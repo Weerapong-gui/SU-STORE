@@ -1,0 +1,16 @@
+<svg width="1200" height="900" viewBox="0 0 1200 900" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="singleFrontBg" x1="600" y1="0" x2="600" y2="900" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#F8F8FA"/>
+      <stop offset="1" stop-color="#ECEEF3"/>
+    </linearGradient>
+    <linearGradient id="singleFrontShirt" x1="600" y1="180" x2="600" y2="760" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#FFFFFF"/>
+      <stop offset="1" stop-color="#DDE0E7"/>
+    </linearGradient>
+  </defs>
+  <rect width="1200" height="900" fill="url(#singleFrontBg)"/>
+  <ellipse cx="600" cy="700" rx="250" ry="60" fill="#BAC0CA" opacity="0.3"/>
+  <path d="M430 250C430 224 451 203 477 203H723C749 203 770 224 770 250V292L835 337C850 347 855 367 846 385L810 458C800 478 776 485 757 473L770 750C770 779 746 803 717 803H483C454 803 430 779 430 750L443 473C424 485 400 478 390 458L354 385C345 367 350 347 365 337L430 292V250Z" fill="url(#singleFrontShirt)" stroke="#B9BEC8" stroke-width="5"/>
+  <path d="M535 203C535 169 563 141 597 141C631 141 659 169 659 203" stroke="#B9BEC8" stroke-width="5"/>
+</svg>
