@@ -29,18 +29,13 @@ export function ProductShowcase({
       )}
     >
       <Container>
-        <div
-          className={cn(
-            "grid items-center gap-12 md:grid-cols-2",
-            reversed ? "md:[&>*:first-child]:order-2" : ""
-          )}
-        >
+        <div className="grid items-center gap-12 md:grid-cols-2">
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             whileInView={{ opacity: 1, y: 0 }}
             viewport={{ once: true, amount: 0.35 }}
             transition={{ duration: 0.6 }}
-            className="space-y-6"
+            className={cn("order-2 space-y-6", reversed ? "md:order-2" : "md:order-1")}
           >
             <p className={cn("text-sm tracking-[0.14em]", dark ? "text-zinc-300" : "text-zinc-500")}>
               {product.shortName}
@@ -90,7 +85,8 @@ export function ProductShowcase({
             viewport={{ once: true, amount: 0.3 }}
             transition={{ duration: 0.65 }}
             className={cn(
-              "rounded-3xl border p-4 shadow-soft",
+              "order-1 rounded-3xl border p-4 shadow-soft",
+              reversed ? "md:order-1" : "md:order-2",
               dark ? "border-zinc-700 bg-zinc-900" : "border-zinc-200 bg-white"
             )}
           >

@@ -25,3 +25,7 @@ body {
 ::selection {
   background: rgba(17, 17, 17, 0.12);
 }
+
+.font-sf-pro {
+  font-family: "SF Pro Display", "SF Pro Text", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+}

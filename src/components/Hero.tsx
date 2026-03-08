@@ -7,15 +7,15 @@ import { Container } from "@/components/ui/Container";
 
 export function Hero() {
   return (
-    <section className="relative overflow-hidden bg-gradient-to-b from-white to-mist py-20 md:py-24">
-      <Container className="flex min-h-[78vh] flex-col items-center justify-center text-center">
+    <section className="relative overflow-hidden bg-gradient-to-b from-white to-mist pt-8 md:pt-12">
+      <Container className="flex min-h-[56vh] flex-col items-center justify-start pb-8 text-center md:min-h-[62vh] md:pb-10">
         <motion.p
           initial={{ opacity: 0, y: 12 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.6 }}
           className="text-sm font-medium tracking-[0.16em] text-zinc-500"
         >
-          PREMIUM COTTON COLLECTION
+          Fresher Package 28th
         </motion.p>
 
         <motion.h1
@@ -28,7 +28,7 @@ export function Hero() {
           <br />
           POLO SHIRT
         </motion.h1>
-
+        {/*
         <motion.p
           initial={{ opacity: 0, y: 18 }}
           animate={{ opacity: 1, y: 0 }}
@@ -37,7 +37,7 @@ export function Hero() {
         >
           Minimal design. Premium comfort. Built for your everyday fit.
         </motion.p>
-
+          */}
         <motion.div
           initial={{ opacity: 0, y: 12 }}
           animate={{ opacity: 1, y: 0 }}
@@ -49,23 +49,25 @@ export function Hero() {
             View Products
           </BuyButton>
         </motion.div>
-
-        <motion.div
-          initial={{ opacity: 0, y: 20, scale: 0.98 }}
-          animate={{ opacity: 1, y: 0, scale: 1 }}
-          transition={{ duration: 0.8, delay: 0.3 }}
-          className="mt-14 w-full max-w-5xl rounded-3xl border border-zinc-200/70 bg-white p-4 shadow-card"
-        >
-          <Image
-            src="/images/video.png"
-            alt="Hero shirt"
-            width={1600}
-            height={1000}
-            className="h-auto w-full rounded-2xl"
-            priority
-          />
-        </motion.div>
       </Container>
+
+      <motion.div
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.7, delay: 0.28 }}
+        className="w-full pb-10 md:pb-14"
+      >
+        <div className="relative mx-auto aspect-[16/9] w-full max-w-[1920px] overflow-hidden">
+          <Image
+            src="/images/polo.png"
+            alt="Fresher polo shirt strip"
+            fill
+            priority
+            sizes="(min-width: 1920px) 1920px, 100vw"
+            className="object-cover object-center"
+          />
+        </div>
+      </motion.div>
     </section>
   );
 }

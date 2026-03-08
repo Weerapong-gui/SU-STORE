@@ -1,26 +1,35 @@
 import { CheckoutForm } from "@/components/CheckoutForm";
 import { Container } from "@/components/ui/Container";
-import { SectionTitle } from "@/components/ui/SectionTitle";
 
 type CheckoutPageProps = {
   searchParams?: {
     product?: string;
+    size?: string;
+    quantity?: string;
+    firstName?: string;
+    lastName?: string;
+    nickname?: string;
+    email?: string;
+    phone?: string;
+    school?: string;
   };
 };
 
 export default function CheckoutPage({ searchParams }: CheckoutPageProps) {
   return (
-    <section className="bg-mist py-20 md:py-24">
-      <Container className="max-w-3xl">
-        <SectionTitle
-          align="center"
-          title="Checkout"
-          subtitle="กรอกข้อมูลสั่งซื้อ แล้วเราจะติดต่อกลับเพื่อยืนยันออเดอร์"
+    <section className="bg-[#ececec] py-6 md:py-8">
+      <Container className="max-w-[1440px]">
+        <CheckoutForm
+          defaultProduct={searchParams?.product}
+          defaultSize={searchParams?.size}
+          defaultQuantity={searchParams?.quantity}
+          defaultFirstName={searchParams?.firstName}
+          defaultLastName={searchParams?.lastName}
+          defaultNickname={searchParams?.nickname}
+          defaultEmail={searchParams?.email}
+          defaultPhone={searchParams?.phone}
+          defaultSchool={searchParams?.school}
         />
-
-        <div className="mt-12">
-          <CheckoutForm defaultProduct={searchParams?.product} />
-        </div>
       </Container>
     </section>
   );

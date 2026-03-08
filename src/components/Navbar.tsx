@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { ShoppingBag } from "lucide-react";
 import { Container } from "@/components/ui/Container";
 
 const navItems = [
@@ -19,9 +20,10 @@ export function Navbar() {
             <Link
               key={item.href}
               href={item.href}
-              className="text-sm text-zinc-600 transition hover:text-zinc-900"
+              className="inline-flex items-center gap-2 text-sm text-zinc-600 transition hover:text-zinc-900"
             >
               {item.label}
+              {item.href === "/checkout" ? <ShoppingBag className="h-4 w-4" strokeWidth={1.8} /> : null}
             </Link>
           ))}
         </nav>

@@ -9,7 +9,7 @@ export default function ProductsPage() {
       <Container>
         <SectionTitle
           title="Products"
-          subtitle="Two focused choices. One premium standard."
+          subtitle="Fresher Package 28th"
           align="center"
         />
 
