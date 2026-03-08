@@ -49,6 +49,7 @@ export default function CheckoutSummaryPage({ searchParams }: SummaryPageProps) 
     phone: rawPhone,
     school: rawSchool
   });
+  const paymentParams = editParams.toString();
 
   const subtotal = product.price * quantity;
 
@@ -104,12 +105,12 @@ export default function CheckoutSummaryPage({ searchParams }: SummaryPageProps) 
             >
               Back to Edit
             </Link>
-            <button
-              type="button"
-              className="inline-flex items-center justify-center rounded-full bg-black px-6 py-3 text-sm font-medium text-white"
+            <Link
+              href={`/checkout/payment?${paymentParams}`}
+              className="inline-flex items-center justify-center rounded-full bg-black px-6 py-3 text-sm font-medium text-white transition hover:bg-zinc-800"
             >
               Ready to Confirm
-            </button>
+            </Link>
           </div>
         </div>
       </Container>
