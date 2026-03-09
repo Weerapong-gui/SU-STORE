@@ -1,17 +1,17 @@
 import type { Metadata } from "next";
-import { Inter } from "next/font/google";
 import "@/app/globals.css";
 import { Navbar } from "@/components/Navbar";
 import { Footer } from "@/components/Footer";
 
-const inter = Inter({
-  subsets: ["latin"],
-  display: "swap"
-});
-
 export const metadata: Metadata = {
-  title: "SU STORE | Minimal Premium Shirt",
-  description: "Apple-style premium shirt showcase with smooth shopping flow"
+  title: "Fresher Package 28th",
+  description: "Apple-style premium shirt showcase with smooth shopping flow",
+  icons: {
+    icon: [
+      { url: "/images/LOGO-01.png", media: "(prefers-color-scheme: light)" },
+      { url: "/images/LOGO-02.png", media: "(prefers-color-scheme: dark)" }
+    ]
+  }
 };
 
 export default function RootLayout({
@@ -21,7 +21,7 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="th">
-      <body className={inter.className}>
+      <body>
         <Navbar />
         <main>{children}</main>
         <Footer />

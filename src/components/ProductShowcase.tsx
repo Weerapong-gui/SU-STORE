@@ -43,12 +43,15 @@ export function ProductShowcase({
             <h2 className="text-4xl font-semibold tracking-tight md:text-6xl">
               {product.name}
             </h2>
+            {/* 
             <p className={cn("max-w-xl text-lg md:text-2xl", dark ? "text-zinc-300" : "text-zinc-600")}>
               {product.tagline}
             </p>
+            
             <p className={cn("max-w-xl", dark ? "text-zinc-300" : "text-zinc-600")}>
               {product.description}
             </p>
+             */}
 
             <div className="flex flex-wrap gap-3 pt-2">
               {product.features.map((feature) => (

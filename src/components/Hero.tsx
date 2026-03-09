@@ -8,7 +8,7 @@ import { Container } from "@/components/ui/Container";
 export function Hero() {
   return (
     <section className="relative overflow-hidden bg-gradient-to-b from-white to-mist pt-8 md:pt-12">
-      <Container className="flex min-h-[56vh] flex-col items-center justify-start pb-8 text-center md:min-h-[62vh] md:pb-10">
+      <Container className="flex min-h-0 flex-col items-center justify-start pb-6 text-center md:min-h-[48vh] md:pb-8 lg:min-h-[56vh] lg:pb-10">
         <motion.p
           initial={{ opacity: 0, y: 12 }}
           animate={{ opacity: 1, y: 0 }}
@@ -55,7 +55,7 @@ export function Hero() {
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.7, delay: 0.28 }}
-        className="w-full pb-10 md:pb-14"
+        className="-mt-4 w-full pb-10 md:-mt-6 md:pb-14"
       >
         <div className="relative mx-auto aspect-[16/9] w-full max-w-[1920px] overflow-hidden">
           <Image

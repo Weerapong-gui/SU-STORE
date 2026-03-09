@@ -41,7 +41,7 @@ export default function ProductDetailPage({ params }: Params) {
   return (
     <section className="bg-white py-20 md:py-24">
       <Container>
-        <div className="grid gap-10 md:grid-cols-2 md:items-center">
+        <div className="grid gap-10 md:grid-cols-2 md:items-start">
           <div className="space-y-4">
             {product.images.map((image, index) => (
               <div
@@ -60,7 +60,7 @@ export default function ProductDetailPage({ params }: Params) {
             ))}
           </div>
 
-          <div>
+          <div className="self-start lg:sticky lg:top-24">
             <p className="text-xs tracking-[0.14em] text-zinc-500">{product.shortName}</p>
             <h1 className="mt-4 text-5xl font-semibold tracking-tight text-ink md:text-6xl">
               {product.name}
