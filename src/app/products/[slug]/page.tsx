@@ -76,7 +76,9 @@ export default function ProductDetailPage({ params }: Params) {
               ))}
             </ul>
 
-            <p className="mt-10 text-3xl font-semibold text-ink">{formatPrice(product.price)}</p>
+            <p className="mt-10 text-3xl font-semibold text-apple-blue">
+              {formatPrice(product.price)}
+            </p>
             <div className="mt-8">
               <BuyButton href={`/checkout?product=${product.slug}`}>Proceed to Checkout</BuyButton>
             </div>

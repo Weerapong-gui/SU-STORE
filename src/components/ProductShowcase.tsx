@@ -70,7 +70,12 @@ export function ProductShowcase({
             </div>
 
             <div className="flex items-center gap-4 pt-2">
-              <p className={cn("text-2xl font-semibold", dark ? "text-white" : "text-ink")}>
+              <p
+                className={cn(
+                  "text-2xl font-semibold",
+                  dark ? "text-apple-blue-light" : "text-apple-blue"
+                )}
+              >
                 {formatPrice(product.price)}
               </p>
               <BuyButton

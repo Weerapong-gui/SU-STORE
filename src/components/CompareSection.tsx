@@ -28,8 +28,8 @@ export function CompareSection() {
             <tbody className="text-sm md:text-base">
               <tr className="border-t border-zinc-100">
                 <td className="px-6 py-4 text-zinc-500">Price</td>
-                <td className="px-6 py-4">{formatPrice(single.price)}</td>
-                <td className="px-6 py-4">{formatPrice(set.price)}</td>
+                <td className="px-6 py-4 font-semibold text-apple-blue">{formatPrice(single.price)}</td>
+                <td className="px-6 py-4 font-semibold text-apple-blue">{formatPrice(set.price)}</td>
               </tr>
               <tr className="border-t border-zinc-100">
                 <td className="px-6 py-4 text-zinc-500">เหมาะกับ</td>
@@ -48,13 +48,13 @@ export function CompareSection() {
         <div className="mt-8 flex flex-wrap items-center justify-center gap-5">
           <Link
             href={`/products/${single.slug}`}
-            className="text-sm font-medium text-zinc-800 underline-offset-4 hover:underline"
+            className="text-sm font-medium text-apple-blue underline-offset-4 transition hover:text-apple-blue-dark hover:underline"
           >
             ดูรายละเอียด {single.shortName}
           </Link>
           <Link
             href={`/products/${set.slug}`}
-            className="text-sm font-medium text-zinc-800 underline-offset-4 hover:underline"
+            className="text-sm font-medium text-apple-blue underline-offset-4 transition hover:text-apple-blue-dark hover:underline"
           >
             ดูรายละเอียด {set.shortName}
           </Link>

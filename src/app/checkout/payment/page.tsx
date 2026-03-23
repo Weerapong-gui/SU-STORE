@@ -101,7 +101,9 @@ export default async function CheckoutPaymentPage({ searchParams }: PaymentPageP
 
               <div className="mt-5 rounded-2xl border border-zinc-200 bg-[#f7f7f9] p-4">
                 <p className="text-xs font-semibold tracking-[0.08em] text-zinc-500">TOTAL AMOUNT</p>
-                <p className="mt-1 text-3xl font-semibold tracking-tight text-zinc-900">{formatPrice(total)}</p>
+                <p className="mt-1 text-3xl font-semibold tracking-tight text-apple-blue">
+                  {formatPrice(total)}
+                </p>
                 <p className="mt-2 text-xs text-zinc-500">ยอดนี้ถูกล็อกตามจำนวนสินค้าและจำนวนชิ้นที่เลือก</p>
               </div>
             </div>
@@ -114,8 +116,12 @@ export default async function CheckoutPaymentPage({ searchParams }: PaymentPageP
               <div className="mt-4 space-y-2 text-sm text-zinc-700">
                 <p>Size: {size}</p>
                 <p>Quantity: {quantity}</p>
-                <p>Unit Price: {formatPrice(product.price)}</p>
-                <p className="font-semibold text-zinc-900">Total: {formatPrice(total)}</p>
+                <p>
+                  Unit Price: <span className="font-semibold text-apple-blue">{formatPrice(product.price)}</span>
+                </p>
+                <p className="font-semibold text-zinc-900">
+                  Total: <span className="text-apple-blue">{formatPrice(total)}</span>
+                </p>
               </div>
 
               <div className="mt-5 border-t border-zinc-200 pt-4 text-sm text-zinc-700">
@@ -130,13 +136,13 @@ export default async function CheckoutPaymentPage({ searchParams }: PaymentPageP
               <div className="mt-6 flex flex-wrap gap-3">
                 <Link
                   href={`/checkout/summary?${params.toString()}`}
-                  className="inline-flex items-center justify-center rounded-full border border-zinc-300 bg-white px-5 py-2.5 text-sm font-medium text-zinc-900 transition hover:bg-zinc-100"
+                  className="inline-flex items-center justify-center rounded-full border border-apple-blue/20 bg-white px-5 py-2.5 text-sm font-medium text-apple-blue transition hover:bg-apple-blue-soft focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-apple-blue/15"
                 >
                   Back to Summary
                 </Link>
                 <Link
                   href={`/checkout?${params.toString()}`}
-                  className="inline-flex items-center justify-center rounded-full bg-black px-5 py-2.5 text-sm font-medium text-white transition hover:bg-zinc-800"
+                  className="inline-flex items-center justify-center rounded-full bg-apple-blue px-5 py-2.5 text-sm font-medium text-white shadow-[0_10px_24px_rgba(0,113,227,0.24)] transition hover:bg-apple-blue-dark focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-apple-blue/20"
                 >
                   Edit Order
                 </Link>

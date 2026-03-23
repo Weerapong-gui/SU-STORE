@@ -15,11 +15,14 @@ export function BuyButton({
   className
 }: BuyButtonProps) {
   const base =
-    "inline-flex items-center justify-center rounded-full px-6 py-3 text-sm font-medium transition duration-300";
+    "inline-flex items-center justify-center rounded-full px-6 py-3 text-sm font-medium transition duration-300 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-apple-blue/20";
   const styles = {
-    primary: "bg-black text-white hover:scale-[1.02] hover:bg-zinc-900",
-    secondary: "bg-zinc-100 text-zinc-900 hover:scale-[1.02] hover:bg-zinc-200",
-    dark: "bg-white text-black hover:scale-[1.02] hover:bg-zinc-200"
+    primary:
+      "bg-apple-blue text-white shadow-[0_10px_24px_rgba(0,113,227,0.28)] hover:scale-[1.02] hover:bg-apple-blue-dark",
+    secondary:
+      "border border-apple-blue/15 bg-apple-blue-soft text-apple-blue hover:scale-[1.02] hover:border-apple-blue/30 hover:bg-[#dcecff]",
+    dark:
+      "bg-apple-blue-light text-white shadow-[0_10px_24px_rgba(41,151,255,0.28)] hover:scale-[1.02] hover:bg-apple-blue"
   };
 
   return (

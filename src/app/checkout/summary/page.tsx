@@ -71,7 +71,9 @@ export default function CheckoutSummaryPage({ searchParams }: SummaryPageProps) 
               <div className="mt-4 space-y-2 text-sm text-zinc-700">
                 <p>Size: {size}</p>
                 <p>Quantity: {quantity}</p>
-                <p>Unit Price: {formatPrice(product.price)}</p>
+                <p>
+                  Unit Price: <span className="font-semibold text-apple-blue">{formatPrice(product.price)}</span>
+                </p>
               </div>
             </div>
 
@@ -90,24 +92,24 @@ export default function CheckoutSummaryPage({ searchParams }: SummaryPageProps) 
           <div className="mt-6 rounded-3xl border border-zinc-300 bg-white p-5">
             <div className="flex items-center justify-between text-sm text-zinc-700">
               <span>Subtotal</span>
-              <span>{formatPrice(subtotal)}</span>
+              <span className="font-semibold text-apple-blue">{formatPrice(subtotal)}</span>
             </div>
             <div className="mt-3 flex items-center justify-between text-lg font-semibold text-zinc-900">
               <span>Total</span>
-              <span>{formatPrice(subtotal)}</span>
+              <span className="text-apple-blue">{formatPrice(subtotal)}</span>
             </div>
           </div>
 
           <div className="mt-6 flex flex-wrap gap-3">
             <Link
               href={`/checkout?${editParams.toString()}`}
-              className="inline-flex items-center justify-center rounded-full border border-zinc-300 bg-white px-6 py-3 text-sm font-medium text-zinc-900 transition hover:bg-zinc-100"
+              className="inline-flex items-center justify-center rounded-full border border-apple-blue/20 bg-white px-6 py-3 text-sm font-medium text-apple-blue transition hover:bg-apple-blue-soft focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-apple-blue/15"
             >
               Back to Edit
             </Link>
             <Link
               href={`/checkout/payment?${paymentParams}`}
-              className="inline-flex items-center justify-center rounded-full bg-black px-6 py-3 text-sm font-medium text-white transition hover:bg-zinc-800"
+              className="inline-flex items-center justify-center rounded-full bg-apple-blue px-6 py-3 text-sm font-medium text-white shadow-[0_10px_24px_rgba(0,113,227,0.24)] transition hover:bg-apple-blue-dark focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-apple-blue/20"
             >
               Ready to Confirm
             </Link>

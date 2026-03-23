@@ -41,6 +41,9 @@ const SCHOOL_OPTIONS = [
   "School of Social Innovation"
 ] as const;
 
+const FIELD_CLASSES =
+  "h-11 w-full rounded-2xl border border-zinc-300 bg-white px-4 text-xs text-zinc-900 outline-none transition focus:border-apple-blue focus:ring-4 focus:ring-apple-blue/10";
+
 export function CheckoutForm({
   defaultProduct,
   defaultSize,
@@ -184,7 +187,9 @@ export function CheckoutForm({
           <h1 className="mt-2 text-lg font-semibold tracking-tight text-zinc-900 md:text-xl">
             {selectedProduct.name}
           </h1>
-          <p className="mt-2 text-sm font-medium text-zinc-700">เริ่มต้นที่ {formatPrice(selectedProduct.price)}</p>
+          <p className="mt-2 text-sm font-semibold text-apple-blue">
+            เริ่มต้นที่ {formatPrice(selectedProduct.price)}
+          </p>
         </div>
 
         <div className="space-y-4">
@@ -195,12 +200,13 @@ export function CheckoutForm({
                 key={product.slug}
                 type="button"
                 onClick={() => setSelectedProductSlug(product.slug)}
+                aria-pressed={selectedProductSlug === product.slug}
                 aria-label={`Select ${product.name}`}
                 className={cn(
-                  "w-full rounded-[1.8rem] border p-5 text-left transition",
+                  "w-full rounded-[1.8rem] border p-5 text-left transition focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-apple-blue/15",
                   selectedProductSlug === product.slug
-                    ? "border-zinc-800 bg-white shadow-soft"
-                    : "border-zinc-300 bg-[#f5f5f7] hover:border-zinc-500"
+                    ? "border-apple-blue bg-white shadow-[0_12px_32px_rgba(0,113,227,0.12)]"
+                    : "border-zinc-300 bg-[#f5f5f7] hover:border-apple-blue/35 hover:bg-white"
                 )}
               >
                 <div className="grid grid-cols-[1fr_auto] items-start gap-4">
@@ -212,7 +218,12 @@ export function CheckoutForm({
                       {product.tagline}
                     </p>
                   </div>
-                  <p className="pt-1 text-lg font-medium text-zinc-900 md:text-xl">
+                  <p
+                    className={cn(
+                      "pt-1 text-lg font-semibold md:text-xl",
+                      selectedProductSlug === product.slug ? "text-apple-blue" : "text-zinc-900"
+                    )}
+                  >
                     {formatPrice(product.price)}
                   </p>
                 </div>
@@ -230,9 +241,12 @@ export function CheckoutForm({
                 key={size}
                 type="button"
                 onClick={() => setSelectedSize(size)}
+                aria-pressed={selectedSize === size}
                 className={cn(
-                  "h-11 rounded-2xl border border-zinc-300 bg-white text-xs font-semibold text-zinc-800 transition hover:bg-zinc-100",
-                  selectedSize === size ? "z-10 border-zinc-900 bg-zinc-900 text-white" : ""
+                  "h-11 rounded-2xl border border-zinc-300 bg-white text-xs font-semibold text-zinc-800 transition focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-apple-blue/15 hover:border-apple-blue/30 hover:bg-apple-blue-soft",
+                  selectedSize === size
+                    ? "z-10 border-apple-blue bg-apple-blue text-white shadow-[0_8px_20px_rgba(0,113,227,0.22)]"
+                    : ""
                 )}
               >
                 {size}
@@ -240,7 +254,7 @@ export function CheckoutForm({
             ))}
           </div>
 
-          <p className="text-right text-xs font-medium text-zinc-600">SIZE GUIDE</p>
+          <p className="text-right text-xs font-medium text-apple-blue">SIZE GUIDE</p>
         </div>
 
         <label className="block">
@@ -250,7 +264,7 @@ export function CheckoutForm({
             min={1}
             value={quantity}
             onChange={(event) => setQuantity(Math.max(1, Number(event.target.value) || 1))}
-            className="mt-2 h-11 w-24 rounded-2xl border border-zinc-300 bg-white px-3 text-sm outline-none focus:border-zinc-900"
+            className="mt-2 h-11 w-24 rounded-2xl border border-zinc-300 bg-white px-3 text-sm outline-none transition focus:border-apple-blue focus:ring-4 focus:ring-apple-blue/10"
           />
         </label>
 
@@ -264,7 +278,7 @@ export function CheckoutForm({
                 name="firstName"
                 required
                 defaultValue={defaultFirstName ?? ""}
-                className="h-11 w-full rounded-2xl border border-zinc-300 bg-white px-4 text-xs outline-none focus:border-zinc-900"
+                className={FIELD_CLASSES}
                 placeholder="First name"
               />
             </label>
@@ -274,7 +288,7 @@ export function CheckoutForm({
                 name="lastName"
                 required
                 defaultValue={defaultLastName ?? ""}
-                className="h-11 w-full rounded-2xl border border-zinc-300 bg-white px-4 text-xs outline-none focus:border-zinc-900"
+                className={FIELD_CLASSES}
                 placeholder="Last name"
               />
             </label>
@@ -287,7 +301,7 @@ export function CheckoutForm({
                 name="nickname"
                 required
                 defaultValue={defaultNickname ?? ""}
-                className="h-11 w-full rounded-2xl border border-zinc-300 bg-white px-4 text-xs outline-none focus:border-zinc-900"
+                className={FIELD_CLASSES}
                 placeholder="Nickname"
               />
             </label>
@@ -299,7 +313,7 @@ export function CheckoutForm({
                 required
                 value={email}
                 onChange={(event) => handleEmailChange(event.target.value)}
-                className="h-11 w-full rounded-2xl border border-zinc-300 bg-white px-4 text-xs outline-none focus:border-zinc-900"
+                className={FIELD_CLASSES}
                 placeholder={`@${EMAIL_DOMAIN}`}
               />
             </label>
@@ -312,7 +326,7 @@ export function CheckoutForm({
                 name="phone"
                 required
                 defaultValue={defaultPhone ?? ""}
-                className="h-11 w-full rounded-2xl border border-zinc-300 bg-white px-4 text-xs outline-none focus:border-zinc-900"
+                className={FIELD_CLASSES}
                 placeholder="08x-xxx-xxxx"
               />
             </label>
@@ -324,7 +338,7 @@ export function CheckoutForm({
               name="school"
               required
               defaultValue={safeDefaultSchool}
-              className="h-11 w-full rounded-2xl border border-zinc-300 bg-white px-4 text-xs outline-none focus:border-zinc-900"
+              className={FIELD_CLASSES}
             >
               <option value="" disabled>
                 Select school
@@ -342,7 +356,7 @@ export function CheckoutForm({
           <button
             type="submit"
             disabled={status === "loading"}
-            className="h-12 rounded-full bg-black px-6 text-xs font-semibold tracking-[0.04em] text-white transition hover:bg-zinc-800 disabled:cursor-not-allowed disabled:opacity-70"
+            className="h-12 rounded-full bg-apple-blue px-6 text-xs font-semibold tracking-[0.04em] text-white shadow-[0_12px_28px_rgba(0,113,227,0.24)] transition hover:bg-apple-blue-dark focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-apple-blue/20 disabled:cursor-not-allowed disabled:opacity-70"
           >
             {status === "loading" ? "LOADING..." : "CONTINUE TO CHECKOUT"}
           </button>
