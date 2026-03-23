@@ -59,7 +59,7 @@ export function Hero() {
       >
         <div className="relative mx-auto aspect-[16/9] w-full max-w-[1920px] overflow-hidden">
           <Image
-            src="/images/pr1.png"
+            src="/images/Pr1.png"
             alt="Fresher polo shirt strip"
             fill
             priority

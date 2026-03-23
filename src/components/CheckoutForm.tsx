@@ -25,7 +25,6 @@ const SIZE_OPTIONS = ["XS", "S", "M", "L", "XL", "XXL", "3XL", "4XL"] as const;
 const EMAIL_DOMAIN = "lamduan.mfu.ac.th";
 const SCHOOL_OPTIONS = [
   "School of Agro-Industry",
-  "School of Anti-Aging and Regenerative Medicine",
   "School of Cosmetic Science",
   "School of Dentistry",
   "School of Health Science",
