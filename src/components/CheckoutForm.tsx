@@ -40,8 +40,25 @@ const SCHOOL_OPTIONS = [
   "School of Social Innovation"
 ] as const;
 
-const FIELD_CLASSES =
+const PRODUCT_DISPLAY_NAMES = {
+  single: "FRESHER POLO SHIRT",
+  bundle: "FRESHER BUNDLE"
+} as const;
+
+const TEXT_FIELD_CLASSES =
   "h-11 w-full rounded-2xl border border-zinc-300 bg-white px-4 text-xs text-zinc-900 outline-none transition focus:border-apple-blue focus:ring-4 focus:ring-apple-blue/10";
+const PACKAGE_OPTION_BASE_CLASSES =
+  "w-full rounded-[1.8rem] border p-5 text-left transition focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-apple-blue/15";
+const PACKAGE_OPTION_SELECTED_CLASSES =
+  "border-apple-blue bg-white shadow-[0_12px_32px_rgba(0,113,227,0.12)]";
+const PACKAGE_OPTION_IDLE_CLASSES =
+  "border-zinc-300 bg-[#f5f5f7] hover:border-apple-blue/35 hover:bg-white";
+const SIZE_OPTION_BASE_CLASSES =
+  "h-11 rounded-2xl border border-zinc-300 bg-white text-xs font-semibold text-zinc-800 transition focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-apple-blue/15 hover:border-apple-blue/30 hover:bg-apple-blue-soft";
+const SIZE_OPTION_SELECTED_CLASSES =
+  "z-10 border-apple-blue bg-apple-blue text-white shadow-[0_8px_20px_rgba(0,113,227,0.22)]";
+const PRIMARY_SUBMIT_BUTTON_CLASSES =
+  "h-12 rounded-full bg-apple-blue px-6 text-xs font-semibold tracking-[0.04em] text-white shadow-[0_12px_28px_rgba(0,113,227,0.24)] transition hover:bg-apple-blue-dark focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-apple-blue/20 disabled:cursor-not-allowed disabled:opacity-70";
 
 export function CheckoutForm({
   defaultProduct,
@@ -55,62 +72,64 @@ export function CheckoutForm({
   defaultSchool
 }: CheckoutFormProps) {
   const router = useRouter();
-  const safeDefault = useMemo(() => {
-    const matched = products.find((product) => product.slug === defaultProduct);
-    return matched?.slug ?? products[0].slug;
+  const defaultProductSlug = useMemo(() => {
+    const matchingProduct = products.find((product) => product.slug === defaultProduct);
+    return matchingProduct?.slug ?? products[0].slug;
   }, [defaultProduct]);
-  const safeDefaultSize = useMemo(() => {
+  const defaultSizeOption = useMemo(() => {
     return SIZE_OPTIONS.includes(defaultSize as (typeof SIZE_OPTIONS)[number])
       ? (defaultSize as (typeof SIZE_OPTIONS)[number])
       : "M";
   }, [defaultSize]);
-  const safeDefaultQuantity = useMemo(() => {
+  const defaultQuantityValue = useMemo(() => {
     const parsed = Number.parseInt(defaultQuantity ?? "1", 10);
     return Number.isNaN(parsed) ? 1 : Math.max(1, parsed);
   }, [defaultQuantity]);
-  const safeDefaultEmail = useMemo(() => defaultEmail?.trim() ?? "", [defaultEmail]);
-  const safeDefaultSchool = useMemo(() => {
+  const defaultEmailValue = useMemo(() => defaultEmail?.trim() ?? "", [defaultEmail]);
+  const defaultSchoolOption = useMemo(() => {
     return SCHOOL_OPTIONS.includes(defaultSchool as (typeof SCHOOL_OPTIONS)[number])
       ? defaultSchool
       : "";
   }, [defaultSchool]);
 
-  const [selectedProductSlug, setSelectedProductSlug] = useState(safeDefault);
-  const [selectedSize, setSelectedSize] = useState<(typeof SIZE_OPTIONS)[number]>(safeDefaultSize);
-  const [quantity, setQuantity] = useState(safeDefaultQuantity);
-  const [email, setEmail] = useState(safeDefaultEmail);
-  const [status, setStatus] = useState<SubmitStatus>("idle");
+  const [activeProductSlug, setActiveProductSlug] = useState(defaultProductSlug);
+  const [selectedSizeOption, setSelectedSizeOption] = useState<(typeof SIZE_OPTIONS)[number]>(
+    defaultSizeOption
+  );
+  const [selectedQuantity, setSelectedQuantity] = useState(defaultQuantityValue);
+  const [customerEmail, setCustomerEmail] = useState(defaultEmailValue);
+  const [submitState, setSubmitState] = useState<SubmitStatus>("idle");
 
-  const selectedProduct = useMemo(() => {
-    return products.find((product) => product.slug === selectedProductSlug) ?? products[0];
-  }, [selectedProductSlug]);
+  const activeProduct = useMemo(() => {
+    return products.find((product) => product.slug === activeProductSlug) ?? products[0];
+  }, [activeProductSlug]);
 
   useEffect(() => {
-    setSelectedProductSlug(safeDefault);
-  }, [safeDefault]);
+    setActiveProductSlug(defaultProductSlug);
+  }, [defaultProductSlug]);
   useEffect(() => {
-    setSelectedSize(safeDefaultSize);
-  }, [safeDefaultSize]);
+    setSelectedSizeOption(defaultSizeOption);
+  }, [defaultSizeOption]);
   useEffect(() => {
-    setQuantity(safeDefaultQuantity);
-  }, [safeDefaultQuantity]);
+    setSelectedQuantity(defaultQuantityValue);
+  }, [defaultQuantityValue]);
   useEffect(() => {
-    setEmail(safeDefaultEmail);
-  }, [safeDefaultEmail]);
+    setCustomerEmail(defaultEmailValue);
+  }, [defaultEmailValue]);
 
   function handleEmailChange(value: string) {
     const nextValue = value.replace(/\s/g, "");
     if (nextValue.endsWith("@")) {
       const localPart = nextValue.slice(0, -1);
-      setEmail(localPart ? `${localPart}@${EMAIL_DOMAIN}` : `@${EMAIL_DOMAIN}`);
+      setCustomerEmail(localPart ? `${localPart}@${EMAIL_DOMAIN}` : `@${EMAIL_DOMAIN}`);
       return;
     }
-    setEmail(nextValue);
+    setCustomerEmail(nextValue);
   }
 
-  function onSubmit(event: FormEvent<HTMLFormElement>) {
+  function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    setStatus("loading");
+    setSubmitState("loading");
 
     const formData = new FormData(event.currentTarget);
     const firstName = String(formData.get("firstName") ?? "").trim();
@@ -120,15 +139,15 @@ export function CheckoutForm({
     const phone = String(formData.get("phone") ?? "").trim();
     const school = String(formData.get("school") ?? "").trim();
 
-    formData.set("product", selectedProduct.slug);
-    formData.set("size", selectedSize);
-    formData.set("quantity", String(quantity));
+    formData.set("product", activeProduct.slug);
+    formData.set("size", selectedSizeOption);
+    formData.set("quantity", String(selectedQuantity));
     formData.set("color", "all");
 
-    const params = new URLSearchParams({
-      product: selectedProduct.slug,
-      size: selectedSize,
-      quantity: String(quantity),
+    const checkoutSearchParams = new URLSearchParams({
+      product: activeProduct.slug,
+      size: selectedSizeOption,
+      quantity: String(selectedQuantity),
       firstName,
       lastName,
       nickname,
@@ -137,21 +156,21 @@ export function CheckoutForm({
       school
     });
 
-    router.push(`/checkout/summary?${params.toString()}`);
+    router.push(`/checkout/summary?${checkoutSearchParams.toString()}`);
   }
 
   return (
-    <form onSubmit={onSubmit} className="grid gap-6 lg:grid-cols-[1.2fr_0.8fr] lg:gap-10">
+    <form onSubmit={handleSubmit} className="grid gap-6 lg:grid-cols-[1.2fr_0.8fr] lg:gap-10">
       <div className="lg:h-[calc(100vh-7rem)] lg:overflow-y-auto lg:overscroll-contain lg:pr-1">
         <div className="flex snap-x snap-mandatory gap-3 overflow-x-auto pb-2 lg:hidden">
-          {selectedProduct.images.map((image, index) => (
+          {activeProduct.images.map((image, index) => (
             <div
               key={`${image}-${index}`}
               className="relative h-[58vh] min-h-[360px] w-full shrink-0 snap-center overflow-hidden rounded-3xl"
             >
               <Image
                 src={image}
-                alt={`${selectedProduct.name} image ${index + 1}`}
+                alt={`${activeProduct.name} image ${index + 1}`}
                 fill
                 priority={index === 0}
                 sizes="100vw"
@@ -162,14 +181,14 @@ export function CheckoutForm({
         </div>
 
         <div className="hidden space-y-3 lg:block">
-          {selectedProduct.images.map((image, index) => (
+          {activeProduct.images.map((image, index) => (
             <div
               key={`${image}-${index}`}
               className="relative min-h-[380px] overflow-hidden rounded-3xl md:min-h-[640px] lg:min-h-[820px]"
             >
               <Image
                 src={image}
-                alt={`${selectedProduct.name} image ${index + 1}`}
+                alt={`${activeProduct.name} image ${index + 1}`}
                 fill
                 priority={index === 0}
                 sizes="(min-width: 1024px) 65vw, 100vw"
@@ -182,12 +201,12 @@ export function CheckoutForm({
 
       <div className="font-sf-pro space-y-5 rounded-[2rem] border border-zinc-300 bg-[#f5f5f7] p-6 lg:h-[calc(100vh-7rem)] lg:overflow-y-auto lg:overscroll-contain lg:p-8 lg:pr-6">
         <div>
-          <p className="text-xs tracking-[0.08em] text-zinc-500">{selectedProduct.shortName}</p>
+          <p className="text-xs tracking-[0.08em] text-zinc-500">{activeProduct.shortName}</p>
           <h1 className="mt-2 text-lg font-semibold tracking-tight text-zinc-900 md:text-xl">
-            {selectedProduct.name}
+            {activeProduct.name}
           </h1>
           <p className="mt-2 text-sm font-semibold text-apple-blue">
-            เริ่มต้นที่ {formatPrice(selectedProduct.price)}
+            เริ่มต้นที่ {formatPrice(activeProduct.price)}
           </p>
         </div>
 
@@ -198,20 +217,20 @@ export function CheckoutForm({
               <button
                 key={product.slug}
                 type="button"
-                onClick={() => setSelectedProductSlug(product.slug)}
-                aria-pressed={selectedProductSlug === product.slug}
+                onClick={() => setActiveProductSlug(product.slug)}
+                aria-pressed={activeProductSlug === product.slug}
                 aria-label={`Select ${product.name}`}
                 className={cn(
-                  "w-full rounded-[1.8rem] border p-5 text-left transition focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-apple-blue/15",
-                  selectedProductSlug === product.slug
-                    ? "border-apple-blue bg-white shadow-[0_12px_32px_rgba(0,113,227,0.12)]"
-                    : "border-zinc-300 bg-[#f5f5f7] hover:border-apple-blue/35 hover:bg-white"
+                  PACKAGE_OPTION_BASE_CLASSES,
+                  activeProductSlug === product.slug
+                    ? PACKAGE_OPTION_SELECTED_CLASSES
+                    : PACKAGE_OPTION_IDLE_CLASSES
                 )}
               >
                 <div className="grid grid-cols-[1fr_auto] items-start gap-4">
                   <div>
                     <p className="text-xl font-semibold tracking-tight text-zinc-900 md:text-2xl">
-                      {product.category === "single" ? "FRESHER POLO SHIRT" : "FRESHER BUNDLE"}
+                      {PRODUCT_DISPLAY_NAMES[product.category]}
                     </p>
                     <p className="mt-2 max-w-[24ch] text-base leading-snug text-zinc-800 md:text-lg">
                       {product.tagline}
@@ -220,7 +239,7 @@ export function CheckoutForm({
                   <p
                     className={cn(
                       "pt-1 text-lg font-semibold md:text-xl",
-                      selectedProductSlug === product.slug ? "text-apple-blue" : "text-zinc-900"
+                      activeProductSlug === product.slug ? "text-apple-blue" : "text-zinc-900"
                     )}
                   >
                     {formatPrice(product.price)}
@@ -239,13 +258,11 @@ export function CheckoutForm({
               <button
                 key={size}
                 type="button"
-                onClick={() => setSelectedSize(size)}
-                aria-pressed={selectedSize === size}
+                onClick={() => setSelectedSizeOption(size)}
+                aria-pressed={selectedSizeOption === size}
                 className={cn(
-                  "h-11 rounded-2xl border border-zinc-300 bg-white text-xs font-semibold text-zinc-800 transition focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-apple-blue/15 hover:border-apple-blue/30 hover:bg-apple-blue-soft",
-                  selectedSize === size
-                    ? "z-10 border-apple-blue bg-apple-blue text-white shadow-[0_8px_20px_rgba(0,113,227,0.22)]"
-                    : ""
+                  SIZE_OPTION_BASE_CLASSES,
+                  selectedSizeOption === size ? SIZE_OPTION_SELECTED_CLASSES : ""
                 )}
               >
                 {size}
@@ -261,8 +278,8 @@ export function CheckoutForm({
           <input
             type="number"
             min={1}
-            value={quantity}
-            onChange={(event) => setQuantity(Math.max(1, Number(event.target.value) || 1))}
+            value={selectedQuantity}
+            onChange={(event) => setSelectedQuantity(Math.max(1, Number(event.target.value) || 1))}
             className="mt-2 h-11 w-24 rounded-2xl border border-zinc-300 bg-white px-3 text-sm outline-none transition focus:border-apple-blue focus:ring-4 focus:ring-apple-blue/10"
           />
         </label>
@@ -277,7 +294,7 @@ export function CheckoutForm({
                 name="firstName"
                 required
                 defaultValue={defaultFirstName ?? ""}
-                className={FIELD_CLASSES}
+                className={TEXT_FIELD_CLASSES}
                 placeholder="First name"
               />
             </label>
@@ -287,7 +304,7 @@ export function CheckoutForm({
                 name="lastName"
                 required
                 defaultValue={defaultLastName ?? ""}
-                className={FIELD_CLASSES}
+                className={TEXT_FIELD_CLASSES}
                 placeholder="Last name"
               />
             </label>
@@ -300,7 +317,7 @@ export function CheckoutForm({
                 name="nickname"
                 required
                 defaultValue={defaultNickname ?? ""}
-                className={FIELD_CLASSES}
+                className={TEXT_FIELD_CLASSES}
                 placeholder="Nickname"
               />
             </label>
@@ -310,9 +327,9 @@ export function CheckoutForm({
                 name="email"
                 type="email"
                 required
-                value={email}
+                value={customerEmail}
                 onChange={(event) => handleEmailChange(event.target.value)}
-                className={FIELD_CLASSES}
+                className={TEXT_FIELD_CLASSES}
                 placeholder={`@${EMAIL_DOMAIN}`}
               />
             </label>
@@ -325,7 +342,7 @@ export function CheckoutForm({
                 name="phone"
                 required
                 defaultValue={defaultPhone ?? ""}
-                className={FIELD_CLASSES}
+                className={TEXT_FIELD_CLASSES}
                 placeholder="08x-xxx-xxxx"
               />
             </label>
@@ -336,8 +353,8 @@ export function CheckoutForm({
             <select
               name="school"
               required
-              defaultValue={safeDefaultSchool}
-              className={FIELD_CLASSES}
+              defaultValue={defaultSchoolOption}
+              className={TEXT_FIELD_CLASSES}
             >
               <option value="" disabled>
                 Select school
@@ -354,16 +371,16 @@ export function CheckoutForm({
         <div className="grid grid-cols-[1fr_auto] gap-2">
           <button
             type="submit"
-            disabled={status === "loading"}
-            className="h-12 rounded-full bg-apple-blue px-6 text-xs font-semibold tracking-[0.04em] text-white shadow-[0_12px_28px_rgba(0,113,227,0.24)] transition hover:bg-apple-blue-dark focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-apple-blue/20 disabled:cursor-not-allowed disabled:opacity-70"
+            disabled={submitState === "loading"}
+            className={PRIMARY_SUBMIT_BUTTON_CLASSES}
           >
-            {status === "loading" ? "LOADING..." : "CONTINUE TO CHECKOUT"}
+            {submitState === "loading" ? "LOADING..." : "CONTINUE TO CHECKOUT"}
           </button>
         </div>
 
-        <input type="hidden" name="product" value={selectedProduct.slug} />
-        <input type="hidden" name="size" value={selectedSize} />
-        <input type="hidden" name="quantity" value={quantity} />
+        <input type="hidden" name="product" value={activeProduct.slug} />
+        <input type="hidden" name="size" value={selectedSizeOption} />
+        <input type="hidden" name="quantity" value={selectedQuantity} />
         <input type="hidden" name="color" value="all" />
       </div>
     </form>

@@ -14,9 +14,9 @@ export function BuyButton({
   variant = "primary",
   className
 }: BuyButtonProps) {
-  const base =
+  const buttonBaseClasses =
     "inline-flex items-center justify-center rounded-full px-6 py-3 text-sm font-medium transition duration-300 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-apple-blue/20";
-  const styles = {
+  const buttonVariantClasses = {
     primary:
       "bg-apple-blue text-white shadow-[0_10px_24px_rgba(0,113,227,0.28)] hover:scale-[1.02] hover:bg-apple-blue-dark",
     secondary:
@@ -26,7 +26,7 @@ export function BuyButton({
   };
 
   return (
-    <Link href={href} className={cn(base, styles[variant], className)}>
+    <Link href={href} className={cn(buttonBaseClasses, buttonVariantClasses[variant], className)}>
       {children}
     </Link>
   );

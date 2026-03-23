@@ -20,11 +20,11 @@ export const products: Product[] = [
     description: "ชุดเซตที่ออกแบบให้เข้ากันอย่างลงตัว พร้อมใส่ พร้อมออกจากบ้านทันที",
     price: 790,
     images: ["/images/FRESHER BUNDLE.png", "/images/FRESHER BUNDLE.png"],
-    category: "set",
+    category: "bundle",
     features: ["Complete look", "Premium fabric", "Easy matching"]
   }
 ];
 
 export function getProductBySlug(slug: string) {
-  return products.find((item) => item.slug === slug);
+  return products.find((product) => product.slug === slug);
 }

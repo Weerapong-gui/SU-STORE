@@ -1,4 +1,4 @@
-export type ProductCategory = "single" | "set";
+export type ProductCategory = "single" | "bundle";
 
 export type Product = {
   slug: string;

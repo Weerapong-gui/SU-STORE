@@ -3,14 +3,14 @@ import { ProductShowcase } from "@/components/ProductShowcase";
 import { products } from "@/data/products";
 
 export default function HomePage() {
-  const single = products.find((item) => item.category === "single") ?? products[0];
-  const set = products.find((item) => item.category === "set") ?? products[1];
+  const singleProduct = products.find((product) => product.category === "single") ?? products[0];
+  const bundleProduct = products.find((product) => product.category === "bundle") ?? products[1];
 
   return (
     <>
       <Hero />
-      <ProductShowcase product={single} />
-      <ProductShowcase product={set} reversed dark />
+      <ProductShowcase product={singleProduct} />
+      <ProductShowcase product={bundleProduct} isReversedLayout isDarkTheme />
     </>
   );
 }

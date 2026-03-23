@@ -2,13 +2,16 @@ import Link from "next/link";
 import { ShoppingBag } from "lucide-react";
 import { Container } from "@/components/ui/Container";
 
-const navItems = [
+const navigationLinks = [
   { href: "/", label: "Home" },
   { href: "/products", label: "Products" },
   { href: "/checkout", label: "Checkout" }
 ];
 
 export function Navbar() {
+  const navigationLinkClasses =
+    "inline-flex items-center gap-2 text-sm text-zinc-600 transition hover:text-zinc-900";
+
   return (
     <header className="sticky top-0 z-50 border-b border-zinc-200/60 bg-white/70 backdrop-blur-md">
       <Container className="flex h-16 items-center justify-between">
@@ -16,14 +19,16 @@ export function Navbar() {
           SU STORE
         </Link>
         <nav className="flex items-center gap-6">
-          {navItems.map((item) => (
+          {navigationLinks.map((navigationLink) => (
             <Link
-              key={item.href}
-              href={item.href}
-              className="inline-flex items-center gap-2 text-sm text-zinc-600 transition hover:text-zinc-900"
+              key={navigationLink.href}
+              href={navigationLink.href}
+              className={navigationLinkClasses}
             >
-              {item.label}
-              {item.href === "/checkout" ? <ShoppingBag className="h-4 w-4" strokeWidth={1.8} /> : null}
+              {navigationLink.label}
+              {navigationLink.href === "/checkout" ? (
+                <ShoppingBag className="h-4 w-4" strokeWidth={1.8} />
+              ) : null}
             </Link>
           ))}
         </nav>

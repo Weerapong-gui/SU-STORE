@@ -8,12 +8,14 @@ type ProductCardProps = {
 };
 
 export function ProductCard({ product }: ProductCardProps) {
+  const cardClasses =
+    "overflow-hidden rounded-3xl border border-zinc-200 bg-white shadow-soft transition hover:-translate-y-1 hover:border-apple-blue/30";
+  const productLinkClasses =
+    "group block focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-apple-blue/20";
+
   return (
-    <article className="overflow-hidden rounded-3xl border border-zinc-200 bg-white shadow-soft transition hover:-translate-y-1 hover:border-apple-blue/30">
-      <Link
-        href={`/products/${product.slug}`}
-        className="group block focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-apple-blue/20"
-      >
+    <article className={cardClasses}>
+      <Link href={`/products/${product.slug}`} className={productLinkClasses}>
         <div className="relative aspect-[4/3] overflow-hidden bg-zinc-100">
           <Image
             src={product.images[0]}
