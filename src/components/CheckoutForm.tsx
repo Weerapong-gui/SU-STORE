@@ -4,10 +4,12 @@ import Image from "next/image";
 import { FormEvent, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { products } from "@/data/products";
+import { EMAIL_DOMAIN, SCHOOL_OPTIONS, SIZE_OPTIONS } from "@/lib/checkoutOptions";
 import { formatPrice } from "@/lib/formatPrice";
 import { cn } from "@/lib/utils";
 
 type CheckoutFormProps = {
+  existingOrderId?: string;
   defaultProduct?: string;
   defaultSize?: string;
   defaultQuantity?: string;
@@ -20,25 +22,6 @@ type CheckoutFormProps = {
 };
 
 type SubmitStatus = "idle" | "loading";
-
-const SIZE_OPTIONS = ["XS", "S", "M", "L", "XL", "XXL", "3XL", "4XL"] as const;
-const EMAIL_DOMAIN = "lamduan.mfu.ac.th";
-const SCHOOL_OPTIONS = [
-  "School of Agro-Industry",
-  "School of Cosmetic Science",
-  "School of Dentistry",
-  "School of Health Science",
-  "School of Applied Digital Technology",
-  "School of Integrative Medicine",
-  "School of Law",
-  "School of Liberal Arts",
-  "School of Management",
-  "School of Medicine",
-  "School of Nursing",
-  "School of Science",
-  "School of Sinology",
-  "School of Social Innovation"
-] as const;
 
 const PRODUCT_DISPLAY_NAMES = {
   single: "FRESHER POLO SHIRT",
@@ -61,6 +44,7 @@ const PRIMARY_SUBMIT_BUTTON_CLASSES =
   "h-12 rounded-full bg-apple-blue px-6 text-xs font-semibold tracking-[0.04em] text-white shadow-[0_12px_28px_rgba(0,113,227,0.24)] transition hover:bg-apple-blue-dark focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-apple-blue/20 disabled:cursor-not-allowed disabled:opacity-70";
 
 export function CheckoutForm({
+  existingOrderId,
   defaultProduct,
   defaultSize,
   defaultQuantity,
@@ -99,6 +83,7 @@ export function CheckoutForm({
   const [selectedQuantity, setSelectedQuantity] = useState(defaultQuantityValue);
   const [customerEmail, setCustomerEmail] = useState(defaultEmailValue);
   const [submitState, setSubmitState] = useState<SubmitStatus>("idle");
+  const [submitError, setSubmitError] = useState("");
 
   const activeProduct = useMemo(() => {
     return products.find((product) => product.slug === activeProductSlug) ?? products[0];
@@ -107,12 +92,15 @@ export function CheckoutForm({
   useEffect(() => {
     setActiveProductSlug(defaultProductSlug);
   }, [defaultProductSlug]);
+
   useEffect(() => {
     setSelectedSizeOption(defaultSizeOption);
   }, [defaultSizeOption]);
+
   useEffect(() => {
     setSelectedQuantity(defaultQuantityValue);
   }, [defaultQuantityValue]);
+
   useEffect(() => {
     setCustomerEmail(defaultEmailValue);
   }, [defaultEmailValue]);
@@ -127,36 +115,54 @@ export function CheckoutForm({
     setCustomerEmail(nextValue);
   }
 
-  function handleSubmit(event: FormEvent<HTMLFormElement>) {
+  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setSubmitState("loading");
+    setSubmitError("");
 
     const formData = new FormData(event.currentTarget);
-    const firstName = String(formData.get("firstName") ?? "").trim();
-    const lastName = String(formData.get("lastName") ?? "").trim();
-    const nickname = String(formData.get("nickname") ?? "").trim();
-    const emailValue = String(formData.get("email") ?? "").trim();
-    const phone = String(formData.get("phone") ?? "").trim();
-    const school = String(formData.get("school") ?? "").trim();
-
-    formData.set("product", activeProduct.slug);
-    formData.set("size", selectedSizeOption);
-    formData.set("quantity", String(selectedQuantity));
-    formData.set("color", "all");
-
-    const checkoutSearchParams = new URLSearchParams({
+    const payload = {
       product: activeProduct.slug,
       size: selectedSizeOption,
-      quantity: String(selectedQuantity),
-      firstName,
-      lastName,
-      nickname,
-      email: emailValue,
-      phone,
-      school
-    });
+      quantity: selectedQuantity,
+      firstName: String(formData.get("firstName") ?? "").trim(),
+      lastName: String(formData.get("lastName") ?? "").trim(),
+      nickname: String(formData.get("nickname") ?? "").trim(),
+      email: String(formData.get("email") ?? "").trim(),
+      phone: String(formData.get("phone") ?? "").trim(),
+      school: String(formData.get("school") ?? "").trim()
+    };
 
-    router.push(`/checkout/summary?${checkoutSearchParams.toString()}`);
+    const endpoint = existingOrderId ? `/api/order/${existingOrderId}` : "/api/order";
+    const method = existingOrderId ? "PUT" : "POST";
+
+    try {
+      const response = await fetch(endpoint, {
+        method,
+        headers: {
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify(payload)
+      });
+
+      const result = (await response.json().catch(() => null)) as
+        | {
+            message?: string;
+            orderId?: string;
+          }
+        | null;
+
+      if (!response.ok || !result?.orderId) {
+        setSubmitError(result?.message ?? "ไม่สามารถบันทึกคำสั่งซื้อได้ในขณะนี้");
+        setSubmitState("idle");
+        return;
+      }
+
+      router.push(`/checkout/summary/${result.orderId}`);
+    } catch {
+      setSubmitError("ไม่สามารถเชื่อมต่อกับระบบสั่งซื้อได้ในขณะนี้");
+      setSubmitState("idle");
+    }
   }
 
   return (
@@ -208,6 +214,11 @@ export function CheckoutForm({
           <p className="mt-2 text-sm font-semibold text-apple-blue">
             เริ่มต้นที่ {formatPrice(activeProduct.price)}
           </p>
+          {existingOrderId ? (
+            <p className="mt-3 text-xs font-medium tracking-[0.08em] text-zinc-500">
+              ORDER ID {existingOrderId}
+            </p>
+          ) : null}
         </div>
 
         <div className="space-y-4">
@@ -278,6 +289,7 @@ export function CheckoutForm({
           <input
             type="number"
             min={1}
+            max={99}
             value={selectedQuantity}
             onChange={(event) => setSelectedQuantity(Math.max(1, Number(event.target.value) || 1))}
             className="mt-2 h-11 w-24 rounded-2xl border border-zinc-300 bg-white px-3 text-sm outline-none transition focus:border-apple-blue focus:ring-4 focus:ring-apple-blue/10"
@@ -368,20 +380,25 @@ export function CheckoutForm({
           </label>
         </div>
 
+        {submitError ? (
+          <div className="rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">
+            {submitError}
+          </div>
+        ) : null}
+
         <div className="grid grid-cols-[1fr_auto] gap-2">
           <button
             type="submit"
             disabled={submitState === "loading"}
             className={PRIMARY_SUBMIT_BUTTON_CLASSES}
           >
-            {submitState === "loading" ? "LOADING..." : "CONTINUE TO CHECKOUT"}
+            {submitState === "loading"
+              ? "SAVING ORDER..."
+              : existingOrderId
+                ? "UPDATE ORDER"
+                : "CONTINUE TO SUMMARY"}
           </button>
         </div>
-
-        <input type="hidden" name="product" value={activeProduct.slug} />
-        <input type="hidden" name="size" value={selectedSizeOption} />
-        <input type="hidden" name="quantity" value={selectedQuantity} />
-        <input type="hidden" name="color" value="all" />
       </div>
     </form>
   );

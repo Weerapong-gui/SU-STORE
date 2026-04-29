@@ -5,6 +5,8 @@ coverage
 .DS_Store
 .env
 .env.local
+data/orders
+data/slips
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*

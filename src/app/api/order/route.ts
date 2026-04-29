@@ -1,33 +1,26 @@
 import { NextResponse } from "next/server";
-
-const REQUIRED_FIELDS = ["name", "phone", "product", "address"];
+import { createOrder } from "@/lib/orderStore";
+import { validateOrderInput } from "@/lib/orderValidation";
 
 export async function POST(request: Request) {
   try {
-    const body = (await request.json()) as Record<string, string>;
+    const body = (await request.json()) as Record<string, unknown>;
+    const validation = validateOrderInput(body);
 
-    const missing = REQUIRED_FIELDS.find((field) => {
-      const value = body[field];
-      return typeof value !== "string" || !value.trim();
-    });
-
-    if (missing) {
-      return NextResponse.json(
-        { message: `กรุณากรอกข้อมูลให้ครบ: ${missing}` },
-        { status: 400 }
-      );
+    if (!validation.data) {
+      return NextResponse.json({ message: validation.message }, { status: 400 });
     }
 
-    const orderId = `SU-${Date.now()}`;
+    const order = await createOrder(validation.data);
 
     return NextResponse.json({
-      message: `รับคำสั่งซื้อเรียบร้อย หมายเลขออเดอร์ ${orderId}`,
-      orderId
+      message: `สร้างคำสั่งซื้อเรียบร้อย หมายเลขออเดอร์ ${order.id}`,
+      orderId: order.id
     });
   } catch {
     return NextResponse.json(
-      { message: "รูปแบบข้อมูลไม่ถูกต้อง" },
-      { status: 400 }
+      { message: "ไม่สามารถสร้างคำสั่งซื้อได้ในขณะนี้" },
+      { status: 500 }
     );
   }
 }
