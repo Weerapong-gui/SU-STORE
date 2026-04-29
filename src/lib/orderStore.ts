@@ -4,13 +4,20 @@ import { promises as fs } from "node:fs";
 import path from "node:path";
 import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
+import {
+  createRemoteOrder,
+  getRemoteOrderById,
+  hasRemoteOrderApi,
+  updateRemoteOrder,
+  updateRemoteOrderSlip
+} from "@/lib/remoteOrderApi";
 import { ValidatedOrderInput } from "@/lib/orderValidation";
 import { Order, OrderSlip } from "@/types/order";
 
 const DATA_ROOT = path.join(process.cwd(), "data");
 const ORDERS_DIR = path.join(DATA_ROOT, "orders");
 const SLIPS_DIR = path.join(DATA_ROOT, "slips");
-const ORDER_ID_PATTERN = /^SU-[A-Z0-9]+$/;
+const ORDER_ID_PATTERN = /^[A-Z0-9-]+$/;
 const ALLOWED_SLIP_TYPES = new Set(["image/jpeg", "image/png", "image/webp", "application/pdf"]);
 const MAX_SLIP_SIZE_BYTES = 5 * 1024 * 1024;
 const ORDER_COOKIE_PREFIX = "su-order-";
@@ -186,6 +193,10 @@ export async function getOrderById(orderId: string) {
     return null;
   }
 
+  if (hasRemoteOrderApi()) {
+    return getRemoteOrderById(orderId);
+  }
+
   const storageMode = getOrderStorageMode();
 
   if (storageMode === "blob") {
@@ -226,12 +237,24 @@ export async function getOrderById(orderId: string) {
 }
 
 export async function createOrder(input: ValidatedOrderInput) {
+  if (hasRemoteOrderApi()) {
+    const order = await createRemoteOrder(input);
+    if (!order) {
+      throw new Error("Remote order API returned no order during creation.");
+    }
+    return order;
+  }
+
   const order = buildOrderFromInput(generateOrderId(), input);
   await writeOrder(order);
   return order;
 }
 
 export async function updateOrder(orderId: string, input: ValidatedOrderInput) {
+  if (hasRemoteOrderApi()) {
+    return updateRemoteOrder(orderId, input);
+  }
+
   const existingOrder = await getOrderById(orderId);
   if (!existingOrder) {
     return null;
@@ -245,6 +268,10 @@ export async function updateOrder(orderId: string, input: ValidatedOrderInput) {
 }
 
 export function setOrderResponseCookie(response: NextResponse, order: Order) {
+  if (hasRemoteOrderApi()) {
+    return;
+  }
+
   if (getOrderStorageMode() !== "cookie") {
     return;
   }
@@ -327,6 +354,14 @@ export async function attachSlipToOrder(orderId: string, file: File) {
     updatedAt: new Date().toISOString(),
     slip
   };
+
+  if (hasRemoteOrderApi()) {
+    const remoteOrder = await updateRemoteOrderSlip(orderId, slip);
+    if (!remoteOrder) {
+      throw new Error("Failed to update remote order slip metadata.");
+    }
+    return remoteOrder;
+  }
 
   await writeOrder(updatedOrder);
   return updatedOrder;

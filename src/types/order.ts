@@ -33,6 +33,8 @@ export type OrderSlip = {
 
 export type Order = {
   id: string;
+  sequenceNumber?: number;
+  roundNumber?: number;
   status: OrderStatus;
   paymentStatus: PaymentStatus;
   createdAt: string;
