@@ -5,7 +5,7 @@ import generatePayload from "promptpay-qr";
 import { notFound } from "next/navigation";
 import { PaymentSlipUploadForm } from "@/components/PaymentSlipUploadForm";
 import { Container } from "@/components/ui/Container";
-import { getOrderById } from "@/lib/orderStore";
+import { canUploadPaymentSlip, getOrderById } from "@/lib/orderStore";
 import { formatPrice } from "@/lib/formatPrice";
 
 export const dynamic = "force-dynamic";
@@ -28,6 +28,7 @@ export default async function CheckoutPaymentPage({ params }: CheckoutPaymentPag
   }
 
   const promptPayId = process.env.PROMPTPAY_ID ?? process.env.NEXT_PUBLIC_PROMPTPAY_ID ?? "";
+  const slipUploadEnabled = canUploadPaymentSlip();
 
   let promptPayQrCodeDataUrl = "";
   if (promptPayId) {
@@ -108,10 +109,18 @@ export default async function CheckoutPaymentPage({ params }: CheckoutPaymentPag
               <div className="mt-5 border-t border-zinc-200 pt-4 text-sm text-zinc-700">
                 <p className="text-xs font-semibold tracking-[0.1em] text-zinc-500">UPLOAD PAYMENT SLIP</p>
                 <div className="mt-3">
-                  <PaymentSlipUploadForm
-                    orderId={order.id}
-                    hasUploadedSlip={Boolean(order.slip)}
-                  />
+                  {slipUploadEnabled ? (
+                    <PaymentSlipUploadForm
+                      orderId={order.id}
+                      hasUploadedSlip={Boolean(order.slip)}
+                    />
+                  ) : (
+                    <div className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+                      deployment บน Vercel นี้ยังไม่ได้เชื่อม Blob storage สำหรับเก็บสลิป
+                      กรุณาเพิ่ม <code className="rounded bg-amber-100 px-1">BLOB_READ_WRITE_TOKEN</code>
+                      แล้ว redeploy ก่อนเปิดใช้งานขั้นตอนนี้
+                    </div>
+                  )}
                 </div>
               </div>
 

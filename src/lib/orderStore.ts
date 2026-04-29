@@ -1,6 +1,9 @@
+import { del, get, put } from "@vercel/blob";
 import { randomBytes } from "node:crypto";
 import { promises as fs } from "node:fs";
 import path from "node:path";
+import { cookies } from "next/headers";
+import { NextResponse } from "next/server";
 import { ValidatedOrderInput } from "@/lib/orderValidation";
 import { Order, OrderSlip } from "@/types/order";
 
@@ -10,9 +13,17 @@ const SLIPS_DIR = path.join(DATA_ROOT, "slips");
 const ORDER_ID_PATTERN = /^SU-[A-Z0-9]+$/;
 const ALLOWED_SLIP_TYPES = new Set(["image/jpeg", "image/png", "image/webp", "application/pdf"]);
 const MAX_SLIP_SIZE_BYTES = 5 * 1024 * 1024;
+const ORDER_COOKIE_PREFIX = "su-order-";
+const ORDER_COOKIE_MAX_AGE_SECONDS = 60 * 60 * 24 * 7;
+
+type OrderStorageMode = "filesystem" | "blob" | "cookie";
 
 function getOrderFilePath(orderId: string) {
   return path.join(ORDERS_DIR, `${orderId}.json`);
+}
+
+function getOrderBlobPath(orderId: string) {
+  return `orders/${orderId}.json`;
 }
 
 function generateOrderId() {
@@ -57,18 +68,85 @@ function buildOrderFromInput(orderId: string, input: ValidatedOrderInput, existi
   };
 }
 
+function isVercelRuntime() {
+  return Boolean(process.env.VERCEL || process.env.VERCEL_URL);
+}
+
+function hasBlobStorage() {
+  return Boolean(process.env.BLOB_READ_WRITE_TOKEN);
+}
+
+function getOrderStorageMode(): OrderStorageMode {
+  if (hasBlobStorage()) {
+    return "blob";
+  }
+
+  if (isVercelRuntime()) {
+    return "cookie";
+  }
+
+  return "filesystem";
+}
+
+function getOrderCookieName(orderId: string) {
+  return `${ORDER_COOKIE_PREFIX}${orderId}`;
+}
+
+function encodeOrderCookie(order: Order) {
+  return Buffer.from(JSON.stringify(order), "utf8").toString("base64url");
+}
+
+function decodeOrderCookie(serializedOrder: string) {
+  return JSON.parse(Buffer.from(serializedOrder, "base64url").toString("utf8")) as Order;
+}
+
+function sanitizeFileName(fileName: string) {
+  return fileName
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9.-]+/g, "-")
+    .replace(/-+/g, "-")
+    .replace(/^-|-$/g, "") || "slip";
+}
+
 async function ensureStorage() {
   await fs.mkdir(ORDERS_DIR, { recursive: true });
   await fs.mkdir(SLIPS_DIR, { recursive: true });
 }
 
 async function writeOrder(order: Order) {
+  const storageMode = getOrderStorageMode();
+
+  if (storageMode === "blob") {
+    await put(getOrderBlobPath(order.id), JSON.stringify(order, null, 2), {
+      access: "private",
+      addRandomSuffix: false,
+      allowOverwrite: true,
+      contentType: "application/json",
+      cacheControlMaxAge: 60
+    });
+    return;
+  }
+
+  if (storageMode === "cookie") {
+    return;
+  }
+
   await ensureStorage();
   await fs.writeFile(getOrderFilePath(order.id), JSON.stringify(order, null, 2), "utf8");
 }
 
 async function removeSlipFile(order: Order) {
   if (!order.slip?.storedName) {
+    return;
+  }
+
+  if (getOrderStorageMode() === "blob") {
+    try {
+      await del(order.slip.storedName);
+    } catch {
+      return;
+    }
     return;
   }
 
@@ -108,6 +186,34 @@ export async function getOrderById(orderId: string) {
     return null;
   }
 
+  const storageMode = getOrderStorageMode();
+
+  if (storageMode === "blob") {
+    const blobResult = await get(getOrderBlobPath(orderId), {
+      access: "private"
+    });
+
+    if (!blobResult || blobResult.statusCode !== 200) {
+      return null;
+    }
+
+    const rawOrder = await new Response(blobResult.stream).text();
+    return JSON.parse(rawOrder) as Order;
+  }
+
+  if (storageMode === "cookie") {
+    const serializedOrder = cookies().get(getOrderCookieName(orderId))?.value;
+    if (!serializedOrder) {
+      return null;
+    }
+
+    try {
+      return decodeOrderCookie(serializedOrder);
+    } catch {
+      return null;
+    }
+  }
+
   try {
     const rawOrder = await fs.readFile(getOrderFilePath(orderId), "utf8");
     return JSON.parse(rawOrder) as Order;
@@ -138,7 +244,33 @@ export async function updateOrder(orderId: string, input: ValidatedOrderInput) {
   return order;
 }
 
+export function setOrderResponseCookie(response: NextResponse, order: Order) {
+  if (getOrderStorageMode() !== "cookie") {
+    return;
+  }
+
+  response.cookies.set({
+    name: getOrderCookieName(order.id),
+    value: encodeOrderCookie(order),
+    httpOnly: true,
+    sameSite: "lax",
+    secure: isVercelRuntime(),
+    path: "/",
+    maxAge: ORDER_COOKIE_MAX_AGE_SECONDS
+  });
+}
+
+export function canUploadPaymentSlip() {
+  return getOrderStorageMode() !== "cookie";
+}
+
 export function validateSlipUpload(file: File) {
+  if (!canUploadPaymentSlip()) {
+    return {
+      message: "deployment นี้ยังไม่ได้ตั้งค่า Vercel Blob สำหรับเก็บสลิปการชำระเงิน"
+    };
+  }
+
   if (!ALLOWED_SLIP_TYPES.has(file.type)) {
     return { message: "รองรับไฟล์ JPG, PNG, WEBP หรือ PDF เท่านั้น" };
   }
@@ -156,17 +288,33 @@ export async function attachSlipToOrder(orderId: string, file: File) {
     return null;
   }
 
-  await ensureStorage();
+  const storageMode = getOrderStorageMode();
+  if (storageMode === "cookie") {
+    throw new Error("Payment slip upload requires persistent storage.");
+  }
+
   await removeSlipFile(existingOrder);
 
   const extension = resolveSlipExtension(file.name, file.type);
-  const storedName = `${orderId}-${Date.now()}${extension}`;
-  const fileBuffer = Buffer.from(await file.arrayBuffer());
-  await fs.writeFile(path.join(SLIPS_DIR, storedName), fileBuffer);
+  const storedName = `${orderId}-${Date.now()}-${sanitizeFileName(file.name.replace(/\.[^.]+$/, ""))}${extension}`;
+
+  if (storageMode === "blob") {
+    await put(`slips/${storedName}`, file, {
+      access: "private",
+      addRandomSuffix: false,
+      allowOverwrite: true,
+      contentType: file.type,
+      cacheControlMaxAge: 60
+    });
+  } else {
+    await ensureStorage();
+    const fileBuffer = Buffer.from(await file.arrayBuffer());
+    await fs.writeFile(path.join(SLIPS_DIR, storedName), fileBuffer);
+  }
 
   const slip: OrderSlip = {
     originalName: file.name,
-    storedName,
+    storedName: storageMode === "blob" ? `slips/${storedName}` : storedName,
     mimeType: file.type,
     size: file.size,
     uploadedAt: new Date().toISOString()

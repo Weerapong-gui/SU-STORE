@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { createOrder } from "@/lib/orderStore";
+import { createOrder, setOrderResponseCookie } from "@/lib/orderStore";
 import { validateOrderInput } from "@/lib/orderValidation";
 
 export async function POST(request: Request) {
@@ -13,11 +13,16 @@ export async function POST(request: Request) {
 
     const order = await createOrder(validation.data);
 
-    return NextResponse.json({
+    const response = NextResponse.json({
       message: `สร้างคำสั่งซื้อเรียบร้อย หมายเลขออเดอร์ ${order.id}`,
       orderId: order.id
     });
-  } catch {
+
+    setOrderResponseCookie(response, order);
+    return response;
+
+  } catch (error) {
+    console.error("Failed to create order", error);
     return NextResponse.json(
       { message: "ไม่สามารถสร้างคำสั่งซื้อได้ในขณะนี้" },
       { status: 500 }
