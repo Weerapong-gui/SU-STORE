@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { formatOrderNumber } from "@/lib/formatOrderNumber";
 import { createOrder, setOrderResponseCookie } from "@/lib/orderStore";
 import { validateOrderInput } from "@/lib/orderValidation";
 
@@ -14,7 +15,7 @@ export async function POST(request: Request) {
     const order = await createOrder(validation.data);
 
     const response = NextResponse.json({
-      message: `สร้างคำสั่งซื้อเรียบร้อย หมายเลขออเดอร์ ${order.id}`,
+      message: `สร้างคำสั่งซื้อเรียบร้อย หมายเลขออเดอร์ ${formatOrderNumber(order)}`,
       orderId: order.id
     });
 

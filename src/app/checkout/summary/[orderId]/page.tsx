@@ -1,9 +1,9 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { Container } from "@/components/ui/Container";
+import { formatOrderNumber } from "@/lib/formatOrderNumber";
 import { getOrderById } from "@/lib/orderStore";
 import { formatPrice } from "@/lib/formatPrice";
-import { Order } from "@/types/order";
 
 export const dynamic = "force-dynamic";
 
@@ -18,19 +18,6 @@ type CheckoutSummaryPageProps = {
     orderId: string;
   };
 };
-
-function formatDisplayOrderId(order: Order) {
-  if (order.id.startsWith("FP28")) {
-    return order.id;
-  }
-
-  if (typeof order.sequenceNumber === "number") {
-    const roundNumber = order.roundNumber ?? 1;
-    return `FP28${String(order.sequenceNumber).padStart(4, "0")}${roundNumber}`;
-  }
-
-  return order.id;
-}
 
 export default async function CheckoutSummaryPage({ params }: CheckoutSummaryPageProps) {
   const order = await getOrderById(params.orderId);
@@ -47,7 +34,7 @@ export default async function CheckoutSummaryPage({ params }: CheckoutSummaryPag
           <h1 className="mt-2 text-2xl font-semibold tracking-tight text-zinc-900 md:text-3xl">
             ตรวจสอบคำสั่งซื้อก่อนชำระเงิน
           </h1>
-          <p className="mt-2 text-sm text-zinc-600">หมายเลขออเดอร์: {formatDisplayOrderId(order)}</p>
+          <p className="mt-2 text-sm text-zinc-600">หมายเลขออเดอร์: {formatOrderNumber(order)}</p>
 
           <div className={`mt-6 ${INFO_CARD_CLASSES}`}>
             <div className="grid gap-6 md:grid-cols-2 md:gap-0">

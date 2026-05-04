@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { formatOrderNumber } from "@/lib/formatOrderNumber";
 import { getOrderById, setOrderResponseCookie, updateOrder } from "@/lib/orderStore";
 import { validateOrderInput } from "@/lib/orderValidation";
 
@@ -42,7 +43,7 @@ export async function PUT(request: Request, { params }: OrderRouteProps) {
     }
 
     const response = NextResponse.json({
-      message: `อัปเดตคำสั่งซื้อ ${order.id} เรียบร้อย`,
+      message: `อัปเดตคำสั่งซื้อ ${formatOrderNumber(order)} เรียบร้อย`,
       orderId: order.id
     });
 

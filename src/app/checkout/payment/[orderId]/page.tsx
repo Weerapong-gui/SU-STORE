@@ -5,6 +5,7 @@ import generatePayload from "promptpay-qr";
 import { notFound } from "next/navigation";
 import { PaymentSlipUploadForm } from "@/components/PaymentSlipUploadForm";
 import { Container } from "@/components/ui/Container";
+import { formatOrderNumber } from "@/lib/formatOrderNumber";
 import { canUploadPaymentSlip, getOrderById } from "@/lib/orderStore";
 import { formatPrice } from "@/lib/formatPrice";
 
@@ -52,7 +53,7 @@ export default async function CheckoutPaymentPage({ params }: CheckoutPaymentPag
             สแกน QR เพื่อชำระเงิน
           </h1>
           <p className="mt-2 text-sm text-zinc-600">
-            Order ID {order.id} ถูกบันทึกแล้ว หลังโอนเสร็จให้อัปโหลดสลิปเพื่อยืนยันการชำระเงิน
+            หมายเลขออเดอร์ {formatOrderNumber(order)} ถูกบันทึกแล้ว หลังโอนเสร็จให้อัปโหลดสลิปเพื่อยืนยันการชำระเงิน
           </p>
 
           <div className="mt-6 grid gap-4 lg:grid-cols-[0.95fr_1.05fr]">

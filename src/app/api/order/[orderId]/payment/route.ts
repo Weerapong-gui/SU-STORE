@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { formatOrderNumber } from "@/lib/formatOrderNumber";
 import { attachSlipToOrder, setOrderResponseCookie, validateSlipUpload } from "@/lib/orderStore";
 
 type PaymentRouteProps = {
@@ -27,7 +28,7 @@ export async function POST(request: Request, { params }: PaymentRouteProps) {
     }
 
     const response = NextResponse.json({
-      message: `บันทึกสลิปของคำสั่งซื้อ ${order.id} เรียบร้อย`,
+      message: `บันทึกสลิปของคำสั่งซื้อ ${formatOrderNumber(order)} เรียบร้อย`,
       orderId: order.id
     });
 

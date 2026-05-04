@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { Container } from "@/components/ui/Container";
+import { formatOrderNumber } from "@/lib/formatOrderNumber";
 import { getOrderById } from "@/lib/orderStore";
 import { formatPrice } from "@/lib/formatPrice";
 
@@ -33,7 +34,7 @@ export default async function CheckoutCompletePage({ params }: CheckoutCompleteP
             ส่งสลิปเรียบร้อยแล้ว
           </h1>
           <p className="mt-2 text-sm text-zinc-600">
-            ทีมงานจะตรวจสอบการชำระเงินของออเดอร์ {order.id} และติดต่อกลับหากต้องการข้อมูลเพิ่มเติม
+            ทีมงานจะตรวจสอบการชำระเงินของออเดอร์ {formatOrderNumber(order)} และติดต่อกลับหากต้องการข้อมูลเพิ่มเติม
           </p>
 
           <div className="mt-6 rounded-3xl border border-zinc-300 bg-white p-5">
