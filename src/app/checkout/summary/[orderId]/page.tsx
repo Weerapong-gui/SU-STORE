@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 import { Container } from "@/components/ui/Container";
 import { getOrderById } from "@/lib/orderStore";
 import { formatPrice } from "@/lib/formatPrice";
+import { Order } from "@/types/order";
 
 export const dynamic = "force-dynamic";
 
@@ -17,6 +18,19 @@ type CheckoutSummaryPageProps = {
     orderId: string;
   };
 };
+
+function formatDisplayOrderId(order: Order) {
+  if (order.id.startsWith("FP28")) {
+    return order.id;
+  }
+
+  if (typeof order.sequenceNumber === "number") {
+    const roundNumber = order.roundNumber ?? 1;
+    return `FP28${String(order.sequenceNumber).padStart(4, "0")}${roundNumber}`;
+  }
+
+  return order.id;
+}
 
 export default async function CheckoutSummaryPage({ params }: CheckoutSummaryPageProps) {
   const order = await getOrderById(params.orderId);
@@ -33,34 +47,36 @@ export default async function CheckoutSummaryPage({ params }: CheckoutSummaryPag
           <h1 className="mt-2 text-2xl font-semibold tracking-tight text-zinc-900 md:text-3xl">
             ตรวจสอบคำสั่งซื้อก่อนชำระเงิน
           </h1>
-          <p className="mt-2 text-sm text-zinc-600">Order ID: {order.id}</p>
+          <p className="mt-2 text-sm text-zinc-600">หมายเลขออเดอร์: {formatDisplayOrderId(order)}</p>
 
-          <div className="mt-6 grid gap-4 md:grid-cols-2">
-            <div className={INFO_CARD_CLASSES}>
-              <p className="text-xs font-semibold tracking-[0.1em] text-zinc-500">ORDER</p>
-              <h2 className="mt-2 text-xl font-semibold text-zinc-900">{order.product.name}</h2>
-              <p className="mt-1 text-sm text-zinc-600">{order.product.tagline}</p>
+          <div className={`mt-6 ${INFO_CARD_CLASSES}`}>
+            <div className="grid gap-6 md:grid-cols-2 md:gap-0">
+              <div className="md:pr-6">
+                <p className="text-xs font-semibold tracking-[0.1em] text-zinc-500">ORDER</p>
+                <h2 className="mt-2 text-xl font-semibold text-zinc-900">{order.product.name}</h2>
+                <p className="mt-1 text-sm text-zinc-600">{order.product.tagline}</p>
 
-              <div className="mt-4 space-y-2 text-sm text-zinc-700">
-                <p>Size: {order.size}</p>
-                <p>Quantity: {order.quantity}</p>
-                <p>
-                  Unit Price:{" "}
-                  <span className="font-semibold text-apple-blue">
-                    {formatPrice(order.product.price)}
-                  </span>
-                </p>
+                <div className="mt-4 space-y-2 text-sm text-zinc-700">
+                  <p>Size: {order.size}</p>
+                  <p>Quantity: {order.quantity}</p>
+                  <p>
+                    Unit Price:{" "}
+                    <span className="font-semibold text-apple-blue">
+                      {formatPrice(order.product.price)}
+                    </span>
+                  </p>
+                </div>
               </div>
-            </div>
 
-            <div className={INFO_CARD_CLASSES}>
-              <p className="text-xs font-semibold tracking-[0.1em] text-zinc-500">CUSTOMER</p>
-              <div className="mt-3 space-y-2 text-sm text-zinc-700">
-                <p>Name: {order.customer.firstName} {order.customer.lastName}</p>
-                <p>Nickname: {order.customer.nickname}</p>
-                <p>Email: {order.customer.email}</p>
-                <p>Phone: {order.customer.phone}</p>
-                <p>School: {order.customer.school}</p>
+              <div className="border-t border-zinc-200 pt-6 md:border-l md:border-t-0 md:pl-6 md:pt-0">
+                <p className="text-xs font-semibold tracking-[0.1em] text-zinc-500">CUSTOMER</p>
+                <div className="mt-3 space-y-2 text-sm text-zinc-700">
+                  <p>Name: {order.customer.firstName} {order.customer.lastName}</p>
+                  <p>Nickname: {order.customer.nickname}</p>
+                  <p>Email: {order.customer.email}</p>
+                  <p>Phone: {order.customer.phone}</p>
+                  <p>School: {order.customer.school}</p>
+                </div>
               </div>
             </div>
           </div>
