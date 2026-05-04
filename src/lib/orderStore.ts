@@ -21,9 +21,14 @@ const ORDER_ID_PATTERN = /^[A-Z0-9-]+$/;
 const ALLOWED_SLIP_TYPES = new Set(["image/jpeg", "image/png", "image/webp", "application/pdf"]);
 const MAX_SLIP_SIZE_BYTES = 5 * 1024 * 1024;
 const ORDER_COOKIE_PREFIX = "su-order-";
+const REMOTE_ORDER_TOKEN_COOKIE_PREFIX = "su-order-token-";
 const ORDER_COOKIE_MAX_AGE_SECONDS = 60 * 60 * 24 * 7;
 
 type OrderStorageMode = "filesystem" | "blob" | "cookie";
+type CreateOrderResult = {
+  order: Order;
+  accessToken?: string;
+};
 
 function getOrderFilePath(orderId: string) {
   return path.join(ORDERS_DIR, `${orderId}.json`);
@@ -99,12 +104,36 @@ function getOrderCookieName(orderId: string) {
   return `${ORDER_COOKIE_PREFIX}${orderId}`;
 }
 
+function getRemoteOrderTokenCookieName(orderId: string) {
+  return `${REMOTE_ORDER_TOKEN_COOKIE_PREFIX}${orderId}`;
+}
+
 function encodeOrderCookie(order: Order) {
   return Buffer.from(JSON.stringify(order), "utf8").toString("base64url");
 }
 
 function decodeOrderCookie(serializedOrder: string) {
   return JSON.parse(Buffer.from(serializedOrder, "base64url").toString("utf8")) as Order;
+}
+
+function getRemoteOrderAccessToken(orderId: string) {
+  return cookies().get(getRemoteOrderTokenCookieName(orderId))?.value ?? "";
+}
+
+function setRemoteOrderAccessTokenCookie(
+  response: NextResponse,
+  orderId: string,
+  accessToken: string
+) {
+  response.cookies.set({
+    name: getRemoteOrderTokenCookieName(orderId),
+    value: accessToken,
+    httpOnly: true,
+    sameSite: "lax",
+    secure: isVercelRuntime(),
+    path: "/",
+    maxAge: ORDER_COOKIE_MAX_AGE_SECONDS
+  });
 }
 
 function sanitizeFileName(fileName: string) {
@@ -194,7 +223,7 @@ export async function getOrderById(orderId: string) {
   }
 
   if (hasRemoteOrderApi()) {
-    return getRemoteOrderById(orderId);
+    return getRemoteOrderById(orderId, getRemoteOrderAccessToken(orderId));
   }
 
   const storageMode = getOrderStorageMode();
@@ -242,17 +271,20 @@ export async function createOrder(input: ValidatedOrderInput) {
     if (!order) {
       throw new Error("Remote order API returned no order during creation.");
     }
-    return order;
+    return {
+      order,
+      accessToken: order.accessToken
+    } satisfies CreateOrderResult;
   }
 
   const order = buildOrderFromInput(generateOrderId(), input);
   await writeOrder(order);
-  return order;
+  return { order } satisfies CreateOrderResult;
 }
 
 export async function updateOrder(orderId: string, input: ValidatedOrderInput) {
   if (hasRemoteOrderApi()) {
-    return updateRemoteOrder(orderId, input);
+    return updateRemoteOrder(orderId, input, getRemoteOrderAccessToken(orderId));
   }
 
   const existingOrder = await getOrderById(orderId);
@@ -267,8 +299,17 @@ export async function updateOrder(orderId: string, input: ValidatedOrderInput) {
   return order;
 }
 
-export function setOrderResponseCookie(response: NextResponse, order: Order) {
+export function setOrderResponseCookie(
+  response: NextResponse,
+  order: Order,
+  options?: {
+    accessToken?: string;
+  }
+) {
   if (hasRemoteOrderApi()) {
+    if (options?.accessToken) {
+      setRemoteOrderAccessTokenCookie(response, order.id, options.accessToken);
+    }
     return;
   }
 
@@ -356,7 +397,11 @@ export async function attachSlipToOrder(orderId: string, file: File) {
   };
 
   if (hasRemoteOrderApi()) {
-    const remoteOrder = await updateRemoteOrderSlip(orderId, slip);
+    const remoteOrder = await updateRemoteOrderSlip(
+      orderId,
+      slip,
+      getRemoteOrderAccessToken(orderId)
+    );
     if (!remoteOrder) {
       throw new Error("Failed to update remote order slip metadata.");
     }

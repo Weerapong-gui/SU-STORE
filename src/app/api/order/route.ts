@@ -12,14 +12,14 @@ export async function POST(request: Request) {
       return NextResponse.json({ message: validation.message }, { status: 400 });
     }
 
-    const order = await createOrder(validation.data);
+    const { order, accessToken } = await createOrder(validation.data);
 
     const response = NextResponse.json({
       message: `สร้างคำสั่งซื้อเรียบร้อย หมายเลขออเดอร์ ${formatOrderNumber(order)}`,
       orderId: order.id
     });
 
-    setOrderResponseCookie(response, order);
+    setOrderResponseCookie(response, order, { accessToken });
     return response;
 
   } catch (error) {

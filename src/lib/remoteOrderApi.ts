@@ -4,12 +4,20 @@ import { Order, OrderCustomer, OrderProductSnapshot, OrderSlip } from "@/types/o
 const REMOTE_ORDER_API_BASE_URL = process.env.ORDER_API_BASE_URL?.replace(/\/$/, "") ?? "";
 const REMOTE_ORDER_API_TOKEN = process.env.ORDER_API_TOKEN ?? "";
 
+export type RemoteOrder = Order & {
+  accessToken?: string;
+};
+
 type RemoteOrderPayload = {
   product: OrderProductSnapshot;
   customer: OrderCustomer;
   size: string;
   quantity: number;
   totalAmount: number;
+};
+
+type RemoteOrderRequestOptions = RequestInit & {
+  orderAccessToken?: string;
 };
 
 function createProductSnapshot(input: ValidatedOrderInput): OrderProductSnapshot {
@@ -45,7 +53,10 @@ function createRemoteOrderPayload(input: ValidatedOrderInput): RemoteOrderPayloa
   };
 }
 
-async function remoteOrderRequest<T>(pathname: string, init?: RequestInit): Promise<T | null> {
+async function remoteOrderRequest<T>(
+  pathname: string,
+  init?: RemoteOrderRequestOptions
+): Promise<T | null> {
   if (!REMOTE_ORDER_API_BASE_URL) {
     return null;
   }
@@ -56,6 +67,8 @@ async function remoteOrderRequest<T>(pathname: string, init?: RequestInit): Prom
   }
   if (REMOTE_ORDER_API_TOKEN) {
     headers.set("Authorization", `Bearer ${REMOTE_ORDER_API_TOKEN}`);
+  } else if (init?.orderAccessToken) {
+    headers.set("X-Order-Token", init.orderAccessToken);
   }
 
   const response = await fetch(`${REMOTE_ORDER_API_BASE_URL}${pathname}`, {
@@ -64,7 +77,7 @@ async function remoteOrderRequest<T>(pathname: string, init?: RequestInit): Prom
     cache: "no-store"
   });
 
-  if (response.status === 404) {
+  if (response.status === 401 || response.status === 404) {
     return null;
   }
 
@@ -80,27 +93,39 @@ export function hasRemoteOrderApi() {
   return Boolean(REMOTE_ORDER_API_BASE_URL);
 }
 
-export async function getRemoteOrderById(orderId: string) {
-  return remoteOrderRequest<Order>(`/orders/${encodeURIComponent(orderId)}`);
+export async function getRemoteOrderById(orderId: string, orderAccessToken?: string) {
+  return remoteOrderRequest<Order>(`/orders/${encodeURIComponent(orderId)}`, {
+    orderAccessToken
+  });
 }
 
 export async function createRemoteOrder(input: ValidatedOrderInput) {
-  return remoteOrderRequest<Order>("/orders", {
+  return remoteOrderRequest<RemoteOrder>("/orders", {
     method: "POST",
     body: JSON.stringify(createRemoteOrderPayload(input))
   });
 }
 
-export async function updateRemoteOrder(orderId: string, input: ValidatedOrderInput) {
+export async function updateRemoteOrder(
+  orderId: string,
+  input: ValidatedOrderInput,
+  orderAccessToken?: string
+) {
   return remoteOrderRequest<Order>(`/orders/${encodeURIComponent(orderId)}`, {
     method: "PUT",
+    orderAccessToken,
     body: JSON.stringify(createRemoteOrderPayload(input))
   });
 }
 
-export async function updateRemoteOrderSlip(orderId: string, slip: OrderSlip) {
+export async function updateRemoteOrderSlip(
+  orderId: string,
+  slip: OrderSlip,
+  orderAccessToken?: string
+) {
   return remoteOrderRequest<Order>(`/orders/${encodeURIComponent(orderId)}/slip`, {
     method: "PATCH",
+    orderAccessToken,
     body: JSON.stringify({ slip })
   });
 }

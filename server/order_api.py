@@ -1,7 +1,10 @@
 #!/usr/bin/env python3
+from __future__ import annotations
+
 import json
 import os
 import re
+import secrets
 import sqlite3
 from datetime import datetime, timezone
 from http import HTTPStatus
@@ -52,6 +55,7 @@ def ensure_db() -> None:
               email TEXT NOT NULL,
               phone TEXT NOT NULL,
               school TEXT NOT NULL,
+              access_token TEXT NOT NULL,
               slip_original_name TEXT,
               slip_stored_name TEXT,
               slip_mime_type TEXT,
@@ -60,6 +64,20 @@ def ensure_db() -> None:
           )
           """
       )
+      columns = {
+          row[1]
+          for row in connection.execute("PRAGMA table_info(orders)").fetchall()
+      }
+      if "access_token" not in columns:
+          connection.execute("ALTER TABLE orders ADD COLUMN access_token TEXT")
+      existing_rows = connection.execute(
+          "SELECT internal_id FROM orders WHERE access_token IS NULL OR access_token = ''"
+      ).fetchall()
+      for row in existing_rows:
+          connection.execute(
+              "UPDATE orders SET access_token = ? WHERE internal_id = ?",
+              (create_order_access_token(), row[0]),
+          )
       connection.execute("CREATE UNIQUE INDEX IF NOT EXISTS idx_orders_order_code ON orders(order_code)")
 
 
@@ -73,7 +91,11 @@ def create_order_code(sequence_number: int) -> str:
     return f"{ORDER_PREFIX}{sequence_number:04d}{ORDER_ROUND}"
 
 
-def serialize_order(row: sqlite3.Row) -> dict[str, Any]:
+def create_order_access_token() -> str:
+    return secrets.token_hex(24)
+
+
+def serialize_order(row: sqlite3.Row, include_access_token: bool = False) -> dict[str, Any]:
     slip = None
     if row["slip_stored_name"]:
         slip = {
@@ -84,7 +106,7 @@ def serialize_order(row: sqlite3.Row) -> dict[str, Any]:
             "uploadedAt": row["slip_uploaded_at"],
         }
 
-    return {
+    payload = {
         "id": row["order_code"],
         "sequenceNumber": row["internal_id"],
         "roundNumber": row["round_number"],
@@ -114,6 +136,9 @@ def serialize_order(row: sqlite3.Row) -> dict[str, Any]:
         },
         "slip": slip,
     }
+    if include_access_token:
+        payload["accessToken"] = row["access_token"]
+    return payload
 
 
 def validate_order_payload(payload: Any) -> tuple[dict[str, Any] | None, str | None]:
@@ -179,14 +204,15 @@ def fetch_order_by_code(connection: sqlite3.Connection, order_code: str) -> sqli
 
 def create_order(connection: sqlite3.Connection, payload: dict[str, Any]) -> dict[str, Any]:
     now = now_iso()
+    access_token = create_order_access_token()
     cursor = connection.execute(
         """
         INSERT INTO orders (
             round_number, status, payment_status, created_at, updated_at,
             product_slug, product_name, product_short_name, product_tagline, product_price, product_image, product_category,
-            size, quantity, total_amount,
+            size, quantity, total_amount, access_token,
             first_name, last_name, nickname, email, phone, school
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """,
         (
             ORDER_ROUND,
@@ -204,6 +230,7 @@ def create_order(connection: sqlite3.Connection, payload: dict[str, Any]) -> dic
             payload["size"],
             payload["quantity"],
             payload["total_amount"],
+            access_token,
             payload["customer"]["firstName"],
             payload["customer"]["lastName"],
             payload["customer"]["nickname"],
@@ -220,7 +247,7 @@ def create_order(connection: sqlite3.Connection, payload: dict[str, Any]) -> dic
     )
     row = fetch_order_by_code(connection, order_code)
     assert row is not None
-    return serialize_order(row)
+    return serialize_order(row, include_access_token=True)
 
 
 def update_order(connection: sqlite3.Connection, order_code: str, payload: dict[str, Any]) -> dict[str, Any] | None:
@@ -342,21 +369,19 @@ class OrderRequestHandler(BaseHTTPRequestHandler):
         raw_body = self.rfile.read(content_length)
         return json.loads(raw_body.decode("utf-8"))
 
-    def _is_authorized(self) -> bool:
-        if not ORDER_API_TOKEN:
-            return True
-        return self.headers.get("Authorization") == f"Bearer {ORDER_API_TOKEN}"
+    def _has_global_authorization(self) -> bool:
+        return bool(ORDER_API_TOKEN) and self.headers.get("Authorization") == f"Bearer {ORDER_API_TOKEN}"
 
-    def _require_authorization(self) -> bool:
-        if self._is_authorized():
+    def _is_authorized_for_order(self, row: sqlite3.Row) -> bool:
+        if self._has_global_authorization():
             return True
+        return self.headers.get("X-Order-Token") == row["access_token"]
+
+    def _deny_unauthorized(self) -> bool:
         self._send_json(HTTPStatus.UNAUTHORIZED, {"message": "unauthorized"})
         return False
 
     def do_GET(self) -> None:
-        if not self._require_authorization():
-            return
-
         path = urlparse(self.path).path
         if path == "/health":
             self._send_json(HTTPStatus.OK, {"status": "ok"})
@@ -377,12 +402,12 @@ class OrderRequestHandler(BaseHTTPRequestHandler):
             if row is None:
                 self._send_json(HTTPStatus.NOT_FOUND, {"message": "order not found"})
                 return
+            if not self._is_authorized_for_order(row):
+                self._deny_unauthorized()
+                return
             self._send_json(HTTPStatus.OK, serialize_order(row))
 
     def do_POST(self) -> None:
-        if not self._require_authorization():
-            return
-
         path = urlparse(self.path).path
         if path != "/orders":
             self._send_json(HTTPStatus.NOT_FOUND, {"message": "not found"})
@@ -405,27 +430,32 @@ class OrderRequestHandler(BaseHTTPRequestHandler):
             self._send_json(HTTPStatus.CREATED, order)
 
     def do_PUT(self) -> None:
-        if not self._require_authorization():
-            return
-
         path = urlparse(self.path).path
         order_match = re.fullmatch(r"/orders/([A-Z0-9-]+)", path)
         if not order_match:
             self._send_json(HTTPStatus.NOT_FOUND, {"message": "not found"})
             return
 
-        try:
-            payload = self._read_json()
-        except json.JSONDecodeError:
-            self._send_json(HTTPStatus.BAD_REQUEST, {"message": "invalid json"})
-            return
-
-        validated_payload, error_message = validate_order_payload(payload)
-        if error_message:
-            self._send_json(HTTPStatus.BAD_REQUEST, {"message": error_message})
-            return
-
         with open_db() as connection:
+            existing_order = fetch_order_by_code(connection, order_match.group(1))
+            if existing_order is None:
+                self._send_json(HTTPStatus.NOT_FOUND, {"message": "order not found"})
+                return
+            if not self._is_authorized_for_order(existing_order):
+                self._deny_unauthorized()
+                return
+
+            try:
+                payload = self._read_json()
+            except json.JSONDecodeError:
+                self._send_json(HTTPStatus.BAD_REQUEST, {"message": "invalid json"})
+                return
+
+            validated_payload, error_message = validate_order_payload(payload)
+            if error_message:
+                self._send_json(HTTPStatus.BAD_REQUEST, {"message": error_message})
+                return
+
             order = update_order(connection, order_match.group(1), validated_payload)
             if order is None:
                 self._send_json(HTTPStatus.NOT_FOUND, {"message": "order not found"})
@@ -434,27 +464,32 @@ class OrderRequestHandler(BaseHTTPRequestHandler):
             self._send_json(HTTPStatus.OK, order)
 
     def do_PATCH(self) -> None:
-        if not self._require_authorization():
-            return
-
         path = urlparse(self.path).path
         order_match = re.fullmatch(r"/orders/([A-Z0-9-]+)/slip", path)
         if not order_match:
             self._send_json(HTTPStatus.NOT_FOUND, {"message": "not found"})
             return
 
-        try:
-            payload = self._read_json()
-        except json.JSONDecodeError:
-            self._send_json(HTTPStatus.BAD_REQUEST, {"message": "invalid json"})
-            return
-
-        slip_payload, error_message = validate_slip_payload(payload)
-        if error_message:
-            self._send_json(HTTPStatus.BAD_REQUEST, {"message": error_message})
-            return
-
         with open_db() as connection:
+            existing_order = fetch_order_by_code(connection, order_match.group(1))
+            if existing_order is None:
+                self._send_json(HTTPStatus.NOT_FOUND, {"message": "order not found"})
+                return
+            if not self._is_authorized_for_order(existing_order):
+                self._deny_unauthorized()
+                return
+
+            try:
+                payload = self._read_json()
+            except json.JSONDecodeError:
+                self._send_json(HTTPStatus.BAD_REQUEST, {"message": "invalid json"})
+                return
+
+            slip_payload, error_message = validate_slip_payload(payload)
+            if error_message:
+                self._send_json(HTTPStatus.BAD_REQUEST, {"message": error_message})
+                return
+
             order = update_order_slip(connection, order_match.group(1), slip_payload)
             if order is None:
                 self._send_json(HTTPStatus.NOT_FOUND, {"message": "order not found"})

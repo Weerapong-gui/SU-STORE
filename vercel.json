@@ -1,0 +1,6 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "env": {
+    "ORDER_API_BASE_URL": "https://1620d202591cd4.lhr.life"
+  }
+}
