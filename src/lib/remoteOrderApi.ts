@@ -94,9 +94,13 @@ export function hasRemoteOrderApi() {
 }
 
 export async function getRemoteOrderById(orderId: string, orderAccessToken?: string) {
-  return remoteOrderRequest<Order>(`/orders/${encodeURIComponent(orderId)}`, {
-    orderAccessToken
-  });
+  try {
+    return await remoteOrderRequest<Order>(`/orders/${encodeURIComponent(orderId)}`, {
+      orderAccessToken
+    });
+  } catch {
+    return null;
+  }
 }
 
 export async function createRemoteOrder(input: ValidatedOrderInput) {
