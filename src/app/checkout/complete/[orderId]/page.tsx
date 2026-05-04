@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { notFound } from "next/navigation";
+import { OrderAccessFallback } from "@/components/OrderAccessFallback";
 import { Container } from "@/components/ui/Container";
 import { formatOrderNumber } from "@/lib/formatOrderNumber";
 import { getOrderById } from "@/lib/orderStore";
@@ -22,7 +22,7 @@ export default async function CheckoutCompletePage({ params }: CheckoutCompleteP
   const order = await getOrderById(params.orderId);
 
   if (!order) {
-    notFound();
+    return <OrderAccessFallback orderId={params.orderId} title="เปิดหน้าสถานะคำสั่งซื้อไม่ได้" />;
   }
 
   return (

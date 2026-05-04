@@ -2,7 +2,7 @@ import Image from "next/image";
 import Link from "next/link";
 import QRCode from "qrcode";
 import generatePayload from "promptpay-qr";
-import { notFound } from "next/navigation";
+import { OrderAccessFallback } from "@/components/OrderAccessFallback";
 import { PaymentSlipUploadForm } from "@/components/PaymentSlipUploadForm";
 import { Container } from "@/components/ui/Container";
 import { formatOrderNumber } from "@/lib/formatOrderNumber";
@@ -25,7 +25,7 @@ export default async function CheckoutPaymentPage({ params }: CheckoutPaymentPag
   const order = await getOrderById(params.orderId);
 
   if (!order) {
-    notFound();
+    return <OrderAccessFallback orderId={params.orderId} title="เปิดหน้าชำระเงินไม่ได้" />;
   }
 
   const promptPayId = process.env.PROMPTPAY_ID ?? process.env.NEXT_PUBLIC_PROMPTPAY_ID ?? "";
