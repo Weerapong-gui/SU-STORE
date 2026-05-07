@@ -45,7 +45,7 @@ export function Hero() {
           className="mt-10 flex flex-wrap items-center justify-center gap-4"
         >
           <BuyButton href="/checkout">Shop Now</BuyButton>
-          <BuyButton href="/products" variant="secondary">
+          <BuyButton href="/products" variant="secondary" className="hidden md:inline-flex">
             View Products
           </BuyButton>
         </motion.div>
