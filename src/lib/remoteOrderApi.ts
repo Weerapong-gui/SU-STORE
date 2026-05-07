@@ -62,7 +62,8 @@ async function remoteOrderRequest<T>(
   }
 
   const headers = new Headers(init?.headers);
-  if (!headers.has("Content-Type") && init?.body) {
+  const isFormDataBody = typeof FormData !== "undefined" && init?.body instanceof FormData;
+  if (!headers.has("Content-Type") && init?.body && !isFormDataBody) {
     headers.set("Content-Type", "application/json");
   }
   if (REMOTE_ORDER_API_TOKEN) {
@@ -142,19 +143,13 @@ export async function uploadRemoteOrderSlip(
   file: File,
   orderAccessToken?: string
 ) {
-  const fileContentBase64 = Buffer.from(await file.arrayBuffer()).toString("base64");
+  const formData = new FormData();
+  formData.append("slip", file);
+  formData.append("uploadedAt", new Date().toISOString());
 
   return remoteOrderRequest<Order>(`/orders/${encodeURIComponent(orderId)}/slip`, {
     method: "PATCH",
     orderAccessToken,
-    body: JSON.stringify({
-      slip: {
-        originalName: file.name,
-        mimeType: file.type,
-        size: file.size,
-        uploadedAt: new Date().toISOString(),
-        fileContentBase64
-      }
-    })
+    body: formData
   });
 }

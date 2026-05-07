@@ -26,6 +26,7 @@ export type OrderProductSnapshot = {
 export type OrderSlip = {
   originalName: string;
   storedName: string;
+  storedPath?: string;
   mimeType: string;
   size: number;
   uploadedAt: string;
