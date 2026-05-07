@@ -4,7 +4,7 @@ import { OrderAccessFallback } from "@/components/OrderAccessFallback";
 import { PaymentSlipUploadForm } from "@/components/PaymentSlipUploadForm";
 import { Container } from "@/components/ui/Container";
 import { formatOrderNumber } from "@/lib/formatOrderNumber";
-import { getOrderById, getPaymentSlipUploadAvailability } from "@/lib/orderStore";
+import { canUploadPaymentSlip, getOrderById } from "@/lib/orderStore";
 import { formatPrice } from "@/lib/formatPrice";
 
 export const dynamic = "force-dynamic";
@@ -13,7 +13,7 @@ const INFO_CARD_CLASSES = "rounded-3xl border border-zinc-300 bg-white p-5";
 const SECONDARY_ACTION_LINK_CLASSES =
   "inline-flex items-center justify-center rounded-full border border-apple-blue/20 bg-white px-5 py-2.5 text-sm font-medium text-apple-blue transition hover:bg-apple-blue-soft focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-apple-blue/15";
 const BANK_NAME = "ธนาคารกรุงเทพ";
-const ACCOUNT_NUMBER = "672 - 3000 - 425";
+const ACCOUNT_NUMBER = "672-3000-425";
 const ACCOUNT_NUMBER_VALUE = "6723000425";
 
 type CheckoutPaymentPageProps = {
@@ -29,7 +29,7 @@ export default async function CheckoutPaymentPage({ params }: CheckoutPaymentPag
     return <OrderAccessFallback orderId={params.orderId} title="เปิดหน้าชำระเงินไม่ได้" />;
   }
 
-  const slipUploadAvailability = await getPaymentSlipUploadAvailability();
+  const slipUploadEnabled = canUploadPaymentSlip();
 
   return (
     <section className="bg-[#ececec] py-6 md:py-10">
@@ -89,14 +89,16 @@ export default async function CheckoutPaymentPage({ params }: CheckoutPaymentPag
             <div className={INFO_CARD_CLASSES}>
               <p className="text-xs font-semibold tracking-[0.1em] text-zinc-500">UPLOAD SLIP</p>
               <div className="mt-3 text-sm text-zinc-700">
-                {slipUploadAvailability.enabled ? (
+                {slipUploadEnabled ? (
                   <PaymentSlipUploadForm
                     orderId={order.id}
                     hasUploadedSlip={Boolean(order.slip)}
                   />
                 ) : (
                   <div className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
-                    {slipUploadAvailability.message}
+                    deployment บน Vercel นี้ยังไม่ได้เชื่อม Blob storage สำหรับเก็บสลิป กรุณาเพิ่ม{" "}
+                    <code className="rounded bg-amber-100 px-1">BLOB_READ_WRITE_TOKEN</code> แล้ว redeploy
+                    ก่อนเปิดใช้งานขั้นตอนนี้
                   </div>
                 )}
               </div>

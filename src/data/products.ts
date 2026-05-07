@@ -7,7 +7,7 @@ export const products: Product[] = [
     shortName: "เสื้อเดี่ยว",
     tagline: " ",
     description: "เสื้อเดี่ยวทรงสวย ใส่สบาย เนื้อผ้านุ่มพรีเมียม ใส่ได้ทุกวัน",
-    price: 390,
+    price: 399,
     images: ["/images/polo.png", "/images/polo.png"],
     category: "single"
   },
@@ -17,7 +17,7 @@ export const products: Product[] = [
     shortName: "ชุดเซต",
     tagline: " ",
     description: "ชุดเซตที่ออกแบบให้เข้ากันอย่างลงตัว พร้อมใส่ พร้อมออกจากบ้านทันที",
-    price: 790,
+    price: 799,
     images: ["/images/FRESHER BUNDLE.png", "/images/FRESHER BUNDLE.png"],
     category: "bundle"
   }
