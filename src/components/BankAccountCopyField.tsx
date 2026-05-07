@@ -70,26 +70,28 @@ export function BankAccountCopyField({
 
   return (
     <div className="mt-5 rounded-[1.75rem] bg-[#e7e7e7] p-4 sm:p-5">
-      <div className="flex items-center gap-2.5 sm:gap-3">
-        <p className="min-w-0 flex-1 whitespace-nowrap text-[clamp(1.45rem,5.4vw,3rem)] font-medium leading-none tracking-[0.02em] text-zinc-950 sm:tracking-[0.04em]">
-          {formattedAccountNumber}
-        </p>
+      <div className="flex justify-center">
+        <div className="inline-flex max-w-full items-center gap-2 sm:gap-3">
+          <p className="whitespace-nowrap text-[clamp(1.28rem,4.9vw,3rem)] font-medium leading-none tracking-[0.01em] text-zinc-950 sm:tracking-[0.04em]">
+            {formattedAccountNumber}
+          </p>
 
-        <div className="relative shrink-0">
-          {copied ? (
-            <span className="absolute -top-9 left-1/2 -translate-x-1/2 rounded-full bg-zinc-950 px-3 py-1 text-[11px] font-semibold tracking-[0.08em] text-white">
-              Copied
-            </span>
-          ) : null}
+          <div className="relative shrink-0">
+            {copied ? (
+              <span className="absolute -top-9 left-1/2 -translate-x-1/2 rounded-full bg-zinc-950 px-3 py-1 text-[11px] font-semibold tracking-[0.08em] text-white">
+                Copied
+              </span>
+            ) : null}
 
-          <button
-            type="button"
-            onClick={handleCopy}
-            aria-label="Copy bank account number"
-            className="flex size-11 items-center justify-center rounded-2xl bg-zinc-950 text-white transition hover:bg-zinc-800 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-zinc-400/40 sm:size-12"
-          >
-            <CopyIcon />
-          </button>
+            <button
+              type="button"
+              onClick={handleCopy}
+              aria-label="Copy bank account number"
+              className="flex size-10 items-center justify-center rounded-2xl bg-zinc-950 text-white transition hover:bg-zinc-800 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-zinc-400/40 sm:size-12"
+            >
+              <CopyIcon />
+            </button>
+          </div>
         </div>
       </div>
     </div>
