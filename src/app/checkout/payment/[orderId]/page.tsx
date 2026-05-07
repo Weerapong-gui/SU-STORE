@@ -111,7 +111,7 @@ export default async function CheckoutPaymentPage({ params }: CheckoutPaymentPag
                   Back to Summary
                 </Link>
                 <Link
-                  href={`/checkout?orderId=${order.id}`}
+                  href={`/buy-now?orderId=${order.id}`}
                   className={SECONDARY_ACTION_LINK_CLASSES}
                 >
                   Edit Order

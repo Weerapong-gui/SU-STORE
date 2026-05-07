@@ -1,4 +1,5 @@
 export const SIZE_OPTIONS = ["XS", "S", "M", "L", "XL", "XXL", "3XL", "4XL"] as const;
+export const ONE_SIZE_OPTION = "ONE SIZE" as const;
 
 export const EMAIL_DOMAIN = "lamduan.mfu.ac.th";
 

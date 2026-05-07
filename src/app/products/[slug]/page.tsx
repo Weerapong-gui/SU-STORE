@@ -4,6 +4,7 @@ import type { Metadata } from "next";
 import { BuyButton } from "@/components/BuyButton";
 import { Container } from "@/components/ui/Container";
 import { getProductBySlug, products } from "@/data/products";
+import { createConfiguratorHref } from "@/lib/cart";
 import { formatPrice } from "@/lib/formatPrice";
 
 type ProductDetailPageProps = {
@@ -71,9 +72,12 @@ export default function ProductDetailPage({ params }: ProductDetailPageProps) {
             <p className="mt-10 text-3xl font-semibold text-apple-blue">
               {formatPrice(selectedProduct.price)}
             </p>
-            <div className="mt-8">
-              <BuyButton href={`/checkout?product=${selectedProduct.slug}`}>
-                Proceed to Checkout
+            <div className="mt-8 flex flex-wrap gap-3">
+              <BuyButton href={createConfiguratorHref(selectedProduct.slug, "payment")}>
+                Buy Now
+              </BuyButton>
+              <BuyButton href={createConfiguratorHref(selectedProduct.slug, "cart")} variant="secondary">
+                Add to Cart
               </BuyButton>
             </div>
           </div>

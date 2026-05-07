@@ -1,5 +1,8 @@
+"use client";
+
 import Link from "next/link";
 import { ShoppingBag } from "lucide-react";
+import { useCart } from "@/components/CartProvider";
 import { Container } from "@/components/ui/Container";
 
 const navigationLinks = [
@@ -9,6 +12,7 @@ const navigationLinks = [
 ];
 
 export function Navbar() {
+  const { itemCount } = useCart();
   const navigationLinkClasses =
     "inline-flex items-center gap-2 text-sm text-zinc-600 transition hover:text-zinc-900";
 
@@ -27,7 +31,14 @@ export function Navbar() {
             >
               {navigationLink.label}
               {navigationLink.href === "/checkout" ? (
-                <ShoppingBag className="h-4 w-4" strokeWidth={1.8} />
+                <span className="relative inline-flex">
+                  <ShoppingBag className="h-4 w-4" strokeWidth={1.8} />
+                  {itemCount > 0 ? (
+                    <span className="absolute -right-2.5 -top-2.5 inline-flex min-w-[1.15rem] items-center justify-center rounded-full bg-apple-blue px-1 text-[10px] font-semibold leading-none text-white">
+                      {itemCount > 99 ? "99+" : itemCount}
+                    </span>
+                  ) : null}
+                </span>
               ) : null}
             </Link>
           ))}

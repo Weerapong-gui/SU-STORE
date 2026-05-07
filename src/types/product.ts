@@ -1,4 +1,4 @@
-export type ProductCategory = "single" | "bundle";
+export type ProductCategory = "single" | "bundle" | "jacket" | "headband";
 
 export type Product = {
   slug: string;
@@ -9,4 +9,6 @@ export type Product = {
   price: number;
   images: string[];
   category: ProductCategory;
+  requiresSize: boolean;
+  requiresSchool: boolean;
 };

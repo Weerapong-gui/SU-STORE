@@ -1,10 +1,10 @@
 import { products } from "@/data/products";
-import { SCHOOL_OPTIONS, SIZE_OPTIONS } from "@/lib/checkoutOptions";
+import { ONE_SIZE_OPTION, SCHOOL_OPTIONS, SIZE_OPTIONS } from "@/lib/checkoutOptions";
 import { Product } from "@/types/product";
 
 export type ValidatedOrderInput = {
   product: Product;
-  size: (typeof SIZE_OPTIONS)[number];
+  size: string;
   quantity: number;
   firstName: string;
   lastName: string;
@@ -48,8 +48,8 @@ export function validateOrderInput(payload: Record<string, unknown>): Validation
     return { message: "ไม่พบสินค้าที่เลือก" };
   }
 
-  if (!SIZE_OPTIONS.includes(size as (typeof SIZE_OPTIONS)[number])) {
-    return { message: "กรุณาเลือกไซซ์เสื้อที่ถูกต้อง" };
+  if (product.requiresSize && !SIZE_OPTIONS.includes(size as (typeof SIZE_OPTIONS)[number])) {
+    return { message: "กรุณาเลือกไซซ์ที่ถูกต้อง" };
   }
 
   if (!Number.isInteger(parsedQuantity) || parsedQuantity < 1 || parsedQuantity > 99) {
@@ -76,7 +76,7 @@ export function validateOrderInput(payload: Record<string, unknown>): Validation
   return {
     data: {
       product,
-      size: size as (typeof SIZE_OPTIONS)[number],
+      size: product.requiresSize ? size : ONE_SIZE_OPTION,
       quantity: parsedQuantity,
       firstName,
       lastName,

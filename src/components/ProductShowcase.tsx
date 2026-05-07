@@ -5,6 +5,7 @@ import { motion } from "framer-motion";
 import { Product } from "@/types/product";
 import { Container } from "@/components/ui/Container";
 import { BuyButton } from "@/components/BuyButton";
+import { createConfiguratorHref } from "@/lib/cart";
 import { formatPrice } from "@/lib/formatPrice";
 import { cn } from "@/lib/utils";
 
@@ -45,23 +46,19 @@ export function ProductShowcase({
             <h2 className="text-4xl font-semibold tracking-tight md:text-6xl">
               {product.name}
             </h2>
-            {/*
-            <p className={cn("max-w-xl text-lg md:text-2xl", isDarkTheme ? "text-zinc-300" : "text-zinc-600")}>
-              {product.tagline}
-            </p>
 
-            <p className={cn("max-w-xl", isDarkTheme ? "text-zinc-300" : "text-zinc-600")}>
-              {product.description}
-            </p>
-             */}
-
-            <div className="flex items-center gap-4 pt-2">
-              <p className={cn("text-2xl font-semibold", priceTextClasses)}>{formatPrice(product.price)}</p>
+            <div className="flex flex-wrap items-center gap-4 pt-2">
+              <p className={cn("text-2xl font-semibold", priceTextClasses)}>
+                {formatPrice(product.price)}
+              </p>
               <BuyButton
-                href={`/checkout?product=${product.slug}`}
+                href={createConfiguratorHref(product.slug, "payment")}
                 variant={isDarkTheme ? "dark" : "primary"}
               >
                 Buy Now
+              </BuyButton>
+              <BuyButton href={createConfiguratorHref(product.slug, "cart")} variant="secondary">
+                Add to Cart
               </BuyButton>
             </div>
           </motion.div>

@@ -81,7 +81,7 @@ export default async function CheckoutSummaryPage({ params }: CheckoutSummaryPag
 
           <div className="mt-6 flex flex-wrap gap-3">
             <Link
-              href={`/checkout?orderId=${order.id}`}
+              href={`/buy-now?orderId=${order.id}`}
               className={SECONDARY_ACTION_LINK_CLASSES}
             >
               Back to Edit

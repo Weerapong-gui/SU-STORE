@@ -28,23 +28,14 @@ export function Hero() {
           <br />
           POLO SHIRT
         </motion.h1>
-        {/*
-        <motion.p
-          initial={{ opacity: 0, y: 18 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.7, delay: 0.16 }}
-          className="mt-6 max-w-2xl text-lg text-zinc-600 md:text-2xl"
-        >
-          Minimal design. Premium comfort. Built for your everyday fit.
-        </motion.p>
-          */}
+
         <motion.div
           initial={{ opacity: 0, y: 12 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.6, delay: 0.24 }}
           className="mt-10 flex flex-wrap items-center justify-center gap-4"
         >
-          <BuyButton href="/checkout">Shop Now</BuyButton>
+          <BuyButton href="/products">Shop Now</BuyButton>
           <BuyButton href="/products" variant="secondary" className="hidden md:inline-flex">
             View Products
           </BuyButton>

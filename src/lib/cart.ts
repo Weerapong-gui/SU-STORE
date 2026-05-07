@@ -1,0 +1,106 @@
+import { ONE_SIZE_OPTION, SIZE_OPTIONS } from "@/lib/checkoutOptions";
+import { CartItem } from "@/types/cart";
+import { Product } from "@/types/product";
+
+export const CART_STORAGE_KEY = "su-store-cart";
+export const CONFIGURE_INTENTS = ["payment", "cart"] as const;
+export type ConfigureIntent = (typeof CONFIGURE_INTENTS)[number];
+export type ProductSizeOption = (typeof SIZE_OPTIONS)[number] | typeof ONE_SIZE_OPTION;
+
+type BuyNowHrefOptions = {
+  orderId?: string;
+  productSlug?: string;
+  size?: string;
+  quantity?: number;
+  school?: string;
+};
+
+function isConfigureIntent(value: string | undefined): value is ConfigureIntent {
+  return value === "payment" || value === "cart";
+}
+
+function createCartItemId() {
+  return `cart-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
+}
+
+export function normalizeConfigureIntent(value?: string): ConfigureIntent {
+  return isConfigureIntent(value) ? value : "payment";
+}
+
+export function clampCartQuantity(quantity: number) {
+  return Math.min(99, Math.max(1, quantity));
+}
+
+export function normalizeProductSize(product: Product, size?: string): ProductSizeOption {
+  if (!product.requiresSize) {
+    return ONE_SIZE_OPTION;
+  }
+
+  return SIZE_OPTIONS.includes(size as (typeof SIZE_OPTIONS)[number])
+    ? (size as (typeof SIZE_OPTIONS)[number])
+    : "M";
+}
+
+export function createConfiguratorHref(productSlug: string, intent: ConfigureIntent = "payment") {
+  return `/products/${productSlug}/configure?intent=${intent}`;
+}
+
+export function createBuyNowHref({
+  orderId,
+  productSlug,
+  size,
+  quantity,
+  school
+}: BuyNowHrefOptions) {
+  const searchParams = new URLSearchParams();
+
+  if (orderId) {
+    searchParams.set("orderId", orderId);
+  }
+  if (productSlug) {
+    searchParams.set("product", productSlug);
+  }
+  if (size) {
+    searchParams.set("size", size);
+  }
+  if (typeof quantity === "number" && Number.isFinite(quantity)) {
+    searchParams.set("quantity", String(clampCartQuantity(quantity)));
+  }
+  if (school) {
+    searchParams.set("school", school);
+  }
+
+  const queryString = searchParams.toString();
+  return queryString ? `/buy-now?${queryString}` : "/buy-now";
+}
+
+export function createCartItem(
+  product: Product,
+  selection: {
+    quantity: number;
+    size?: string;
+    school: string;
+  }
+): CartItem {
+  return {
+    id: createCartItemId(),
+    productSlug: product.slug,
+    productName: product.name,
+    productShortName: product.shortName,
+    productImage: product.images[0],
+    productCategory: product.category,
+    unitPrice: product.price,
+    quantity: clampCartQuantity(selection.quantity),
+    size: normalizeProductSize(product, selection.size),
+    school: selection.school,
+    addedAt: new Date().toISOString()
+  };
+}
+
+export function getCartItemCount(items: CartItem[]) {
+  return items.reduce((total, item) => total + item.quantity, 0);
+}
+
+export function getCartSubtotal(items: CartItem[]) {
+  return items.reduce((total, item) => total + item.unitPrice * item.quantity, 0);
+}

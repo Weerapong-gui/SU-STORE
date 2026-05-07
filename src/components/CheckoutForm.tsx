@@ -4,7 +4,8 @@ import Image from "next/image";
 import { FormEvent, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { products } from "@/data/products";
-import { EMAIL_DOMAIN, SCHOOL_OPTIONS, SIZE_OPTIONS } from "@/lib/checkoutOptions";
+import { EMAIL_DOMAIN, ONE_SIZE_OPTION, SCHOOL_OPTIONS, SIZE_OPTIONS } from "@/lib/checkoutOptions";
+import { normalizeProductSize, ProductSizeOption } from "@/lib/cart";
 import { formatPrice } from "@/lib/formatPrice";
 import { cn } from "@/lib/utils";
 
@@ -23,20 +24,16 @@ type CheckoutFormProps = {
 
 type SubmitStatus = "idle" | "loading";
 
-const PRODUCT_DISPLAY_NAMES = {
-  single: "FRESHER POLO SHIRT",
-  bundle: "FRESHER BUNDLE"
-} as const;
 const MIN_QUANTITY = 1;
 const MAX_QUANTITY = 99;
 
 const TEXT_FIELD_CLASSES =
   "h-11 w-full rounded-2xl border border-zinc-300 bg-white px-4 text-xs text-zinc-900 outline-none transition focus:border-apple-blue focus:ring-4 focus:ring-apple-blue/10";
-const PACKAGE_OPTION_BASE_CLASSES =
+const PRODUCT_OPTION_BASE_CLASSES =
   "w-full rounded-[1.8rem] border p-5 text-left transition focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-apple-blue/15";
-const PACKAGE_OPTION_SELECTED_CLASSES =
+const PRODUCT_OPTION_SELECTED_CLASSES =
   "border-apple-blue bg-white shadow-[0_12px_32px_rgba(0,113,227,0.12)]";
-const PACKAGE_OPTION_IDLE_CLASSES =
+const PRODUCT_OPTION_IDLE_CLASSES =
   "border-zinc-300 bg-[#f5f5f7] hover:border-apple-blue/35 hover:bg-white";
 const SIZE_OPTION_BASE_CLASSES =
   "h-11 rounded-2xl border border-zinc-300 bg-white text-xs font-semibold text-zinc-800 transition focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-apple-blue/15 hover:border-apple-blue/30 hover:bg-apple-blue-soft";
@@ -49,6 +46,10 @@ const QUANTITY_CONTROL_BUTTON_CLASSES =
 
 function clampQuantity(quantity: number) {
   return Math.min(MAX_QUANTITY, Math.max(MIN_QUANTITY, quantity));
+}
+
+function getProductBySlug(productSlug?: string) {
+  return products.find((product) => product.slug === productSlug) ?? products[0];
 }
 
 export function CheckoutForm({
@@ -64,15 +65,7 @@ export function CheckoutForm({
   defaultSchool
 }: CheckoutFormProps) {
   const router = useRouter();
-  const defaultProductSlug = useMemo(() => {
-    const matchingProduct = products.find((product) => product.slug === defaultProduct);
-    return matchingProduct?.slug ?? products[0].slug;
-  }, [defaultProduct]);
-  const defaultSizeOption = useMemo(() => {
-    return SIZE_OPTIONS.includes(defaultSize as (typeof SIZE_OPTIONS)[number])
-      ? (defaultSize as (typeof SIZE_OPTIONS)[number])
-      : "M";
-  }, [defaultSize]);
+  const defaultProductData = useMemo(() => getProductBySlug(defaultProduct), [defaultProduct]);
   const defaultQuantityValue = useMemo(() => {
     const parsed = Number.parseInt(defaultQuantity ?? "1", 10);
     return Number.isNaN(parsed) ? MIN_QUANTITY : clampQuantity(parsed);
@@ -84,26 +77,21 @@ export function CheckoutForm({
       : "";
   }, [defaultSchool]);
 
-  const [activeProductSlug, setActiveProductSlug] = useState(defaultProductSlug);
-  const [selectedSizeOption, setSelectedSizeOption] = useState<(typeof SIZE_OPTIONS)[number]>(
-    defaultSizeOption
+  const [activeProductSlug, setActiveProductSlug] = useState(defaultProductData.slug);
+  const [selectedSizeOption, setSelectedSizeOption] = useState<ProductSizeOption>(
+    normalizeProductSize(defaultProductData, defaultSize)
   );
   const [selectedQuantity, setSelectedQuantity] = useState(defaultQuantityValue);
   const [customerEmail, setCustomerEmail] = useState(defaultEmailValue);
   const [submitState, setSubmitState] = useState<SubmitStatus>("idle");
   const [submitError, setSubmitError] = useState("");
 
-  const activeProduct = useMemo(() => {
-    return products.find((product) => product.slug === activeProductSlug) ?? products[0];
-  }, [activeProductSlug]);
+  const activeProduct = useMemo(() => getProductBySlug(activeProductSlug), [activeProductSlug]);
 
   useEffect(() => {
-    setActiveProductSlug(defaultProductSlug);
-  }, [defaultProductSlug]);
-
-  useEffect(() => {
-    setSelectedSizeOption(defaultSizeOption);
-  }, [defaultSizeOption]);
+    setActiveProductSlug(defaultProductData.slug);
+    setSelectedSizeOption(normalizeProductSize(defaultProductData, defaultSize));
+  }, [defaultProductData, defaultSize]);
 
   useEffect(() => {
     setSelectedQuantity(defaultQuantityValue);
@@ -112,6 +100,10 @@ export function CheckoutForm({
   useEffect(() => {
     setCustomerEmail(defaultEmailValue);
   }, [defaultEmailValue]);
+
+  useEffect(() => {
+    setSelectedSizeOption((currentSizeOption) => normalizeProductSize(activeProduct, currentSizeOption));
+  }, [activeProduct]);
 
   function handleEmailChange(value: string) {
     const nextValue = value.replace(/\s/g, "");
@@ -135,7 +127,7 @@ export function CheckoutForm({
     const formData = new FormData(event.currentTarget);
     const payload = {
       product: activeProduct.slug,
-      size: selectedSizeOption,
+      size: normalizeProductSize(activeProduct, selectedSizeOption),
       quantity: selectedQuantity,
       firstName: String(formData.get("firstName") ?? "").trim(),
       lastName: String(formData.get("lastName") ?? "").trim(),
@@ -165,14 +157,14 @@ export function CheckoutForm({
         | null;
 
       if (!response.ok || !result?.orderId) {
-        setSubmitError(result?.message ?? "ไม่สามารถบันทึกคำสั่งซื้อได้ในขณะนี้");
+        setSubmitError(result?.message ?? "Unable to save your order right now.");
         setSubmitState("idle");
         return;
       }
 
       router.push(`/checkout/summary/${result.orderId}`);
     } catch {
-      setSubmitError("ไม่สามารถเชื่อมต่อกับระบบสั่งซื้อได้ในขณะนี้");
+      setSubmitError("Unable to connect to the ordering service right now.");
       setSubmitState("idle");
     }
   }
@@ -224,7 +216,7 @@ export function CheckoutForm({
             {activeProduct.name}
           </h1>
           <p className="mt-2 text-sm font-semibold text-apple-blue">
-            เริ่มต้นที่ {formatPrice(activeProduct.price)}
+            Starting at {formatPrice(activeProduct.price)}
           </p>
           {existingOrderId ? (
             <p className="mt-3 text-xs font-medium tracking-[0.08em] text-zinc-500">
@@ -234,7 +226,7 @@ export function CheckoutForm({
         </div>
 
         <div className="space-y-4">
-          <p className="text-xs font-semibold tracking-[0.1em] text-zinc-700">PACKAGE OPTIONS</p>
+          <p className="text-xs font-semibold tracking-[0.1em] text-zinc-700">PRODUCT OPTIONS</p>
           <div className="space-y-3">
             {products.map((product) => (
               <button
@@ -244,19 +236,19 @@ export function CheckoutForm({
                 aria-pressed={activeProductSlug === product.slug}
                 aria-label={`Select ${product.name}`}
                 className={cn(
-                  PACKAGE_OPTION_BASE_CLASSES,
+                  PRODUCT_OPTION_BASE_CLASSES,
                   activeProductSlug === product.slug
-                    ? PACKAGE_OPTION_SELECTED_CLASSES
-                    : PACKAGE_OPTION_IDLE_CLASSES
+                    ? PRODUCT_OPTION_SELECTED_CLASSES
+                    : PRODUCT_OPTION_IDLE_CLASSES
                 )}
               >
                 <div className="grid grid-cols-[1fr_auto] items-start gap-4">
                   <div>
                     <p className="text-xl font-semibold tracking-tight text-zinc-900 md:text-2xl">
-                      {PRODUCT_DISPLAY_NAMES[product.category]}
+                      {product.name}
                     </p>
-                    <p className="mt-2 max-w-[24ch] text-base leading-snug text-zinc-800 md:text-lg">
-                      {product.tagline}
+                    <p className="mt-2 max-w-[24ch] text-sm leading-snug text-zinc-600 md:text-base">
+                      {product.shortName}
                     </p>
                   </div>
                   <p
@@ -274,26 +266,36 @@ export function CheckoutForm({
         </div>
 
         <div className="space-y-3">
-          <p className="text-xs font-semibold tracking-[0.1em] text-zinc-700">SELECT SIZE</p>
+          <p className="text-xs font-semibold tracking-[0.1em] text-zinc-700">
+            {activeProduct.requiresSize ? "SELECT SIZE" : "SIZE"}
+          </p>
 
-          <div className="grid grid-cols-4 gap-2 md:grid-cols-8">
-            {SIZE_OPTIONS.map((size) => (
-              <button
-                key={size}
-                type="button"
-                onClick={() => setSelectedSizeOption(size)}
-                aria-pressed={selectedSizeOption === size}
-                className={cn(
-                  SIZE_OPTION_BASE_CLASSES,
-                  selectedSizeOption === size ? SIZE_OPTION_SELECTED_CLASSES : ""
-                )}
-              >
-                {size}
-              </button>
-            ))}
-          </div>
+          {activeProduct.requiresSize ? (
+            <>
+              <div className="grid grid-cols-4 gap-2 md:grid-cols-8">
+                {SIZE_OPTIONS.map((size) => (
+                  <button
+                    key={size}
+                    type="button"
+                    onClick={() => setSelectedSizeOption(size)}
+                    aria-pressed={selectedSizeOption === size}
+                    className={cn(
+                      SIZE_OPTION_BASE_CLASSES,
+                      selectedSizeOption === size ? SIZE_OPTION_SELECTED_CLASSES : ""
+                    )}
+                  >
+                    {size}
+                  </button>
+                ))}
+              </div>
 
-          <p className="text-right text-xs font-medium text-apple-blue">SIZE GUIDE</p>
+              <p className="text-right text-xs font-medium text-apple-blue">SIZE GUIDE</p>
+            </>
+          ) : (
+            <div className="inline-flex rounded-2xl border border-zinc-300 bg-white px-4 py-3 text-sm font-semibold text-zinc-800">
+              {ONE_SIZE_OPTION}
+            </div>
+          )}
         </div>
 
         <label className="block">
