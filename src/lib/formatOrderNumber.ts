@@ -1,6 +1,11 @@
 import { Order } from "@/types/order";
 
-const ORDER_PREFIX = "FP28";
+export const ORDER_PREFIX = "FP28";
+export const DEFAULT_ORDER_ROUND = 1;
+
+export function buildOrderCode(sequenceNumber: number, roundNumber = DEFAULT_ORDER_ROUND) {
+  return `${ORDER_PREFIX}${String(sequenceNumber).padStart(4, "0")}${roundNumber}`;
+}
 
 export function formatOrderNumber(order: Pick<Order, "id" | "sequenceNumber" | "roundNumber">) {
   if (order.id.startsWith(ORDER_PREFIX)) {
@@ -8,8 +13,7 @@ export function formatOrderNumber(order: Pick<Order, "id" | "sequenceNumber" | "
   }
 
   if (typeof order.sequenceNumber === "number") {
-    const roundNumber = order.roundNumber ?? 1;
-    return `${ORDER_PREFIX}${String(order.sequenceNumber).padStart(4, "0")}${roundNumber}`;
+    return buildOrderCode(order.sequenceNumber, order.roundNumber ?? DEFAULT_ORDER_ROUND);
   }
 
   return order.id;

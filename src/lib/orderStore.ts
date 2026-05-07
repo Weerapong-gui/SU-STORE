@@ -4,6 +4,7 @@ import { promises as fs } from "node:fs";
 import path from "node:path";
 import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
+import { DEFAULT_ORDER_ROUND, ORDER_PREFIX } from "@/lib/formatOrderNumber";
 import {
   createRemoteOrder,
   getRemoteOrderById,
@@ -22,12 +23,19 @@ const ALLOWED_SLIP_TYPES = new Set(["image/jpeg", "image/png", "image/webp", "ap
 const MAX_SLIP_SIZE_BYTES = 5 * 1024 * 1024;
 const ORDER_COOKIE_PREFIX = "su-order-";
 const REMOTE_ORDER_TOKEN_COOKIE_PREFIX = "su-order-token-";
+const LOCAL_ORDER_SEQUENCE_COOKIE_NAME = "su-order-sequence";
 const ORDER_COOKIE_MAX_AGE_SECONDS = 60 * 60 * 24 * 7;
+const LOCAL_ORDER_SEQUENCE_BLOB_PATH = "orders/_sequence.json";
+const LOCAL_ORDER_SEQUENCE_FILE_PATH = path.join(DATA_ROOT, "order-sequence.json");
 
 type OrderStorageMode = "filesystem" | "blob" | "cookie";
 type CreateOrderResult = {
   order: Order;
   accessToken?: string;
+};
+type LocalOrderNumber = {
+  roundNumber: number;
+  sequenceNumber: number;
 };
 
 function getOrderFilePath(orderId: string) {
@@ -43,15 +51,27 @@ function generateOrderId() {
   return `SU-${Date.now().toString(36).toUpperCase()}${suffix}`;
 }
 
+function getLocalOrderRound() {
+  const parsedRound = Number.parseInt(process.env.ORDER_ROUND ?? "", 10);
+  return Number.isInteger(parsedRound) && parsedRound > 0 ? parsedRound : DEFAULT_ORDER_ROUND;
+}
+
 function isSafeOrderId(orderId: string) {
   return ORDER_ID_PATTERN.test(orderId);
 }
 
-function buildOrderFromInput(orderId: string, input: ValidatedOrderInput, existingOrder?: Order): Order {
+function buildOrderFromInput(
+  orderId: string,
+  input: ValidatedOrderInput,
+  existingOrder?: Order,
+  localOrderNumber?: LocalOrderNumber
+): Order {
   const now = new Date().toISOString();
 
   return {
     id: orderId,
+    sequenceNumber: existingOrder?.sequenceNumber ?? localOrderNumber?.sequenceNumber,
+    roundNumber: existingOrder?.roundNumber ?? localOrderNumber?.roundNumber,
     status: "pending_payment",
     paymentStatus: "awaiting_payment",
     createdAt: existingOrder?.createdAt ?? now,
@@ -108,6 +128,12 @@ function getRemoteOrderTokenCookieName(orderId: string) {
   return `${REMOTE_ORDER_TOKEN_COOKIE_PREFIX}${orderId}`;
 }
 
+function getStoredLocalSequenceNumberFromCookie() {
+  const rawValue = cookies().get(LOCAL_ORDER_SEQUENCE_COOKIE_NAME)?.value ?? "";
+  const parsedValue = Number.parseInt(rawValue, 10);
+  return Number.isInteger(parsedValue) && parsedValue > 0 ? parsedValue : 0;
+}
+
 function encodeOrderCookie(order: Order) {
   return Buffer.from(JSON.stringify(order), "utf8").toString("base64url");
 }
@@ -128,6 +154,18 @@ function setRemoteOrderAccessTokenCookie(
   response.cookies.set({
     name: getRemoteOrderTokenCookieName(orderId),
     value: accessToken,
+    httpOnly: true,
+    sameSite: "lax",
+    secure: isVercelRuntime(),
+    path: "/",
+    maxAge: ORDER_COOKIE_MAX_AGE_SECONDS
+  });
+}
+
+function setLocalOrderSequenceCookie(response: NextResponse, sequenceNumber: number) {
+  response.cookies.set({
+    name: LOCAL_ORDER_SEQUENCE_COOKIE_NAME,
+    value: String(sequenceNumber),
     httpOnly: true,
     sameSite: "lax",
     secure: isVercelRuntime(),
@@ -172,6 +210,103 @@ async function writeOrder(order: Order) {
   await fs.writeFile(getOrderFilePath(order.id), JSON.stringify(order, null, 2), "utf8");
 }
 
+async function readStoredLocalSequenceNumber() {
+  const storageMode = getOrderStorageMode();
+
+  if (storageMode === "blob") {
+    const blobResult = await get(LOCAL_ORDER_SEQUENCE_BLOB_PATH, {
+      access: "private"
+    });
+
+    if (!blobResult || blobResult.statusCode !== 200) {
+      return 0;
+    }
+
+    try {
+      const rawState = await new Response(blobResult.stream).text();
+      const state = JSON.parse(rawState) as { lastSequenceNumber?: number };
+      return typeof state.lastSequenceNumber === "number" && state.lastSequenceNumber > 0
+        ? state.lastSequenceNumber
+        : 0;
+    } catch {
+      return 0;
+    }
+  }
+
+  if (storageMode === "cookie") {
+    return getStoredLocalSequenceNumberFromCookie();
+  }
+
+  try {
+    const rawState = await fs.readFile(LOCAL_ORDER_SEQUENCE_FILE_PATH, "utf8");
+    const state = JSON.parse(rawState) as { lastSequenceNumber?: number };
+    return typeof state.lastSequenceNumber === "number" && state.lastSequenceNumber > 0
+      ? state.lastSequenceNumber
+      : 0;
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === "ENOENT") {
+      return 0;
+    }
+    throw error;
+  }
+}
+
+async function writeStoredLocalSequenceNumber(sequenceNumber: number) {
+  const storageMode = getOrderStorageMode();
+  const serializedState = JSON.stringify({ lastSequenceNumber: sequenceNumber }, null, 2);
+
+  if (storageMode === "blob") {
+    await put(LOCAL_ORDER_SEQUENCE_BLOB_PATH, serializedState, {
+      access: "private",
+      addRandomSuffix: false,
+      allowOverwrite: true,
+      contentType: "application/json",
+      cacheControlMaxAge: 60
+    });
+    return;
+  }
+
+  if (storageMode === "cookie") {
+    return;
+  }
+
+  await ensureStorage();
+  await fs.writeFile(LOCAL_ORDER_SEQUENCE_FILE_PATH, serializedState, "utf8");
+}
+
+async function allocateLocalOrderNumber() {
+  const sequenceNumber = (await readStoredLocalSequenceNumber()) + 1;
+
+  if (getOrderStorageMode() !== "cookie") {
+    await writeStoredLocalSequenceNumber(sequenceNumber);
+  }
+
+  return {
+    sequenceNumber,
+    roundNumber: getLocalOrderRound()
+  } satisfies LocalOrderNumber;
+}
+
+async function ensureLocalOrderNumber(order: Order) {
+  if (
+    typeof order.sequenceNumber === "number" ||
+    order.id.startsWith(ORDER_PREFIX) ||
+    getOrderStorageMode() === "cookie"
+  ) {
+    return order;
+  }
+
+  const localOrderNumber = await allocateLocalOrderNumber();
+  const normalizedOrder: Order = {
+    ...order,
+    sequenceNumber: localOrderNumber.sequenceNumber,
+    roundNumber: localOrderNumber.roundNumber
+  };
+
+  await writeOrder(normalizedOrder);
+  return normalizedOrder;
+}
+
 async function getLocalOrderById(orderId: string) {
   const storageMode = getOrderStorageMode();
 
@@ -185,7 +320,7 @@ async function getLocalOrderById(orderId: string) {
     }
 
     const rawOrder = await new Response(blobResult.stream).text();
-    return JSON.parse(rawOrder) as Order;
+    return ensureLocalOrderNumber(JSON.parse(rawOrder) as Order);
   }
 
   if (storageMode === "cookie") {
@@ -203,7 +338,7 @@ async function getLocalOrderById(orderId: string) {
 
   try {
     const rawOrder = await fs.readFile(getOrderFilePath(orderId), "utf8");
-    return JSON.parse(rawOrder) as Order;
+    return ensureLocalOrderNumber(JSON.parse(rawOrder) as Order);
   } catch (error) {
     if ((error as NodeJS.ErrnoException).code === "ENOENT") {
       return null;
@@ -289,7 +424,7 @@ export async function createOrder(input: ValidatedOrderInput) {
     }
   }
 
-  const order = buildOrderFromInput(generateOrderId(), input);
+  const order = buildOrderFromInput(generateOrderId(), input, undefined, await allocateLocalOrderNumber());
   await writeOrder(order);
   return { order } satisfies CreateOrderResult;
 }
@@ -329,6 +464,10 @@ export function setOrderResponseCookie(
 ) {
   if (options?.accessToken) {
     setRemoteOrderAccessTokenCookie(response, order.id, options.accessToken);
+  }
+
+  if (typeof order.sequenceNumber === "number") {
+    setLocalOrderSequenceCookie(response, order.sequenceNumber);
   }
 
   if (getOrderStorageMode() !== "cookie") {
