@@ -9,6 +9,7 @@ import {
   createRemoteOrder,
   getRemoteOrderById,
   hasRemoteOrderApi,
+  isRemoteOrderApiReachable,
   uploadRemoteOrderSlip,
   updateRemoteOrder,
 } from "@/lib/remoteOrderApi";
@@ -33,10 +34,29 @@ type CreateOrderResult = {
   order: Order;
   accessToken?: string;
 };
+type SlipUploadAvailability = {
+  enabled: boolean;
+  message: string | null;
+};
 type LocalOrderNumber = {
   roundNumber: number;
   sequenceNumber: number;
 };
+
+const BLOB_STORAGE_DISABLED_MESSAGE =
+  "deployment นี้ยังไม่ได้เชื่อม Blob storage สำหรับเก็บสลิป กรุณาเพิ่ม BLOB_READ_WRITE_TOKEN แล้ว redeploy ก่อนเปิดใช้งานขั้นตอนนี้";
+const REMOTE_SLIP_UPLOAD_UNAVAILABLE_MESSAGE =
+  "ระบบรับสลิปบนเซิร์ฟเวอร์ยังไม่พร้อมใช้งานในขณะนี้ กรุณาอัปเดต ORDER_API_BASE_URL หรือ restart order API ปลายทางก่อน";
+
+export class SlipUploadError extends Error {
+  status: number;
+
+  constructor(message: string, status = 503) {
+    super(message);
+    this.name = "SlipUploadError";
+    this.status = status;
+  }
+}
 
 function getOrderFilePath(orderId: string) {
   return path.join(ORDERS_DIR, `${orderId}.json`);
@@ -489,10 +509,33 @@ export function canUploadPaymentSlip() {
   return hasRemoteOrderApi() || getOrderStorageMode() !== "cookie";
 }
 
+export async function getPaymentSlipUploadAvailability(): Promise<SlipUploadAvailability> {
+  if (getOrderStorageMode() !== "cookie") {
+    return { enabled: true, message: null };
+  }
+
+  if (!hasRemoteOrderApi()) {
+    return {
+      enabled: false,
+      message: BLOB_STORAGE_DISABLED_MESSAGE
+    };
+  }
+
+  const remoteReachable = await isRemoteOrderApiReachable();
+  if (!remoteReachable) {
+    return {
+      enabled: false,
+      message: REMOTE_SLIP_UPLOAD_UNAVAILABLE_MESSAGE
+    };
+  }
+
+  return { enabled: true, message: null };
+}
+
 export function validateSlipUpload(file: File) {
   if (!canUploadPaymentSlip()) {
     return {
-      message: "deployment นี้ยังไม่ได้ตั้งค่า Vercel Blob สำหรับเก็บสลิปการชำระเงิน"
+      message: BLOB_STORAGE_DISABLED_MESSAGE
     };
   }
 
@@ -513,6 +556,8 @@ export async function attachSlipToOrder(orderId: string, file: File) {
     return null;
   }
 
+  let remoteUploadUnavailableMessage: string | null = null;
+
   if (hasRemoteOrderApi()) {
     try {
       const remoteOrder = await uploadRemoteOrderSlip(
@@ -525,14 +570,19 @@ export async function attachSlipToOrder(orderId: string, file: File) {
       }
 
       console.warn(`Remote order API returned no order while uploading slip for ${orderId}. Falling back to local storage.`);
+      remoteUploadUnavailableMessage =
+        "ไม่พบคำสั่งซื้อบนเซิร์ฟเวอร์รับสลิป หรือสิทธิ์เข้าถึงคำสั่งซื้อนี้หมดอายุแล้ว";
     } catch (error) {
       console.error(`Remote order API slip upload failed for ${orderId}. Falling back to local storage.`, error);
+      remoteUploadUnavailableMessage = REMOTE_SLIP_UPLOAD_UNAVAILABLE_MESSAGE;
     }
   }
 
   const storageMode = getOrderStorageMode();
   if (storageMode === "cookie") {
-    throw new Error("Payment slip upload requires persistent storage.");
+    throw new SlipUploadError(
+      remoteUploadUnavailableMessage ?? BLOB_STORAGE_DISABLED_MESSAGE
+    );
   }
 
   await removeSlipFile(existingOrder);

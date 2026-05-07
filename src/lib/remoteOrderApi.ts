@@ -93,6 +93,21 @@ export function hasRemoteOrderApi() {
   return Boolean(REMOTE_ORDER_API_BASE_URL);
 }
 
+export async function isRemoteOrderApiReachable() {
+  if (!REMOTE_ORDER_API_BASE_URL) {
+    return false;
+  }
+
+  try {
+    const response = await fetch(`${REMOTE_ORDER_API_BASE_URL}/health`, {
+      cache: "no-store"
+    });
+    return response.ok;
+  } catch {
+    return false;
+  }
+}
+
 export async function getRemoteOrderById(orderId: string, orderAccessToken?: string) {
   try {
     return await remoteOrderRequest<Order>(`/orders/${encodeURIComponent(orderId)}`, {

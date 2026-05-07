@@ -1,6 +1,12 @@
 import { NextResponse } from "next/server";
 import { formatOrderNumber } from "@/lib/formatOrderNumber";
-import { attachSlipToOrder, setOrderResponseCookie, validateSlipUpload } from "@/lib/orderStore";
+import {
+  attachSlipToOrder,
+  getPaymentSlipUploadAvailability,
+  setOrderResponseCookie,
+  SlipUploadError,
+  validateSlipUpload
+} from "@/lib/orderStore";
 
 type PaymentRouteProps = {
   params: {
@@ -15,6 +21,14 @@ export async function POST(request: Request, { params }: PaymentRouteProps) {
 
     if (!(slip instanceof File)) {
       return NextResponse.json({ message: "กรุณาแนบไฟล์สลิปก่อนส่ง" }, { status: 400 });
+    }
+
+    const availability = await getPaymentSlipUploadAvailability();
+    if (!availability.enabled) {
+      return NextResponse.json(
+        { message: availability.message ?? "ไม่สามารถอัปโหลดสลิปได้ในขณะนี้" },
+        { status: 503 }
+      );
     }
 
     const validation = validateSlipUpload(slip);
@@ -36,6 +50,10 @@ export async function POST(request: Request, { params }: PaymentRouteProps) {
     return response;
   } catch (error) {
     console.error("Failed to upload payment slip", error);
+    if (error instanceof SlipUploadError) {
+      return NextResponse.json({ message: error.message }, { status: error.status });
+    }
+
     return NextResponse.json(
       { message: "ไม่สามารถอัปโหลดสลิปได้ในขณะนี้" },
       { status: 500 }
