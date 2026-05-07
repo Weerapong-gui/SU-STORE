@@ -27,6 +27,8 @@ const PRODUCT_DISPLAY_NAMES = {
   single: "FRESHER POLO SHIRT",
   bundle: "FRESHER BUNDLE"
 } as const;
+const MIN_QUANTITY = 1;
+const MAX_QUANTITY = 99;
 
 const TEXT_FIELD_CLASSES =
   "h-11 w-full rounded-2xl border border-zinc-300 bg-white px-4 text-xs text-zinc-900 outline-none transition focus:border-apple-blue focus:ring-4 focus:ring-apple-blue/10";
@@ -42,6 +44,12 @@ const SIZE_OPTION_SELECTED_CLASSES =
   "z-10 border-apple-blue bg-apple-blue text-white shadow-[0_8px_20px_rgba(0,113,227,0.22)]";
 const PRIMARY_SUBMIT_BUTTON_CLASSES =
   "h-12 rounded-full bg-apple-blue px-6 text-xs font-semibold tracking-[0.04em] text-white shadow-[0_12px_28px_rgba(0,113,227,0.24)] transition hover:bg-apple-blue-dark focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-apple-blue/20 disabled:cursor-not-allowed disabled:opacity-70";
+const QUANTITY_CONTROL_BUTTON_CLASSES =
+  "flex h-11 w-11 items-center justify-center rounded-2xl border border-zinc-300 bg-white text-lg font-semibold text-zinc-800 transition focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-apple-blue/15 hover:border-apple-blue/30 hover:bg-apple-blue-soft disabled:cursor-not-allowed disabled:opacity-50";
+
+function clampQuantity(quantity: number) {
+  return Math.min(MAX_QUANTITY, Math.max(MIN_QUANTITY, quantity));
+}
 
 export function CheckoutForm({
   existingOrderId,
@@ -67,7 +75,7 @@ export function CheckoutForm({
   }, [defaultSize]);
   const defaultQuantityValue = useMemo(() => {
     const parsed = Number.parseInt(defaultQuantity ?? "1", 10);
-    return Number.isNaN(parsed) ? 1 : Math.max(1, parsed);
+    return Number.isNaN(parsed) ? MIN_QUANTITY : clampQuantity(parsed);
   }, [defaultQuantity]);
   const defaultEmailValue = useMemo(() => defaultEmail?.trim() ?? "", [defaultEmail]);
   const defaultSchoolOption = useMemo(() => {
@@ -113,6 +121,10 @@ export function CheckoutForm({
       return;
     }
     setCustomerEmail(nextValue);
+  }
+
+  function updateQuantity(nextQuantity: number) {
+    setSelectedQuantity(clampQuantity(nextQuantity));
   }
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
@@ -286,14 +298,29 @@ export function CheckoutForm({
 
         <label className="block">
           <span className="text-xs font-semibold tracking-[0.1em] text-zinc-700">QUANTITY</span>
-          <input
-            type="number"
-            min={1}
-            max={99}
-            value={selectedQuantity}
-            onChange={(event) => setSelectedQuantity(Math.max(1, Number(event.target.value) || 1))}
-            className="mt-2 h-11 w-24 rounded-2xl border border-zinc-300 bg-white px-3 text-sm outline-none transition focus:border-apple-blue focus:ring-4 focus:ring-apple-blue/10"
-          />
+          <div className="mt-2 flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => updateQuantity(selectedQuantity - 1)}
+              disabled={selectedQuantity <= MIN_QUANTITY}
+              aria-label="Decrease quantity"
+              className={QUANTITY_CONTROL_BUTTON_CLASSES}
+            >
+              -
+            </button>
+            <div className="flex h-11 min-w-[4.5rem] items-center justify-center rounded-2xl border border-zinc-300 bg-white px-4 text-sm font-medium text-zinc-900">
+              {selectedQuantity}
+            </div>
+            <button
+              type="button"
+              onClick={() => updateQuantity(selectedQuantity + 1)}
+              disabled={selectedQuantity >= MAX_QUANTITY}
+              aria-label="Increase quantity"
+              className={QUANTITY_CONTROL_BUTTON_CLASSES}
+            >
+              +
+            </button>
+          </div>
         </label>
 
         <div className="space-y-3 border-t border-zinc-300/80 pt-6">

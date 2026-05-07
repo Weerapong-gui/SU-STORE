@@ -68,14 +68,6 @@ export default function ProductDetailPage({ params }: ProductDetailPageProps) {
             <p className="mt-6 text-xl text-zinc-600 md:text-2xl">{selectedProduct.tagline}</p>
             <p className="mt-5 text-zinc-600">{selectedProduct.description}</p>
 
-            <ul className="mt-8 space-y-3">
-              {selectedProduct.features.map((feature) => (
-                <li key={feature} className="text-zinc-700">
-                  • {feature}
-                </li>
-              ))}
-            </ul>
-
             <p className="mt-10 text-3xl font-semibold text-apple-blue">
               {formatPrice(selectedProduct.price)}
             </p>

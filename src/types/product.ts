@@ -9,5 +9,4 @@ export type Product = {
   price: number;
   images: string[];
   category: ProductCategory;
-  features: string[];
 };

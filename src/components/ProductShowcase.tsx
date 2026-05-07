@@ -23,9 +23,6 @@ export function ProductShowcase({
     ? "bg-gradient-to-b from-black to-zinc-900 text-white"
     : "bg-white text-ink";
   const eyebrowTextClasses = isDarkTheme ? "text-zinc-300" : "text-zinc-500";
-  const featureTagClasses = isDarkTheme
-    ? "border-zinc-700 bg-zinc-800/70 text-zinc-200"
-    : "border-zinc-200 bg-zinc-50 text-zinc-700";
   const priceTextClasses = isDarkTheme ? "text-apple-blue-light" : "text-apple-blue";
   const visualCardClasses = isDarkTheme
     ? "border-zinc-700 bg-zinc-900"
@@ -48,29 +45,15 @@ export function ProductShowcase({
             <h2 className="text-4xl font-semibold tracking-tight md:text-6xl">
               {product.name}
             </h2>
-            {/* 
+            {/*
             <p className={cn("max-w-xl text-lg md:text-2xl", isDarkTheme ? "text-zinc-300" : "text-zinc-600")}>
               {product.tagline}
             </p>
-            
+
             <p className={cn("max-w-xl", isDarkTheme ? "text-zinc-300" : "text-zinc-600")}>
               {product.description}
             </p>
              */}
-
-            <div className="flex flex-wrap gap-3 pt-2">
-              {product.features.map((feature) => (
-                <span
-                  key={feature}
-                  className={cn(
-                    "rounded-full border px-4 py-2 text-sm",
-                    featureTagClasses
-                  )}
-                >
-                  {feature}
-                </span>
-              ))}
-            </div>
 
             <div className="flex items-center gap-4 pt-2">
               <p className={cn("text-2xl font-semibold", priceTextClasses)}>{formatPrice(product.price)}</p>
