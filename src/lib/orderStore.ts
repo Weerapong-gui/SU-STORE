@@ -172,6 +172,46 @@ async function writeOrder(order: Order) {
   await fs.writeFile(getOrderFilePath(order.id), JSON.stringify(order, null, 2), "utf8");
 }
 
+async function getLocalOrderById(orderId: string) {
+  const storageMode = getOrderStorageMode();
+
+  if (storageMode === "blob") {
+    const blobResult = await get(getOrderBlobPath(orderId), {
+      access: "private"
+    });
+
+    if (!blobResult || blobResult.statusCode !== 200) {
+      return null;
+    }
+
+    const rawOrder = await new Response(blobResult.stream).text();
+    return JSON.parse(rawOrder) as Order;
+  }
+
+  if (storageMode === "cookie") {
+    const serializedOrder = cookies().get(getOrderCookieName(orderId))?.value;
+    if (!serializedOrder) {
+      return null;
+    }
+
+    try {
+      return decodeOrderCookie(serializedOrder);
+    } catch {
+      return null;
+    }
+  }
+
+  try {
+    const rawOrder = await fs.readFile(getOrderFilePath(orderId), "utf8");
+    return JSON.parse(rawOrder) as Order;
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === "ENOENT") {
+      return null;
+    }
+    throw error;
+  }
+}
+
 async function removeSlipFile(order: Order) {
   if (!order.slip?.storedName) {
     return;
@@ -223,58 +263,30 @@ export async function getOrderById(orderId: string) {
   }
 
   if (hasRemoteOrderApi()) {
-    return getRemoteOrderById(orderId, getRemoteOrderAccessToken(orderId));
-  }
-
-  const storageMode = getOrderStorageMode();
-
-  if (storageMode === "blob") {
-    const blobResult = await get(getOrderBlobPath(orderId), {
-      access: "private"
-    });
-
-    if (!blobResult || blobResult.statusCode !== 200) {
-      return null;
-    }
-
-    const rawOrder = await new Response(blobResult.stream).text();
-    return JSON.parse(rawOrder) as Order;
-  }
-
-  if (storageMode === "cookie") {
-    const serializedOrder = cookies().get(getOrderCookieName(orderId))?.value;
-    if (!serializedOrder) {
-      return null;
-    }
-
-    try {
-      return decodeOrderCookie(serializedOrder);
-    } catch {
-      return null;
+    const remoteOrder = await getRemoteOrderById(orderId, getRemoteOrderAccessToken(orderId));
+    if (remoteOrder) {
+      return remoteOrder;
     }
   }
 
-  try {
-    const rawOrder = await fs.readFile(getOrderFilePath(orderId), "utf8");
-    return JSON.parse(rawOrder) as Order;
-  } catch (error) {
-    if ((error as NodeJS.ErrnoException).code === "ENOENT") {
-      return null;
-    }
-    throw error;
-  }
+  return getLocalOrderById(orderId);
 }
 
 export async function createOrder(input: ValidatedOrderInput) {
   if (hasRemoteOrderApi()) {
-    const order = await createRemoteOrder(input);
-    if (!order) {
-      throw new Error("Remote order API returned no order during creation.");
+    try {
+      const order = await createRemoteOrder(input);
+      if (order) {
+        return {
+          order,
+          accessToken: order.accessToken
+        } satisfies CreateOrderResult;
+      }
+
+      console.warn("Remote order API returned no order during creation. Falling back to local storage.");
+    } catch (error) {
+      console.error("Remote order API create failed. Falling back to local storage.", error);
     }
-    return {
-      order,
-      accessToken: order.accessToken
-    } satisfies CreateOrderResult;
   }
 
   const order = buildOrderFromInput(generateOrderId(), input);
@@ -284,10 +296,19 @@ export async function createOrder(input: ValidatedOrderInput) {
 
 export async function updateOrder(orderId: string, input: ValidatedOrderInput) {
   if (hasRemoteOrderApi()) {
-    return updateRemoteOrder(orderId, input, getRemoteOrderAccessToken(orderId));
+    try {
+      const remoteOrder = await updateRemoteOrder(orderId, input, getRemoteOrderAccessToken(orderId));
+      if (remoteOrder) {
+        return remoteOrder;
+      }
+
+      console.warn(`Remote order API returned no order while updating ${orderId}. Falling back to local storage.`);
+    } catch (error) {
+      console.error(`Remote order API update failed for ${orderId}. Falling back to local storage.`, error);
+    }
   }
 
-  const existingOrder = await getOrderById(orderId);
+  const existingOrder = await getLocalOrderById(orderId);
   if (!existingOrder) {
     return null;
   }
@@ -306,11 +327,8 @@ export function setOrderResponseCookie(
     accessToken?: string;
   }
 ) {
-  if (hasRemoteOrderApi()) {
-    if (options?.accessToken) {
-      setRemoteOrderAccessTokenCookie(response, order.id, options.accessToken);
-    }
-    return;
+  if (options?.accessToken) {
+    setRemoteOrderAccessTokenCookie(response, order.id, options.accessToken);
   }
 
   if (getOrderStorageMode() !== "cookie") {
@@ -397,15 +415,20 @@ export async function attachSlipToOrder(orderId: string, file: File) {
   };
 
   if (hasRemoteOrderApi()) {
-    const remoteOrder = await updateRemoteOrderSlip(
-      orderId,
-      slip,
-      getRemoteOrderAccessToken(orderId)
-    );
-    if (!remoteOrder) {
-      throw new Error("Failed to update remote order slip metadata.");
+    try {
+      const remoteOrder = await updateRemoteOrderSlip(
+        orderId,
+        slip,
+        getRemoteOrderAccessToken(orderId)
+      );
+      if (remoteOrder) {
+        return remoteOrder;
+      }
+
+      console.warn(`Remote order API returned no order while updating slip for ${orderId}. Falling back to local storage.`);
+    } catch (error) {
+      console.error(`Remote order API slip update failed for ${orderId}. Falling back to local storage.`, error);
     }
-    return remoteOrder;
   }
 
   await writeOrder(updatedOrder);
