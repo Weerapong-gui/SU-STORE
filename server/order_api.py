@@ -10,6 +10,8 @@ import os
 import re
 import secrets
 import sqlite3
+import urllib.error
+import urllib.request
 from datetime import datetime, timezone
 from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -24,6 +26,8 @@ SLIPS_DIR = Path(os.environ.get("ORDER_API_SLIPS_DIR", str(DB_PATH.parent / "sli
 ORDER_PREFIX = os.environ.get("ORDER_PREFIX", "FP28")
 ORDER_ROUND = int(os.environ.get("ORDER_ROUND", "1"))
 ORDER_API_TOKEN = os.environ.get("ORDER_API_TOKEN", "")
+GOOGLE_SHEETS_WEBHOOK_URL = os.environ.get("GOOGLE_SHEETS_WEBHOOK_URL", "").strip()
+GOOGLE_SHEETS_WEBHOOK_TOKEN = os.environ.get("GOOGLE_SHEETS_WEBHOOK_TOKEN", "").strip()
 ORDER_ID_PATTERN = re.compile(r"^[A-Z0-9-]+$")
 ALLOWED_SLIP_TYPES = {"image/jpeg", "image/png", "image/webp", "application/pdf"}
 MAX_SLIP_SIZE_BYTES = 5 * 1024 * 1024
@@ -272,6 +276,76 @@ def serialize_order(row: sqlite3.Row, include_access_token: bool = False) -> dic
     if include_access_token:
         payload["accessToken"] = row["access_token"]
     return payload
+
+
+def create_sheet_row_payload(order: dict[str, Any], event: str) -> dict[str, Any]:
+    product = order.get("product") or {}
+    customer = order.get("customer") or {}
+    slip = order.get("slip") or {}
+    return {
+        "orderId": order.get("id", ""),
+        "orderNumber": order.get("id", ""),
+        "roundNumber": order.get("roundNumber", ""),
+        "sequenceNumber": order.get("sequenceNumber", ""),
+        "status": order.get("status", ""),
+        "paymentStatus": order.get("paymentStatus", ""),
+        "createdAt": order.get("createdAt", ""),
+        "updatedAt": order.get("updatedAt", ""),
+        "lastEvent": event,
+        "lastSyncedAt": now_iso(),
+        "productSlug": product.get("slug", ""),
+        "productName": product.get("name", ""),
+        "productShortName": product.get("shortName", ""),
+        "productTagline": product.get("tagline", ""),
+        "productCategory": product.get("category", ""),
+        "productImage": product.get("image", ""),
+        "unitPrice": product.get("price", ""),
+        "size": order.get("size", ""),
+        "quantity": order.get("quantity", ""),
+        "totalAmount": order.get("totalAmount", ""),
+        "firstName": customer.get("firstName", ""),
+        "lastName": customer.get("lastName", ""),
+        "nickname": customer.get("nickname", ""),
+        "email": customer.get("email", ""),
+        "phone": customer.get("phone", ""),
+        "school": customer.get("school", ""),
+        "slipOriginalName": slip.get("originalName", ""),
+        "slipStoredName": slip.get("storedName", ""),
+        "slipStoredPath": slip.get("storedPath", ""),
+        "slipMimeType": slip.get("mimeType", ""),
+        "slipSize": slip.get("size", ""),
+        "slipUploadedAt": slip.get("uploadedAt", ""),
+    }
+
+
+def sync_order_to_google_sheets(order: dict[str, Any], event: str) -> None:
+    if not GOOGLE_SHEETS_WEBHOOK_URL:
+        return
+
+    payload = {
+        "event": event,
+        "syncedAt": now_iso(),
+        "token": GOOGLE_SHEETS_WEBHOOK_TOKEN,
+        "row": create_sheet_row_payload(order, event),
+        "order": order,
+    }
+    request_headers = {
+        "Content-Type": "application/json; charset=utf-8",
+    }
+
+    request = urllib.request.Request(
+        GOOGLE_SHEETS_WEBHOOK_URL,
+        data=json.dumps(payload, ensure_ascii=False).encode("utf-8"),
+        headers=request_headers,
+        method="POST",
+    )
+
+    try:
+        with urllib.request.urlopen(request, timeout=15) as response:
+            if response.status < 200 or response.status >= 300:
+                raise RuntimeError(f"unexpected response status {response.status}")
+    except (urllib.error.URLError, urllib.error.HTTPError, TimeoutError, RuntimeError) as error:
+        print(f"[google-sheets-sync] failed to sync order {order.get('id', '')}: {error}")
 
 
 def validate_order_payload(payload: Any) -> tuple[dict[str, Any] | None, str | None]:
@@ -613,6 +687,7 @@ class OrderRequestHandler(BaseHTTPRequestHandler):
         with open_db() as connection:
             order = create_order(connection, validated_payload)
             connection.commit()
+            sync_order_to_google_sheets(order, "order_created")
             self._send_json(HTTPStatus.CREATED, order)
 
     def do_PUT(self) -> None:
@@ -650,6 +725,7 @@ class OrderRequestHandler(BaseHTTPRequestHandler):
                 return
             connection.commit()
             delete_local_slip_file(previous_slip_stored_name, previous_slip_storage_path)
+            sync_order_to_google_sheets(order, "order_updated")
             self._send_json(HTTPStatus.OK, order)
 
     def do_PATCH(self) -> None:
@@ -703,6 +779,7 @@ class OrderRequestHandler(BaseHTTPRequestHandler):
                 and materialized_slip.get("storedName") != previous_slip_stored_name
             ):
                 delete_local_slip_file(previous_slip_stored_name, previous_slip_storage_path)
+            sync_order_to_google_sheets(order, "payment_slip_uploaded")
             self._send_json(HTTPStatus.OK, order)
 
     def log_message(self, format: str, *args: Any) -> None:
