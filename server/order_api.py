@@ -1,6 +1,8 @@
 #!/usr/bin/env python3
 from __future__ import annotations
 
+import base64
+import binascii
 import json
 import os
 import re
@@ -16,10 +18,13 @@ from urllib.parse import urlparse
 HOST = os.environ.get("ORDER_API_HOST", "0.0.0.0")
 PORT = int(os.environ.get("ORDER_API_PORT", "3010"))
 DB_PATH = Path(os.environ.get("ORDER_API_DB_PATH", str(Path.home() / "su-order-api" / "data" / "orders.db")))
+SLIPS_DIR = Path(os.environ.get("ORDER_API_SLIPS_DIR", str(DB_PATH.parent / "slips")))
 ORDER_PREFIX = os.environ.get("ORDER_PREFIX", "FP28")
 ORDER_ROUND = int(os.environ.get("ORDER_ROUND", "1"))
 ORDER_API_TOKEN = os.environ.get("ORDER_API_TOKEN", "")
 ORDER_ID_PATTERN = re.compile(r"^[A-Z0-9-]+$")
+ALLOWED_SLIP_TYPES = {"image/jpeg", "image/png", "image/webp", "application/pdf"}
+MAX_SLIP_SIZE_BYTES = 5 * 1024 * 1024
 
 
 def now_iso() -> str:
@@ -28,6 +33,7 @@ def now_iso() -> str:
 
 def ensure_db() -> None:
     DB_PATH.parent.mkdir(parents=True, exist_ok=True)
+    SLIPS_DIR.mkdir(parents=True, exist_ok=True)
     with sqlite3.connect(DB_PATH) as connection:
       connection.execute(
           """
@@ -93,6 +99,75 @@ def create_order_code(sequence_number: int) -> str:
 
 def create_order_access_token() -> str:
     return secrets.token_hex(24)
+
+
+def sanitize_file_name(file_name: str) -> str:
+    sanitized = re.sub(r"[^a-z0-9.-]+", "-", file_name.strip().lower())
+    sanitized = re.sub(r"-+", "-", sanitized).strip("-")
+    return sanitized or "slip"
+
+
+def resolve_slip_extension(file_name: str, mime_type: str) -> str:
+    original_extension = Path(file_name).suffix.lower()
+    if original_extension:
+        return original_extension
+    if mime_type == "image/jpeg":
+        return ".jpg"
+    if mime_type == "image/png":
+        return ".png"
+    if mime_type == "image/webp":
+        return ".webp"
+    if mime_type == "application/pdf":
+        return ".pdf"
+    return ".bin"
+
+
+def delete_local_slip_file(stored_name: str | None) -> None:
+    if not stored_name:
+        return
+    target_name = Path(str(stored_name)).name
+    if not target_name:
+        return
+    try:
+        (SLIPS_DIR / target_name).unlink()
+    except FileNotFoundError:
+        return
+
+
+def materialize_slip_payload(order_code: str, slip: dict[str, Any]) -> tuple[dict[str, Any] | None, str | None]:
+    file_content_base64 = slip.get("fileContentBase64")
+    if not isinstance(file_content_base64, str) or not file_content_base64.strip():
+        return slip, None
+
+    mime_type = slip.get("mimeType")
+    if not isinstance(mime_type, str) or mime_type not in ALLOWED_SLIP_TYPES:
+        return None, "unsupported slip mime type"
+
+    file_size = slip.get("size")
+    if not isinstance(file_size, int) or file_size < 1 or file_size > MAX_SLIP_SIZE_BYTES:
+        return None, "slip.size must be between 1 and 5242880"
+
+    try:
+        file_content = base64.b64decode(file_content_base64.encode("utf-8"), validate=True)
+    except (binascii.Error, ValueError):
+        return None, "slip.fileContentBase64 is invalid"
+
+    if len(file_content) != file_size:
+        return None, "slip.size does not match uploaded content"
+
+    safe_name = sanitize_file_name(Path(str(slip["originalName"])).stem)
+    extension = resolve_slip_extension(str(slip["originalName"]), mime_type)
+    stored_name = f"{order_code}-{int(datetime.now(timezone.utc).timestamp())}-{safe_name}{extension}"
+    (SLIPS_DIR / stored_name).write_bytes(file_content)
+
+    normalized_slip = {
+        "originalName": slip["originalName"],
+        "storedName": stored_name,
+        "mimeType": mime_type,
+        "size": file_size,
+        "uploadedAt": slip["uploadedAt"],
+    }
+    return normalized_slip, None
 
 
 def serialize_order(row: sqlite3.Row, include_access_token: bool = False) -> dict[str, Any]:
@@ -187,10 +262,16 @@ def validate_slip_payload(payload: Any) -> tuple[dict[str, Any] | None, str | No
     if not isinstance(slip, dict):
         return None, "payload ต้องมี slip"
 
-    required_fields = ["originalName", "storedName", "mimeType", "size", "uploadedAt"]
+    required_fields = ["originalName", "mimeType", "size", "uploadedAt"]
     for field in required_fields:
         if field not in slip or slip[field] in (None, ""):
             return None, f"slip.{field} is required"
+
+    if (
+        ("storedName" not in slip or slip["storedName"] in (None, ""))
+        and ("fileContentBase64" not in slip or slip["fileContentBase64"] in (None, ""))
+    ):
+        return None, "slip.storedName or slip.fileContentBase64 is required"
 
     return slip, None
 
@@ -444,6 +525,7 @@ class OrderRequestHandler(BaseHTTPRequestHandler):
             if not self._is_authorized_for_order(existing_order):
                 self._deny_unauthorized()
                 return
+            previous_slip_stored_name = existing_order["slip_stored_name"]
 
             try:
                 payload = self._read_json()
@@ -461,6 +543,7 @@ class OrderRequestHandler(BaseHTTPRequestHandler):
                 self._send_json(HTTPStatus.NOT_FOUND, {"message": "order not found"})
                 return
             connection.commit()
+            delete_local_slip_file(previous_slip_stored_name)
             self._send_json(HTTPStatus.OK, order)
 
     def do_PATCH(self) -> None:
@@ -478,6 +561,7 @@ class OrderRequestHandler(BaseHTTPRequestHandler):
             if not self._is_authorized_for_order(existing_order):
                 self._deny_unauthorized()
                 return
+            previous_slip_stored_name = existing_order["slip_stored_name"]
 
             try:
                 payload = self._read_json()
@@ -490,11 +574,21 @@ class OrderRequestHandler(BaseHTTPRequestHandler):
                 self._send_json(HTTPStatus.BAD_REQUEST, {"message": error_message})
                 return
 
-            order = update_order_slip(connection, order_match.group(1), slip_payload)
+            materialized_slip, error_message = materialize_slip_payload(order_match.group(1), slip_payload)
+            if error_message:
+                self._send_json(HTTPStatus.BAD_REQUEST, {"message": error_message})
+                return
+
+            order = update_order_slip(connection, order_match.group(1), materialized_slip)
             if order is None:
                 self._send_json(HTTPStatus.NOT_FOUND, {"message": "order not found"})
                 return
             connection.commit()
+            if (
+                materialized_slip is not None
+                and materialized_slip.get("storedName") != previous_slip_stored_name
+            ):
+                delete_local_slip_file(previous_slip_stored_name)
             self._send_json(HTTPStatus.OK, order)
 
     def log_message(self, format: str, *args: Any) -> None:

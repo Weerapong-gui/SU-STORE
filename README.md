@@ -11,6 +11,7 @@
 service ฝั่ง server ใช้ไฟล์ [server/order_api.py](/Users/parkk/Desktop/su_store/SU-STORE/server/order_api.py:1) และเก็บข้อมูลใน SQLite
 
 - path บน server: `/home/park/su-order-api/data/orders.db`
+- slip uploads on server: `/home/park/su-order-api/data/slips`
 - systemd user service: `su-order-api.service`
 - รูปแบบเลขออเดอร์: `FP28` + เลขลำดับ 4 หลัก + รอบ
   ตัวอย่างลำดับแรก: `FP2800011`

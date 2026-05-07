@@ -1,5 +1,5 @@
 import { ValidatedOrderInput } from "@/lib/orderValidation";
-import { Order, OrderCustomer, OrderProductSnapshot, OrderSlip } from "@/types/order";
+import { Order, OrderCustomer, OrderProductSnapshot } from "@/types/order";
 
 const REMOTE_ORDER_API_BASE_URL = process.env.ORDER_API_BASE_URL?.replace(/\/$/, "") ?? "";
 const REMOTE_ORDER_API_TOKEN = process.env.ORDER_API_TOKEN ?? "";
@@ -122,14 +122,24 @@ export async function updateRemoteOrder(
   });
 }
 
-export async function updateRemoteOrderSlip(
+export async function uploadRemoteOrderSlip(
   orderId: string,
-  slip: OrderSlip,
+  file: File,
   orderAccessToken?: string
 ) {
+  const fileContentBase64 = Buffer.from(await file.arrayBuffer()).toString("base64");
+
   return remoteOrderRequest<Order>(`/orders/${encodeURIComponent(orderId)}/slip`, {
     method: "PATCH",
     orderAccessToken,
-    body: JSON.stringify({ slip })
+    body: JSON.stringify({
+      slip: {
+        originalName: file.name,
+        mimeType: file.type,
+        size: file.size,
+        uploadedAt: new Date().toISOString(),
+        fileContentBase64
+      }
+    })
   });
 }

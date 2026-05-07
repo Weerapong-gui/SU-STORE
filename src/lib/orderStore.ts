@@ -9,8 +9,8 @@ import {
   createRemoteOrder,
   getRemoteOrderById,
   hasRemoteOrderApi,
+  uploadRemoteOrderSlip,
   updateRemoteOrder,
-  updateRemoteOrderSlip
 } from "@/lib/remoteOrderApi";
 import { ValidatedOrderInput } from "@/lib/orderValidation";
 import { Order, OrderSlip } from "@/types/order";
@@ -486,7 +486,7 @@ export function setOrderResponseCookie(
 }
 
 export function canUploadPaymentSlip() {
-  return getOrderStorageMode() !== "cookie";
+  return hasRemoteOrderApi() || getOrderStorageMode() !== "cookie";
 }
 
 export function validateSlipUpload(file: File) {
@@ -511,6 +511,23 @@ export async function attachSlipToOrder(orderId: string, file: File) {
   const existingOrder = await getOrderById(orderId);
   if (!existingOrder) {
     return null;
+  }
+
+  if (hasRemoteOrderApi()) {
+    try {
+      const remoteOrder = await uploadRemoteOrderSlip(
+        orderId,
+        file,
+        getRemoteOrderAccessToken(orderId)
+      );
+      if (remoteOrder) {
+        return remoteOrder;
+      }
+
+      console.warn(`Remote order API returned no order while uploading slip for ${orderId}. Falling back to local storage.`);
+    } catch (error) {
+      console.error(`Remote order API slip upload failed for ${orderId}. Falling back to local storage.`, error);
+    }
   }
 
   const storageMode = getOrderStorageMode();
@@ -554,20 +571,7 @@ export async function attachSlipToOrder(orderId: string, file: File) {
   };
 
   if (hasRemoteOrderApi()) {
-    try {
-      const remoteOrder = await updateRemoteOrderSlip(
-        orderId,
-        slip,
-        getRemoteOrderAccessToken(orderId)
-      );
-      if (remoteOrder) {
-        return remoteOrder;
-      }
-
-      console.warn(`Remote order API returned no order while updating slip for ${orderId}. Falling back to local storage.`);
-    } catch (error) {
-      console.error(`Remote order API slip update failed for ${orderId}. Falling back to local storage.`, error);
-    }
+    console.warn(`Local slip storage was used for ${orderId} because remote upload was unavailable.`);
   }
 
   await writeOrder(updatedOrder);
