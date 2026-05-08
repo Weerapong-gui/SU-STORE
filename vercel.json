@@ -1,6 +1,6 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "env": {
-    "ORDER_API_BASE_URL": "https://spicy-spoons-pump.loca.lt"
+    "ORDER_API_BASE_URL": "https://slow-birds-relate.loca.lt"
   }
 }
