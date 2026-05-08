@@ -14,6 +14,14 @@ type BuyNowHrefOptions = {
   school?: string;
 };
 
+type CartEditHrefOptions = {
+  itemId: string;
+  productSlug: string;
+  size?: string;
+  quantity?: number;
+  school?: string;
+};
+
 function isConfigureIntent(value: string | undefined): value is ConfigureIntent {
   return value === "payment" || value === "cart";
 }
@@ -36,6 +44,30 @@ export function normalizeProductSize(product: Product, size?: string): ProductSi
 
 export function createConfiguratorHref(productSlug: string, intent: ConfigureIntent = "payment") {
   return `/products/${productSlug}/configure?intent=${intent}`;
+}
+
+export function createCartEditHref({
+  itemId,
+  productSlug,
+  size,
+  quantity,
+  school
+}: CartEditHrefOptions) {
+  const searchParams = new URLSearchParams();
+  searchParams.set("intent", "cart");
+  searchParams.set("itemId", itemId);
+
+  if (size) {
+    searchParams.set("size", size);
+  }
+  if (typeof quantity === "number" && Number.isFinite(quantity)) {
+    searchParams.set("quantity", String(clampCartQuantity(quantity)));
+  }
+  if (school) {
+    searchParams.set("school", school);
+  }
+
+  return `/products/${productSlug}/configure?${searchParams.toString()}`;
 }
 
 export function createBuyNowHref({

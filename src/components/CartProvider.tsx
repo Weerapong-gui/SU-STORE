@@ -23,6 +23,11 @@ type CartContextValue = {
   itemCount: number;
   subtotal: number;
   addItem: (product: Product, selection: { quantity: number; size?: string; school: string }) => void;
+  replaceItem: (
+    itemId: string,
+    product: Product,
+    selection: { quantity: number; size?: string; school: string }
+  ) => void;
   removeItem: (itemId: string) => void;
   updateItemQuantity: (itemId: string, quantity: number) => void;
   clearCart: () => void;
@@ -109,6 +114,21 @@ export function CartProvider({ children }: { children: ReactNode }) {
               : item
           );
         });
+      },
+      replaceItem: (itemId, product, selection) => {
+        const nextItem = createCartItem(product, selection);
+
+        setItems((currentItems) =>
+          currentItems.map((item) =>
+            item.id === itemId
+              ? {
+                  ...nextItem,
+                  id: item.id,
+                  addedAt: item.addedAt
+                }
+              : item
+          )
+        );
       },
       removeItem: (itemId) => {
         setItems((currentItems) => currentItems.filter((item) => item.id !== itemId));

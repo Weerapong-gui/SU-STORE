@@ -25,6 +25,10 @@ import { Product } from "@/types/product";
 type ProductConfiguratorProps = {
   product: Product;
   intent: ConfigureIntent;
+  editingItemId?: string;
+  defaultSize?: string;
+  defaultQuantity?: string;
+  defaultSchool?: string;
 };
 
 const SIZE_OPTION_BASE_CLASSES =
@@ -40,15 +44,27 @@ const PRIMARY_BUTTON_CLASSES =
 const SECONDARY_BUTTON_CLASSES =
   "inline-flex h-12 items-center justify-center rounded-full border border-apple-blue/20 bg-white px-6 text-sm font-semibold text-apple-blue transition hover:bg-apple-blue-soft focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-apple-blue/15";
 
-export function ProductConfigurator({ product, intent }: ProductConfiguratorProps) {
+export function ProductConfigurator({
+  product,
+  intent,
+  editingItemId,
+  defaultSize,
+  defaultQuantity,
+  defaultSchool
+}: ProductConfiguratorProps) {
   const router = useRouter();
-  const { addItem } = useCart();
-  const [selectedQuantity, setSelectedQuantity] = useState(1);
+  const { addItem, replaceItem } = useCart();
+  const [selectedQuantity, setSelectedQuantity] = useState(() => {
+    const parsedQuantity = Number.parseInt(defaultQuantity ?? "1", 10);
+    return Number.isNaN(parsedQuantity) ? 1 : clampCartQuantity(parsedQuantity);
+  });
   const [selectedSize, setSelectedSize] = useState<ProductSizeOption>(
-    normalizeStandardProductSize(product)
+    normalizeStandardProductSize(product, defaultSize)
   );
-  const [selectedBundleSize, setSelectedBundleSize] = useState(() => parseBundleSizeSelection());
-  const [selectedSchool, setSelectedSchool] = useState("");
+  const [selectedBundleSize, setSelectedBundleSize] = useState(() =>
+    parseBundleSizeSelection(defaultSize)
+  );
+  const [selectedSchool, setSelectedSchool] = useState(defaultSchool ?? "");
   const [errorMessage, setErrorMessage] = useState("");
   const bundleProduct = isBundleProduct(product);
 
@@ -77,11 +93,20 @@ export function ProductConfigurator({ product, intent }: ProductConfiguratorProp
       return;
     }
 
-    addItem(product, {
-      quantity: selectedQuantity,
-      size: storedSize,
-      school: selectedSchool
-    });
+    if (editingItemId) {
+      replaceItem(editingItemId, product, {
+        quantity: selectedQuantity,
+        size: storedSize,
+        school: selectedSchool
+      });
+    } else {
+      addItem(product, {
+        quantity: selectedQuantity,
+        size: storedSize,
+        school: selectedSchool
+      });
+    }
+
     router.push("/checkout");
   }
 
@@ -293,13 +318,13 @@ export function ProductConfigurator({ product, intent }: ProductConfiguratorProp
                 Payment
               </button>
               <button type="button" onClick={handleAddToCart} className={SECONDARY_BUTTON_CLASSES}>
-                Add to Cart
+                {editingItemId ? "Save Changes" : "Add to Cart"}
               </button>
             </>
           ) : (
             <>
               <button type="button" onClick={handleAddToCart} className={PRIMARY_BUTTON_CLASSES}>
-                Add to Cart
+                {editingItemId ? "Save Changes" : "Add to Cart"}
               </button>
               <button type="button" onClick={handlePayment} className={SECONDARY_BUTTON_CLASSES}>
                 Payment

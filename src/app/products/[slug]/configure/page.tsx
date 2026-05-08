@@ -12,6 +12,10 @@ type ProductConfigurePageProps = {
   };
   searchParams?: {
     intent?: string;
+    itemId?: string;
+    size?: string;
+    quantity?: string;
+    school?: string;
   };
 };
 
@@ -31,6 +35,10 @@ export default function ProductConfigurePage({
         <ProductConfigurator
           product={product}
           intent={normalizeConfigureIntent(searchParams?.intent)}
+          editingItemId={searchParams?.itemId}
+          defaultSize={searchParams?.size}
+          defaultQuantity={searchParams?.quantity}
+          defaultSchool={searchParams?.school}
         />
       </Container>
     </section>

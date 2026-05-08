@@ -9,25 +9,21 @@ export function Hero() {
   return (
     <section className="relative overflow-hidden bg-gradient-to-b from-white to-mist pt-8 md:pt-12">
       <Container className="flex min-h-0 flex-col items-center justify-start pb-6 text-center md:min-h-[48vh] md:pb-8 lg:min-h-[56vh] lg:pb-10">
-        <motion.p
-          initial={{ opacity: 0, y: 12 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.6 }}
-          className="text-sm font-medium tracking-[0.16em] text-zinc-500"
-        >
-          Fresher Package 28th
-        </motion.p>
-
-        <motion.h1
+        <motion.div
           initial={{ opacity: 0, y: 18 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.7, delay: 0.08 }}
-          className="mt-6 max-w-4xl text-5xl font-semibold tracking-tight text-ink md:text-7xl"
+          className="mt-2"
         >
-          FRESHER
-          <br />
-          POLO SHIRT
-        </motion.h1>
+          <Image
+            src="/images/FresherPackageLOGO.png"
+            alt="Fresher Package logo"
+            width={1235}
+            height={1009}
+            priority
+            className="h-auto w-[min(82vw,21rem)] md:w-[min(56vw,28rem)] lg:w-[min(42vw,32rem)]"
+          />
+        </motion.div>
 
         <motion.div
           initial={{ opacity: 0, y: 12 }}
@@ -36,7 +32,7 @@ export function Hero() {
           className="mt-10 flex flex-wrap items-center justify-center gap-4"
         >
           <BuyButton href="/products">Shop Now</BuyButton>
-          <BuyButton href="/products" variant="secondary" className="hidden md:inline-flex">
+          <BuyButton href="/products" variant="secondary">
             View Products
           </BuyButton>
         </motion.div>
