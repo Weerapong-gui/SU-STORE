@@ -1,17 +1,44 @@
 import { redirect } from "next/navigation";
+import { CheckoutPaymentForm } from "@/components/CheckoutPaymentForm";
+import { Container } from "@/components/ui/Container";
+import { getOrderById, getPaymentSlipUploadAvailability } from "@/lib/orderStore";
 
-type LegacyPaymentPageProps = {
+export const dynamic = "force-dynamic";
+
+type CheckoutPaymentPageProps = {
   searchParams?: {
+    product?: string;
     orderId?: string;
+    size?: string;
+    quantity?: string;
+    school?: string;
+    itemId?: string;
   };
 };
 
-export default function LegacyPaymentPage({ searchParams }: LegacyPaymentPageProps) {
+export default async function CheckoutPaymentPage({ searchParams }: CheckoutPaymentPageProps) {
   const orderId = searchParams?.orderId;
+  const existingOrder = orderId ? await getOrderById(orderId) : null;
+  const slipUploadAvailability = await getPaymentSlipUploadAvailability();
 
-  if (orderId) {
-    redirect(`/checkout/payment/${orderId}`);
+  if (!existingOrder && !searchParams?.product) {
+    redirect("/checkout");
   }
 
-  redirect("/checkout");
+  return (
+    <section className="bg-[#ececec] py-6 md:py-8">
+      <Container className="max-w-[1440px]">
+        <CheckoutPaymentForm
+          existingOrder={existingOrder}
+          defaultProduct={searchParams?.product}
+          defaultSize={searchParams?.size}
+          defaultQuantity={searchParams?.quantity}
+          defaultSchool={searchParams?.school}
+          cartItemId={searchParams?.itemId}
+          slipUploadEnabled={slipUploadAvailability.enabled}
+          slipUploadMessage={slipUploadAvailability.message}
+        />
+      </Container>
+    </section>
+  );
 }

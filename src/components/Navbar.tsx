@@ -1,5 +1,6 @@
 "use client";
 
+import Image from "next/image";
 import Link from "next/link";
 import { ShoppingBag } from "lucide-react";
 import { useCart } from "@/components/CartProvider";
@@ -19,8 +20,19 @@ export function Navbar() {
   return (
     <header className="sticky top-0 z-50 border-b border-zinc-200/60 bg-white/70 backdrop-blur-md">
       <Container className="flex h-16 items-center justify-between">
-        <Link href="/" className="text-sm font-semibold tracking-[0.12em] text-ink">
-          SU STORE
+        <Link
+          href="/"
+          className="inline-flex items-center transition hover:opacity-80"
+          aria-label="SU STORE"
+        >
+          <Image
+            src="/images/SUSTORE.png"
+            alt="SU STORE"
+            width={1235}
+            height={1009}
+            priority
+            className="h-7 w-auto md:h-8"
+          />
         </Link>
         <nav className="flex items-center gap-6">
           {navigationLinks.map((navigationLink) => (

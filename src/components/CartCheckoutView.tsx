@@ -2,7 +2,7 @@
 
 import Image from "next/image";
 import Link from "next/link";
-import { Info, Lock, Minus, Pencil, Plus, Trash2 } from "lucide-react";
+import { Lock, Minus, Pencil, Plus, Trash2 } from "lucide-react";
 import { useCart } from "@/components/CartProvider";
 import { createBuyNowHref, createCartEditHref } from "@/lib/cart";
 import { formatPrice } from "@/lib/formatPrice";
@@ -19,6 +19,7 @@ export function CartCheckoutView() {
   const { items, subtotal, itemCount, removeItem, updateItemQuantity, clearCart } = useCart();
   const checkoutTarget = items[0]
     ? createBuyNowHref({
+        itemId: items[0].id,
         productSlug: items[0].productSlug,
         size: items[0].size,
         quantity: items[0].quantity,
@@ -200,15 +201,6 @@ export function CartCheckoutView() {
       </div>
 
       <aside className="space-y-5 self-start xl:sticky xl:top-24">
-        <div className="rounded-[2rem] bg-apple-blue px-5 py-4 text-white">
-          <div className="flex items-start gap-3">
-            <Info className="mt-0.5 h-5 w-5 shrink-0" />
-            <p className="text-sm font-medium">
-              Congratulations! You get FREE Standard Delivery.
-            </p>
-          </div>
-        </div>
-
         <div className="rounded-[2rem] border border-zinc-200 bg-white p-6 shadow-[0_18px_45px_rgba(17,17,17,0.06)]">
           <div className="flex items-center justify-between gap-3 border-b border-zinc-200 pb-5">
             <p className="text-lg font-semibold tracking-tight text-zinc-900">
@@ -243,8 +235,8 @@ export function CartCheckoutView() {
             <div className="flex items-start gap-3">
               <Lock className="mt-0.5 h-5 w-5 shrink-0 text-zinc-500" />
               <p>
-                Current checkout continues with the first item while combined payment
-                for multiple cart items is being connected.
+                The next step will lock this item for payment. If you want to change the product,
+                quantity, or size, please do it here in your cart first.
               </p>
             </div>
           </div>

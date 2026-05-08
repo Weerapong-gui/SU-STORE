@@ -12,6 +12,7 @@ type BuyNowHrefOptions = {
   size?: string;
   quantity?: number;
   school?: string;
+  itemId?: string;
 };
 
 type CartEditHrefOptions = {
@@ -75,7 +76,8 @@ export function createBuyNowHref({
   productSlug,
   size,
   quantity,
-  school
+  school,
+  itemId
 }: BuyNowHrefOptions) {
   const searchParams = new URLSearchParams();
 
@@ -94,9 +96,12 @@ export function createBuyNowHref({
   if (school) {
     searchParams.set("school", school);
   }
+  if (itemId) {
+    searchParams.set("itemId", itemId);
+  }
 
   const queryString = searchParams.toString();
-  return queryString ? `/buy-now?${queryString}` : "/buy-now";
+  return queryString ? `/checkout/payment?${queryString}` : "/checkout/payment";
 }
 
 export function createCartItem(
