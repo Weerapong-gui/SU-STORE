@@ -43,7 +43,7 @@ export const products: Product[] = [
     shortName: "เฮดแบนด์",
     tagline: "A lightweight accessory for sports day and activity looks.",
     description: "เฮดแบนด์ที่ใช้ขนาดแบบ one size โดยเลือกจำนวนและสำนักวิชาได้ก่อนเพิ่มลง cart หรือไปชำระเงินต่อ.",
-    price: 199,
+    price: 35,
     images: ["/images/Pr1.png", "/images/Pr1.png"],
     category: "headband",
     requiresSize: false,

@@ -1,11 +1,10 @@
-import { ONE_SIZE_OPTION, SIZE_OPTIONS } from "@/lib/checkoutOptions";
+import { getStoredProductSize, normalizeStandardProductSize, ProductSizeOption } from "@/lib/productSizing";
 import { CartItem } from "@/types/cart";
 import { Product } from "@/types/product";
 
 export const CART_STORAGE_KEY = "su-store-cart";
 export const CONFIGURE_INTENTS = ["payment", "cart"] as const;
 export type ConfigureIntent = (typeof CONFIGURE_INTENTS)[number];
-export type ProductSizeOption = (typeof SIZE_OPTIONS)[number] | typeof ONE_SIZE_OPTION;
 
 type BuyNowHrefOptions = {
   orderId?: string;
@@ -32,13 +31,7 @@ export function clampCartQuantity(quantity: number) {
 }
 
 export function normalizeProductSize(product: Product, size?: string): ProductSizeOption {
-  if (!product.requiresSize) {
-    return ONE_SIZE_OPTION;
-  }
-
-  return SIZE_OPTIONS.includes(size as (typeof SIZE_OPTIONS)[number])
-    ? (size as (typeof SIZE_OPTIONS)[number])
-    : "M";
+  return normalizeStandardProductSize(product, size);
 }
 
 export function createConfiguratorHref(productSlug: string, intent: ConfigureIntent = "payment") {
@@ -91,7 +84,7 @@ export function createCartItem(
     productCategory: product.category,
     unitPrice: product.price,
     quantity: clampCartQuantity(selection.quantity),
-    size: normalizeProductSize(product, selection.size),
+    size: getStoredProductSize(product, selection.size),
     school: selection.school,
     addedAt: new Date().toISOString()
   };

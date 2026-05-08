@@ -22,10 +22,10 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="th">
-      <body>
+      <body className="flex min-h-screen flex-col">
         <CartProvider>
           <Navbar />
-          <main>{children}</main>
+          <main className="flex-1">{children}</main>
           <Footer />
         </CartProvider>
       </body>

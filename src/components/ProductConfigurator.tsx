@@ -8,10 +8,16 @@ import { SCHOOL_OPTIONS, SIZE_OPTIONS } from "@/lib/checkoutOptions";
 import {
   clampCartQuantity,
   ConfigureIntent,
-  createBuyNowHref,
-  normalizeProductSize
+  createBuyNowHref
 } from "@/lib/cart";
 import { formatPrice } from "@/lib/formatPrice";
+import {
+  getStoredProductSize,
+  isBundleProduct,
+  normalizeStandardProductSize,
+  parseBundleSizeSelection,
+  ProductSizeOption
+} from "@/lib/productSizing";
 import { cn } from "@/lib/utils";
 import { Product } from "@/types/product";
 
@@ -37,12 +43,19 @@ export function ProductConfigurator({ product, intent }: ProductConfiguratorProp
   const router = useRouter();
   const { addItem } = useCart();
   const [selectedQuantity, setSelectedQuantity] = useState(1);
-  const [selectedSize, setSelectedSize] = useState(normalizeProductSize(product));
+  const [selectedSize, setSelectedSize] = useState<ProductSizeOption>(
+    normalizeStandardProductSize(product)
+  );
+  const [selectedBundleSize, setSelectedBundleSize] = useState(() => parseBundleSizeSelection());
   const [selectedSchool, setSelectedSchool] = useState("");
   const [errorMessage, setErrorMessage] = useState("");
+  const bundleProduct = isBundleProduct(product);
 
   const totalPrice = useMemo(() => product.price * selectedQuantity, [product.price, selectedQuantity]);
   const primaryMode = intent === "cart" ? "cart" : "payment";
+  const storedSize = bundleProduct
+    ? getStoredProductSize(product, `POLO:${selectedBundleSize.polo}|JACKET:${selectedBundleSize.jacket}`)
+    : getStoredProductSize(product, selectedSize);
 
   function updateQuantity(nextQuantity: number) {
     setSelectedQuantity(clampCartQuantity(nextQuantity));
@@ -65,7 +78,7 @@ export function ProductConfigurator({ product, intent }: ProductConfiguratorProp
 
     addItem(product, {
       quantity: selectedQuantity,
-      size: selectedSize,
+      size: storedSize,
       school: selectedSchool
     });
     router.push("/checkout");
@@ -79,7 +92,7 @@ export function ProductConfigurator({ product, intent }: ProductConfiguratorProp
     router.push(
       createBuyNowHref({
         productSlug: product.slug,
-        size: selectedSize,
+        size: storedSize,
         quantity: selectedQuantity,
         school: selectedSchool
       })
@@ -88,22 +101,42 @@ export function ProductConfigurator({ product, intent }: ProductConfiguratorProp
 
   return (
     <div className="grid gap-6 lg:grid-cols-[1.05fr_0.95fr]">
-      <div className="space-y-4">
-        {product.images.map((image, index) => (
-          <div
-            key={`${image}-${index}`}
-            className="relative min-h-[320px] overflow-hidden rounded-[2rem] border border-zinc-300 bg-white shadow-soft md:min-h-[520px]"
-          >
-            <Image
-              src={image}
-              alt={`${product.name} image ${index + 1}`}
-              fill
-              priority={index === 0}
-              sizes="(min-width: 1024px) 55vw, 100vw"
-              className="object-cover"
-            />
-          </div>
-        ))}
+      <div>
+        <div className="flex snap-x snap-mandatory gap-3 overflow-x-auto pb-2 lg:hidden">
+          {product.images.map((image, index) => (
+            <div
+              key={`${image}-${index}`}
+              className="relative h-[56vh] min-h-[320px] w-[88vw] shrink-0 snap-center overflow-hidden rounded-[2rem] border border-zinc-300 bg-white shadow-soft"
+            >
+              <Image
+                src={image}
+                alt={`${product.name} image ${index + 1}`}
+                fill
+                priority={index === 0}
+                sizes="88vw"
+                className="object-cover"
+              />
+            </div>
+          ))}
+        </div>
+
+        <div className="hidden space-y-4 lg:block">
+          {product.images.map((image, index) => (
+            <div
+              key={`${image}-${index}`}
+              className="relative min-h-[320px] overflow-hidden rounded-[2rem] border border-zinc-300 bg-white shadow-soft md:min-h-[520px]"
+            >
+              <Image
+                src={image}
+                alt={`${product.name} image ${index + 1}`}
+                fill
+                priority={index === 0}
+                sizes="(min-width: 1024px) 55vw, 100vw"
+                className="object-cover"
+              />
+            </div>
+          ))}
+        </div>
       </div>
 
       <div className="font-sf-pro space-y-6 rounded-[2rem] border border-zinc-300 bg-[#f5f5f7] p-6 md:p-8">
@@ -121,7 +154,54 @@ export function ProductConfigurator({ product, intent }: ProductConfiguratorProp
             {product.requiresSize ? "SELECT SIZE" : "SIZE"}
           </p>
 
-          {product.requiresSize ? (
+          {product.requiresSize && bundleProduct ? (
+            <div className="space-y-4">
+              <div className="space-y-2">
+                <p className="text-xs font-medium tracking-[0.08em] text-zinc-500">POLO SIZE</p>
+                <div className="grid grid-cols-4 gap-2 md:grid-cols-8">
+                  {SIZE_OPTIONS.map((size) => (
+                    <button
+                      key={`polo-${size}`}
+                      type="button"
+                      onClick={() =>
+                        setSelectedBundleSize((currentValue) => ({ ...currentValue, polo: size }))
+                      }
+                      className={cn(
+                        SIZE_OPTION_BASE_CLASSES,
+                        selectedBundleSize.polo === size ? SIZE_OPTION_SELECTED_CLASSES : ""
+                      )}
+                    >
+                      {size}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div className="space-y-2">
+                <p className="text-xs font-medium tracking-[0.08em] text-zinc-500">JACKET SIZE</p>
+                <div className="grid grid-cols-4 gap-2 md:grid-cols-8">
+                  {SIZE_OPTIONS.map((size) => (
+                    <button
+                      key={`jacket-${size}`}
+                      type="button"
+                      onClick={() =>
+                        setSelectedBundleSize((currentValue) => ({
+                          ...currentValue,
+                          jacket: size
+                        }))
+                      }
+                      className={cn(
+                        SIZE_OPTION_BASE_CLASSES,
+                        selectedBundleSize.jacket === size ? SIZE_OPTION_SELECTED_CLASSES : ""
+                      )}
+                    >
+                      {size}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </div>
+          ) : product.requiresSize ? (
             <div className="grid grid-cols-4 gap-2 md:grid-cols-8">
               {SIZE_OPTIONS.map((size) => (
                 <button
@@ -194,7 +274,14 @@ export function ProductConfigurator({ product, intent }: ProductConfiguratorProp
           <div className="mt-3 space-y-2 text-sm text-zinc-700">
             <p>Product: {product.name}</p>
             <p>Quantity: {selectedQuantity}</p>
-            <p>Size: {product.requiresSize ? selectedSize : "ONE SIZE"}</p>
+            {bundleProduct ? (
+              <>
+                <p>Polo Size: {selectedBundleSize.polo}</p>
+                <p>Jacket Size: {selectedBundleSize.jacket}</p>
+              </>
+            ) : (
+              <p>Size: {product.requiresSize ? selectedSize : "ONE SIZE"}</p>
+            )}
             <p>School: {selectedSchool || "-"}</p>
           </div>
           <div className="mt-4 flex items-center justify-between border-t border-zinc-200 pt-4">

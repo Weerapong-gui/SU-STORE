@@ -1,5 +1,6 @@
 import { products } from "@/data/products";
 import { ONE_SIZE_OPTION, SCHOOL_OPTIONS, SIZE_OPTIONS } from "@/lib/checkoutOptions";
+import { getStoredProductSize, isBundleProduct, parseBundleSizeSelection } from "@/lib/productSizing";
 import { Product } from "@/types/product";
 
 export type ValidatedOrderInput = {
@@ -45,38 +46,47 @@ export function validateOrderInput(payload: Record<string, unknown>): Validation
 
   const product = products.find((item) => item.slug === productSlug);
   if (!product) {
-    return { message: "ไม่พบสินค้าที่เลือก" };
+    return { message: "Selected product was not found." };
   }
 
-  if (product.requiresSize && !SIZE_OPTIONS.includes(size as (typeof SIZE_OPTIONS)[number])) {
-    return { message: "กรุณาเลือกไซซ์ที่ถูกต้อง" };
+  if (product.requiresSize && isBundleProduct(product)) {
+    const bundleSize = parseBundleSizeSelection(size);
+
+    if (
+      !SIZE_OPTIONS.includes(bundleSize.polo as (typeof SIZE_OPTIONS)[number]) ||
+      !SIZE_OPTIONS.includes(bundleSize.jacket as (typeof SIZE_OPTIONS)[number])
+    ) {
+      return { message: "Please select both polo size and jacket size." };
+    }
+  } else if (product.requiresSize && !SIZE_OPTIONS.includes(size as (typeof SIZE_OPTIONS)[number])) {
+    return { message: "Please select a valid size." };
   }
 
   if (!Number.isInteger(parsedQuantity) || parsedQuantity < 1 || parsedQuantity > 99) {
-    return { message: "กรุณาระบุจำนวนสินค้าที่ถูกต้อง" };
+    return { message: "Please enter a valid quantity." };
   }
 
   if (!firstName || !lastName || !nickname) {
-    return { message: "กรุณากรอกชื่อ นามสกุล และชื่อเล่นให้ครบ" };
+    return { message: "Please complete your first name, last name, and nickname." };
   }
 
   if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
-    return { message: "กรุณากรอกอีเมลให้ถูกต้อง" };
+    return { message: "Please enter a valid email address." };
   }
 
   const phoneDigits = phone.replace(/\D/g, "");
   if (!phone || phoneDigits.length < 9) {
-    return { message: "กรุณากรอกเบอร์โทรศัพท์ให้ถูกต้อง" };
+    return { message: "Please enter a valid phone number." };
   }
 
   if (!SCHOOL_OPTIONS.includes(school as (typeof SCHOOL_OPTIONS)[number])) {
-    return { message: "กรุณาเลือกสำนักวิชา" };
+    return { message: "Please choose a school." };
   }
 
   return {
     data: {
       product,
-      size: product.requiresSize ? size : ONE_SIZE_OPTION,
+      size: product.requiresSize ? getStoredProductSize(product, size) : ONE_SIZE_OPTION,
       quantity: parsedQuantity,
       firstName,
       lastName,

@@ -4,6 +4,7 @@ import { Container } from "@/components/ui/Container";
 import { formatOrderNumber } from "@/lib/formatOrderNumber";
 import { getOrderById } from "@/lib/orderStore";
 import { formatPrice } from "@/lib/formatPrice";
+import { formatStoredProductSize } from "@/lib/productSizing";
 
 export const dynamic = "force-dynamic";
 
@@ -44,7 +45,7 @@ export default async function CheckoutSummaryPage({ params }: CheckoutSummaryPag
                 <p className="mt-1 text-sm text-zinc-600">{order.product.tagline}</p>
 
                 <div className="mt-4 space-y-2 text-sm text-zinc-700">
-                  <p>Size: {order.size}</p>
+                  <p>Size: {formatStoredProductSize(order.product.category, order.size)}</p>
                   <p>Quantity: {order.quantity}</p>
                   <p>
                     Unit Price:{" "}

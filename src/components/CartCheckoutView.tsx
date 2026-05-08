@@ -5,6 +5,7 @@ import { Trash2 } from "lucide-react";
 import { useCart } from "@/components/CartProvider";
 import { createBuyNowHref } from "@/lib/cart";
 import { formatPrice } from "@/lib/formatPrice";
+import { formatStoredProductSize } from "@/lib/productSizing";
 
 const CARD_CLASSES = "rounded-[2rem] border border-zinc-300 bg-white p-5";
 const PRIMARY_LINK_CLASSES =
@@ -70,7 +71,7 @@ export function CartCheckoutView() {
                   </p>
                   <h2 className="mt-1 text-xl font-semibold text-zinc-900">{item.productName}</h2>
                   <div className="mt-3 space-y-1 text-sm text-zinc-700">
-                    <p>Size: {item.size}</p>
+                    <p>Size: {formatStoredProductSize(item.productCategory, item.size)}</p>
                     <p>Quantity: {item.quantity}</p>
                     <p>School: {item.school}</p>
                     <p>Unit Price: {formatPrice(item.unitPrice)}</p>
