@@ -17,7 +17,7 @@ export function CartCheckoutView() {
 
   if (items.length === 0) {
     return (
-      <div className="font-sf-pro rounded-[2rem] border border-zinc-300 bg-[#f5f5f7] p-6 md:p-8">
+      <div className="font-sf-pro py-6 md:py-10">
         <p className="text-xs font-semibold tracking-[0.1em] text-zinc-500">CHECKOUT</p>
         <h1 className="mt-2 text-2xl font-semibold tracking-tight text-zinc-900 md:text-3xl">
           Your cart is empty
