@@ -3,6 +3,7 @@
 import Image from "next/image";
 import { FormEvent, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
+import { MobileProductSlider } from "@/components/MobileProductSlider";
 import { products } from "@/data/products";
 import { EMAIL_DOMAIN, ONE_SIZE_OPTION, SCHOOL_OPTIONS, SIZE_OPTIONS } from "@/lib/checkoutOptions";
 import { formatPrice } from "@/lib/formatPrice";
@@ -193,23 +194,12 @@ export function CheckoutForm({
   return (
     <form onSubmit={handleSubmit} className="grid gap-6 lg:grid-cols-[1.2fr_0.8fr] lg:gap-10">
       <div className="lg:h-[calc(100vh-7rem)] lg:overflow-y-auto lg:overscroll-contain lg:pr-1">
-        <div className="flex snap-x snap-mandatory gap-3 overflow-x-auto pb-2 lg:hidden">
-          {activeProduct.images.map((image, index) => (
-            <div
-              key={`${image}-${index}`}
-              className="relative h-[58vh] min-h-[360px] w-full shrink-0 snap-center overflow-hidden rounded-3xl"
-            >
-              <Image
-                src={image}
-                alt={`${activeProduct.name} image ${index + 1}`}
-                fill
-                priority={index === 0}
-                sizes="100vw"
-                className="object-cover"
-              />
-            </div>
-          ))}
-        </div>
+        <MobileProductSlider
+          images={activeProduct.images}
+          productName={activeProduct.name}
+          className="pb-2"
+          slideClassName="h-[58vh] min-h-[360px]"
+        />
 
         <div className="hidden space-y-3 lg:block">
           {activeProduct.images.map((image, index) => (

@@ -4,6 +4,7 @@ import Image from "next/image";
 import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useCart } from "@/components/CartProvider";
+import { MobileProductSlider } from "@/components/MobileProductSlider";
 import { SCHOOL_OPTIONS, SIZE_OPTIONS } from "@/lib/checkoutOptions";
 import {
   clampCartQuantity,
@@ -102,23 +103,12 @@ export function ProductConfigurator({ product, intent }: ProductConfiguratorProp
   return (
     <div className="grid gap-6 lg:grid-cols-[1.05fr_0.95fr]">
       <div>
-        <div className="flex snap-x snap-mandatory gap-3 overflow-x-auto pb-2 lg:hidden">
-          {product.images.map((image, index) => (
-            <div
-              key={`${image}-${index}`}
-              className="relative h-[56vh] min-h-[320px] w-[88vw] shrink-0 snap-center overflow-hidden rounded-[2rem] border border-zinc-300 bg-white shadow-soft"
-            >
-              <Image
-                src={image}
-                alt={`${product.name} image ${index + 1}`}
-                fill
-                priority={index === 0}
-                sizes="88vw"
-                className="object-cover"
-              />
-            </div>
-          ))}
-        </div>
+        <MobileProductSlider
+          images={product.images}
+          productName={product.name}
+          className="pb-2"
+          slideClassName="h-[56vh] min-h-[320px] border border-zinc-300 bg-white shadow-soft"
+        />
 
         <div className="hidden space-y-4 lg:block">
           {product.images.map((image, index) => (
