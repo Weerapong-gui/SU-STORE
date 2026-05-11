@@ -21,7 +21,7 @@ from typing import Any
 from urllib.parse import urlparse
 
 HOST = os.environ.get("ORDER_API_HOST", "0.0.0.0")
-PORT = int(os.environ.get("ORDER_API_PORT", "3010"))
+PORT = int(os.environ.get("ORDER_API_PORT", os.environ.get("PORT", "3010")))
 DB_PATH = Path(os.environ.get("ORDER_API_DB_PATH", str(Path.home() / "su-order-api" / "data" / "orders.db")))
 SLIPS_DIR = Path(os.environ.get("ORDER_API_SLIPS_DIR", str(DB_PATH.parent / "slips")))
 ORDER_PREFIX = os.environ.get("ORDER_PREFIX", "FP28")

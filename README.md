@@ -1,4 +1,36 @@
 # SU-STORE
+
+## Permanent Order API Hosting
+
+The order API can run as a separate Render Web Service with a permanent HTTPS URL
+and a persistent disk for SQLite + uploaded slips.
+
+Files added for this:
+
+- `server/Dockerfile`: Docker image for `server/order_api.py`
+- `render.yaml`: Render Blueprint for a Docker web service with a 1 GB persistent disk mounted at `/var/data`
+
+Recommended Render environment values:
+
+- `ORDER_API_HOST=0.0.0.0`
+- `ORDER_API_DB_PATH=/var/data/su-order-api/orders.db`
+- `ORDER_API_SLIPS_DIR=/var/data/su-order-api/slips`
+- `ORDER_PREFIX=FP28`
+- `ORDER_ROUND=1`
+- `KHANTOKE_TICKET_QUOTA=2000`
+- `GOOGLE_SHEETS_WEBHOOK_URL=<Apps Script /exec URL>`
+- `GOOGLE_SHEETS_WEBHOOK_TOKEN=<optional>`
+
+After Render deploys, copy its public URL, for example
+`https://su-order-api.onrender.com`, into Vercel as:
+
+- `ORDER_API_BASE_URL=https://su-order-api.onrender.com`
+
+Then redeploy the Vercel app. Check:
+
+```bash
+curl https://su-order-api.onrender.com/health
+```
 เว็บขายเสื้อพี่เก็ต
 
 ## Order API

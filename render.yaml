@@ -1,0 +1,31 @@
+services:
+  - type: web
+    name: su-order-api
+    runtime: docker
+    dockerfilePath: ./server/Dockerfile
+    plan: starter
+    region: singapore
+    healthCheckPath: /health
+    disk:
+      name: su-order-api-data
+      mountPath: /var/data
+      sizeGB: 1
+    envVars:
+      - key: ORDER_API_HOST
+        value: 0.0.0.0
+      - key: ORDER_API_DB_PATH
+        value: /var/data/su-order-api/orders.db
+      - key: ORDER_API_SLIPS_DIR
+        value: /var/data/su-order-api/slips
+      - key: ORDER_PREFIX
+        value: FP28
+      - key: ORDER_ROUND
+        value: "1"
+      - key: KHANTOKE_TICKET_QUOTA
+        value: "2000"
+      - key: ORDER_API_TOKEN
+        generateValue: true
+      - key: GOOGLE_SHEETS_WEBHOOK_URL
+        sync: false
+      - key: GOOGLE_SHEETS_WEBHOOK_TOKEN
+        sync: false
