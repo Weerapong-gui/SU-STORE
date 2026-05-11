@@ -45,8 +45,8 @@ export type Order = {
   roundNumber?: number;
   status: OrderStatus;
   paymentStatus: PaymentStatus;
-  luckyTicket: boolean;
-  luckyTicketClaimedAt: string | null;
+  khantokeTicket: boolean;
+  khantokeTicketClaimedAt: string | null;
   createdAt: string;
   updatedAt: string;
   size: string;

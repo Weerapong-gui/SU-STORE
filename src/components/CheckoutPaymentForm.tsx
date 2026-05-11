@@ -9,7 +9,7 @@ import { products } from "@/data/products";
 import { EMAIL_DOMAIN, SCHOOL_OPTIONS } from "@/lib/checkoutOptions";
 import { formatOrderNumber } from "@/lib/formatOrderNumber";
 import { formatPrice } from "@/lib/formatPrice";
-import { getLuckyTicketLabel, getOrderStatusLabel } from "@/lib/orderStatus";
+import { getKhantokeTicketLabel, getOrderStatusLabel } from "@/lib/orderStatus";
 import { formatStoredProductSize } from "@/lib/productSizing";
 import { Order } from "@/types/order";
 
@@ -153,8 +153,8 @@ export function CheckoutPaymentForm({
                 Order {formatOrderNumber(existingOrder)} is currently{" "}
                 <span className="font-medium text-zinc-900">{getOrderStatusLabel(existingOrder.status)}</span>.
               </p>
-              <p className={existingOrder.luckyTicket ? "text-emerald-700" : "text-amber-700"}>
-                {getLuckyTicketLabel(existingOrder.luckyTicket)}
+              <p className={existingOrder.khantokeTicket ? "text-emerald-700" : "text-amber-700"}>
+                {getKhantokeTicketLabel(existingOrder.khantokeTicket)}
               </p>
             </div>
           ) : null}

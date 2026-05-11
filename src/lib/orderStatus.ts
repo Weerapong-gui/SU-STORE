@@ -10,6 +10,8 @@ type RawOrder = Partial<Order> &
   Record<string, unknown> & {
     customer?: LegacyCustomer | null;
     slip?: Order["slip"] | null;
+    khantokeTicket?: boolean | number | string;
+    khantokeTicketClaimedAt?: string | null;
     luckyTicket?: boolean | number | string;
     luckyTicketClaimedAt?: string | null;
   };
@@ -125,8 +127,8 @@ export function getOrderStatusLabel(status: OrderStatus) {
   }
 }
 
-export function getLuckyTicketLabel(hasLuckyTicket: boolean) {
-  return hasLuckyTicket ? "ได้รับบัตรจับโชค" : "สิทธิ์บัตรจับโชคเต็มแล้ว";
+export function getKhantokeTicketLabel(hasKhantokeTicket: boolean) {
+  return hasKhantokeTicket ? "ได้รับ Khantoke ticket" : "สิทธิ์ Khantoke ticket เต็มแล้ว";
 }
 
 export function normalizeOrder(rawOrder: RawOrder) {
@@ -138,9 +140,11 @@ export function normalizeOrder(rawOrder: RawOrder) {
   const quantity = typeof rawOrder.quantity === "number" && rawOrder.quantity > 0 ? rawOrder.quantity : 1;
   const totalAmount =
     typeof rawOrder.totalAmount === "number" && rawOrder.totalAmount >= 0 ? rawOrder.totalAmount : 0;
-  const rawLuckyTicket = rawOrder.luckyTicket as unknown;
-  const luckyTicket =
-    rawLuckyTicket === true || rawLuckyTicket === 1 || rawLuckyTicket === "1";
+  const rawKhantokeTicket = (rawOrder.khantokeTicket ?? rawOrder.luckyTicket) as unknown;
+  const khantokeTicket =
+    rawKhantokeTicket === true || rawKhantokeTicket === 1 || rawKhantokeTicket === "1";
+  const rawKhantokeTicketClaimedAt =
+    rawOrder.khantokeTicketClaimedAt ?? rawOrder.luckyTicketClaimedAt;
 
   return {
     id: readString(rawOrder.id),
@@ -148,10 +152,10 @@ export function normalizeOrder(rawOrder: RawOrder) {
     roundNumber,
     status: normalizeOrderStatus(rawOrder.status, rawOrder.paymentStatus),
     paymentStatus: normalizePaymentStatus(rawOrder.status, rawOrder.paymentStatus),
-    luckyTicket,
-    luckyTicketClaimedAt:
-      typeof rawOrder.luckyTicketClaimedAt === "string" && rawOrder.luckyTicketClaimedAt.trim()
-        ? rawOrder.luckyTicketClaimedAt
+    khantokeTicket,
+    khantokeTicketClaimedAt:
+      typeof rawKhantokeTicketClaimedAt === "string" && rawKhantokeTicketClaimedAt.trim()
+        ? rawKhantokeTicketClaimedAt
         : null,
     createdAt: readString(rawOrder.createdAt),
     updatedAt: readString(rawOrder.updatedAt),

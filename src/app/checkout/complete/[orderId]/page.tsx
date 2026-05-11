@@ -3,7 +3,7 @@ import { OrderAccessFallback } from "@/components/OrderAccessFallback";
 import { Container } from "@/components/ui/Container";
 import { formatOrderNumber } from "@/lib/formatOrderNumber";
 import { formatPrice } from "@/lib/formatPrice";
-import { getLuckyTicketLabel, getOrderCustomerName, getOrderStatusLabel } from "@/lib/orderStatus";
+import { getKhantokeTicketLabel, getOrderCustomerName, getOrderStatusLabel } from "@/lib/orderStatus";
 import { getOrderById } from "@/lib/orderStore";
 
 export const dynamic = "force-dynamic";
@@ -46,12 +46,12 @@ export default async function CheckoutCompletePage({ params }: CheckoutCompleteP
 
           <div
             className={`mt-4 rounded-2xl border px-4 py-3 text-sm ${
-              order.luckyTicket
+              order.khantokeTicket
                 ? "border-emerald-200 bg-emerald-50 text-emerald-800"
                 : "border-amber-200 bg-amber-50 text-amber-800"
             }`}
           >
-            {getLuckyTicketLabel(order.luckyTicket)}
+            {getKhantokeTicketLabel(order.khantokeTicket)}
           </div>
 
           <div className="mt-6 rounded-3xl border border-zinc-300 bg-white p-5">

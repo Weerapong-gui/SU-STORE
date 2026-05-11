@@ -29,9 +29,11 @@ const LOCAL_ORDER_SEQUENCE_COOKIE_NAME = "su-order-sequence";
 const ORDER_COOKIE_MAX_AGE_SECONDS = 60 * 60 * 24 * 7;
 const LOCAL_ORDER_SEQUENCE_BLOB_PATH = "orders/_sequence.json";
 const LOCAL_ORDER_SEQUENCE_FILE_PATH = path.join(DATA_ROOT, "order-sequence.json");
-const LOCAL_LUCKY_TICKET_STATE_BLOB_PATH = "orders/_lucky-ticket-claims.json";
-const LOCAL_LUCKY_TICKET_STATE_FILE_PATH = path.join(DATA_ROOT, "lucky-ticket-claims.json");
-const MAX_LUCKY_TICKET_CLAIMS = 2000;
+const LOCAL_KHANTOKE_TICKET_STATE_BLOB_PATH = "orders/_khantoke-ticket-claims.json";
+const LOCAL_KHANTOKE_TICKET_STATE_FILE_PATH = path.join(DATA_ROOT, "khantoke-ticket-claims.json");
+const LEGACY_LOCAL_LUCKY_TICKET_STATE_BLOB_PATH = "orders/_lucky-ticket-claims.json";
+const LEGACY_LOCAL_LUCKY_TICKET_STATE_FILE_PATH = path.join(DATA_ROOT, "lucky-ticket-claims.json");
+const MAX_KHANTOKE_TICKET_CLAIMS = 2000;
 
 type OrderStorageMode = "filesystem" | "blob" | "cookie";
 type CreateOrderResult = {
@@ -46,12 +48,12 @@ type LocalOrderNumber = {
   roundNumber: number;
   sequenceNumber: number;
 };
-type LocalLuckyTicketState = {
+type LocalKhantokeTicketState = {
   claims: Record<string, string>;
 };
-type LuckyTicketAllocation = {
-  luckyTicket: boolean;
-  luckyTicketClaimedAt: string | null;
+type KhantokeTicketAllocation = {
+  khantokeTicket: boolean;
+  khantokeTicketClaimedAt: string | null;
 };
 
 const BLOB_STORAGE_DISABLED_MESSAGE =
@@ -96,7 +98,7 @@ function buildOrderFromInput(
   input: ValidatedOrderInput,
   existingOrder?: Order,
   localOrderNumber?: LocalOrderNumber,
-  luckyTicketAllocation?: LuckyTicketAllocation
+  khantokeTicketAllocation?: KhantokeTicketAllocation
 ): Order {
   const now = new Date().toISOString();
 
@@ -106,9 +108,12 @@ function buildOrderFromInput(
     roundNumber: existingOrder?.roundNumber ?? localOrderNumber?.roundNumber,
     status: "pending_payment",
     paymentStatus: "awaiting_payment",
-    luckyTicket: existingOrder?.luckyTicket ?? luckyTicketAllocation?.luckyTicket ?? false,
-    luckyTicketClaimedAt:
-      existingOrder?.luckyTicketClaimedAt ?? luckyTicketAllocation?.luckyTicketClaimedAt ?? null,
+    khantokeTicket:
+      existingOrder?.khantokeTicket ?? khantokeTicketAllocation?.khantokeTicket ?? false,
+    khantokeTicketClaimedAt:
+      existingOrder?.khantokeTicketClaimedAt ??
+      khantokeTicketAllocation?.khantokeTicketClaimedAt ??
+      null,
     createdAt: existingOrder?.createdAt ?? now,
     updatedAt: now,
     size: input.size,
@@ -309,54 +314,68 @@ async function writeStoredLocalSequenceNumber(sequenceNumber: number) {
   await fs.writeFile(LOCAL_ORDER_SEQUENCE_FILE_PATH, serializedState, "utf8");
 }
 
-async function readLocalLuckyTicketState() {
+async function readLocalKhantokeTicketState() {
   const storageMode = getOrderStorageMode();
 
   if (storageMode === "blob") {
-    const blobResult = await get(LOCAL_LUCKY_TICKET_STATE_BLOB_PATH, {
-      access: "private"
-    });
+    const blobResult =
+      (await get(LOCAL_KHANTOKE_TICKET_STATE_BLOB_PATH, {
+        access: "private"
+      })) ??
+      (await get(LEGACY_LOCAL_LUCKY_TICKET_STATE_BLOB_PATH, {
+        access: "private"
+      }));
 
     if (!blobResult || blobResult.statusCode !== 200) {
-      return { claims: {} } satisfies LocalLuckyTicketState;
+      return { claims: {} } satisfies LocalKhantokeTicketState;
     }
 
     try {
       const rawState = await new Response(blobResult.stream).text();
-      const state = JSON.parse(rawState) as LocalLuckyTicketState;
+      const state = JSON.parse(rawState) as LocalKhantokeTicketState;
       return typeof state === "object" && state && typeof state.claims === "object"
         ? { claims: state.claims ?? {} }
         : { claims: {} };
     } catch {
-      return { claims: {} } satisfies LocalLuckyTicketState;
+      return { claims: {} } satisfies LocalKhantokeTicketState;
     }
   }
 
   if (storageMode === "cookie") {
-    return { claims: {} } satisfies LocalLuckyTicketState;
+    return { claims: {} } satisfies LocalKhantokeTicketState;
   }
 
   try {
-    const rawState = await fs.readFile(LOCAL_LUCKY_TICKET_STATE_FILE_PATH, "utf8");
-    const state = JSON.parse(rawState) as LocalLuckyTicketState;
+    const rawState = await fs.readFile(LOCAL_KHANTOKE_TICKET_STATE_FILE_PATH, "utf8");
+    const state = JSON.parse(rawState) as LocalKhantokeTicketState;
     return typeof state === "object" && state && typeof state.claims === "object"
       ? { claims: state.claims ?? {} }
       : { claims: {} };
   } catch (error) {
     if ((error as NodeJS.ErrnoException).code === "ENOENT") {
-      return { claims: {} } satisfies LocalLuckyTicketState;
+      try {
+        const rawLegacyState = await fs.readFile(LEGACY_LOCAL_LUCKY_TICKET_STATE_FILE_PATH, "utf8");
+        const legacyState = JSON.parse(rawLegacyState) as LocalKhantokeTicketState;
+        return typeof legacyState === "object" &&
+          legacyState &&
+          typeof legacyState.claims === "object"
+          ? { claims: legacyState.claims ?? {} }
+          : { claims: {} };
+      } catch {
+        return { claims: {} } satisfies LocalKhantokeTicketState;
+      }
     }
 
     throw error;
   }
 }
 
-async function writeLocalLuckyTicketState(state: LocalLuckyTicketState) {
+async function writeLocalKhantokeTicketState(state: LocalKhantokeTicketState) {
   const storageMode = getOrderStorageMode();
   const serializedState = JSON.stringify(state, null, 2);
 
   if (storageMode === "blob") {
-    await put(LOCAL_LUCKY_TICKET_STATE_BLOB_PATH, serializedState, {
+    await put(LOCAL_KHANTOKE_TICKET_STATE_BLOB_PATH, serializedState, {
       access: "private",
       addRandomSuffix: false,
       allowOverwrite: true,
@@ -371,41 +390,41 @@ async function writeLocalLuckyTicketState(state: LocalLuckyTicketState) {
   }
 
   await ensureStorage();
-  await fs.writeFile(LOCAL_LUCKY_TICKET_STATE_FILE_PATH, serializedState, "utf8");
+  await fs.writeFile(LOCAL_KHANTOKE_TICKET_STATE_FILE_PATH, serializedState, "utf8");
 }
 
-async function allocateLocalLuckyTicket(orderId: string): Promise<LuckyTicketAllocation> {
+async function allocateLocalKhantokeTicket(orderId: string): Promise<KhantokeTicketAllocation> {
   if (getOrderStorageMode() === "cookie") {
     return {
-      luckyTicket: false,
-      luckyTicketClaimedAt: null
+      khantokeTicket: false,
+      khantokeTicketClaimedAt: null
     };
   }
 
-  const state = await readLocalLuckyTicketState();
+  const state = await readLocalKhantokeTicketState();
   const existingClaim = state.claims[orderId];
   if (existingClaim) {
     return {
-      luckyTicket: true,
-      luckyTicketClaimedAt: existingClaim
+      khantokeTicket: true,
+      khantokeTicketClaimedAt: existingClaim
     };
   }
 
   const currentClaims = Object.keys(state.claims).length;
-  if (currentClaims >= MAX_LUCKY_TICKET_CLAIMS) {
+  if (currentClaims >= MAX_KHANTOKE_TICKET_CLAIMS) {
     return {
-      luckyTicket: false,
-      luckyTicketClaimedAt: null
+      khantokeTicket: false,
+      khantokeTicketClaimedAt: null
     };
   }
 
   const claimedAt = new Date().toISOString();
   state.claims[orderId] = claimedAt;
-  await writeLocalLuckyTicketState(state);
+  await writeLocalKhantokeTicketState(state);
 
   return {
-    luckyTicket: true,
-    luckyTicketClaimedAt: claimedAt
+    khantokeTicket: true,
+    khantokeTicketClaimedAt: claimedAt
   };
 }
 
@@ -565,7 +584,7 @@ export async function createOrder(input: ValidatedOrderInput) {
     input,
     undefined,
     await allocateLocalOrderNumber(),
-    await allocateLocalLuckyTicket(orderId)
+    await allocateLocalKhantokeTicket(orderId)
   );
   await writeOrder(order);
   return { order } satisfies CreateOrderResult;

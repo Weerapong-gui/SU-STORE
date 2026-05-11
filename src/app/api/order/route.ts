@@ -16,8 +16,8 @@ export async function POST(request: Request) {
 
     const response = NextResponse.json({
       success: true,
-      ticket: order.luckyTicket,
-      message: order.luckyTicket ? "ได้รับบัตรจับโชค" : "สิทธิ์เต็มแล้ว",
+      khantokeTicket: order.khantokeTicket,
+      message: order.khantokeTicket ? "ได้รับ Khantoke ticket" : "สิทธิ์ Khantoke ticket เต็มแล้ว",
       orderId: order.id,
       orderNumber: formatOrderNumber(order)
     });

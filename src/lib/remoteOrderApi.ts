@@ -7,7 +7,7 @@ const REMOTE_ORDER_API_TOKEN = process.env.ORDER_API_TOKEN ?? "";
 export type RemoteOrder = Order & {
   accessToken?: string;
   success?: boolean;
-  ticket?: boolean;
+  khantokeTicket?: boolean;
   message?: string;
 };
 

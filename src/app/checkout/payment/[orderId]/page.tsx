@@ -10,7 +10,7 @@ import {
   PAYMENT_ACCOUNT_NUMBER,
   PAYMENT_BANK_NAME
 } from "@/lib/paymentDetails";
-import { getLuckyTicketLabel, getOrderCustomerName, getOrderStatusLabel } from "@/lib/orderStatus";
+import { getKhantokeTicketLabel, getOrderCustomerName, getOrderStatusLabel } from "@/lib/orderStatus";
 import { getOrderById, getPaymentSlipUploadAvailability } from "@/lib/orderStore";
 import { formatStoredProductSize } from "@/lib/productSizing";
 
@@ -52,12 +52,12 @@ export default async function CheckoutPaymentPage({ params }: CheckoutPaymentPag
               <p className="text-xs font-semibold tracking-[0.1em] text-zinc-500">ORDER SUMMARY</p>
               <div
                 className={`mt-4 rounded-2xl border px-4 py-3 text-sm ${
-                  order.luckyTicket
+                  order.khantokeTicket
                     ? "border-emerald-200 bg-emerald-50 text-emerald-800"
                     : "border-amber-200 bg-amber-50 text-amber-800"
                 }`}
               >
-                {getLuckyTicketLabel(order.luckyTicket)}
+                {getKhantokeTicketLabel(order.khantokeTicket)}
               </div>
               <div className="mt-4 grid gap-6 md:grid-cols-2">
                 <div className="space-y-2 text-sm text-zinc-700">
