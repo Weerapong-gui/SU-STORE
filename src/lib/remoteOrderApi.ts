@@ -6,6 +6,9 @@ const REMOTE_ORDER_API_TOKEN = process.env.ORDER_API_TOKEN ?? "";
 
 export type RemoteOrder = Order & {
   accessToken?: string;
+  success?: boolean;
+  ticket?: boolean;
+  message?: string;
 };
 
 type RemoteOrderPayload = {
@@ -34,12 +37,12 @@ function createProductSnapshot(input: ValidatedOrderInput): OrderProductSnapshot
 
 function createCustomerSnapshot(input: ValidatedOrderInput): OrderCustomer {
   return {
-    firstName: input.firstName,
-    lastName: input.lastName,
-    nickname: input.nickname,
+    studentCode: input.studentCode,
     email: input.email,
+    fullName: input.fullName,
     phone: input.phone,
-    school: input.school
+    school: input.school,
+    parentPhone: input.parentPhone
   };
 }
 

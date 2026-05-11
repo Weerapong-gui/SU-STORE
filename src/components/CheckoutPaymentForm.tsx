@@ -4,16 +4,12 @@ import Image from "next/image";
 import Link from "next/link";
 import { FormEvent, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import { BankAccountCopyField } from "@/components/BankAccountCopyField";
 import { useCart } from "@/components/CartProvider";
 import { products } from "@/data/products";
-import { EMAIL_DOMAIN } from "@/lib/checkoutOptions";
+import { EMAIL_DOMAIN, SCHOOL_OPTIONS } from "@/lib/checkoutOptions";
+import { formatOrderNumber } from "@/lib/formatOrderNumber";
 import { formatPrice } from "@/lib/formatPrice";
-import {
-  PAYMENT_ACCOUNT_COPY_VALUE,
-  PAYMENT_ACCOUNT_NUMBER,
-  PAYMENT_BANK_NAME
-} from "@/lib/paymentDetails";
+import { getLuckyTicketLabel, getOrderStatusLabel } from "@/lib/orderStatus";
 import { formatStoredProductSize } from "@/lib/productSizing";
 import { Order } from "@/types/order";
 
@@ -22,18 +18,15 @@ type CheckoutPaymentFormProps = {
   defaultProduct?: string;
   defaultSize?: string;
   defaultQuantity?: string;
-  defaultSchool?: string;
   cartItemId?: string;
-  slipUploadEnabled: boolean;
-  slipUploadMessage: string | null;
 };
 
 type SubmitState = "idle" | "loading";
 
 const TEXT_FIELD_CLASSES =
   "h-11 w-full rounded-2xl border border-zinc-300 bg-white px-4 text-sm text-zinc-900 outline-none transition focus:border-apple-blue focus:ring-4 focus:ring-apple-blue/10";
-const FILE_INPUT_CLASSES =
-  "block w-full rounded-2xl border border-zinc-300 bg-white px-4 py-3 text-sm text-zinc-700 file:mr-4 file:rounded-full file:border-0 file:bg-apple-blue file:px-4 file:py-2 file:text-sm file:font-medium file:text-white hover:file:bg-apple-blue-dark";
+const SELECT_FIELD_CLASSES =
+  "h-11 w-full rounded-2xl border border-zinc-300 bg-white px-4 text-sm text-zinc-900 outline-none transition focus:border-apple-blue focus:ring-4 focus:ring-apple-blue/10";
 const PRIMARY_BUTTON_CLASSES =
   "inline-flex min-h-12 items-center justify-center rounded-full bg-black px-6 py-3 text-sm font-semibold tracking-[0.02em] text-white transition hover:bg-zinc-900 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-zinc-300 disabled:cursor-not-allowed disabled:opacity-60";
 const SECONDARY_LINK_CLASSES =
@@ -52,10 +45,7 @@ export function CheckoutPaymentForm({
   defaultProduct,
   defaultSize,
   defaultQuantity,
-  defaultSchool,
-  cartItemId,
-  slipUploadEnabled,
-  slipUploadMessage
+  cartItemId
 }: CheckoutPaymentFormProps) {
   const router = useRouter();
   const { removeItem } = useCart();
@@ -77,10 +67,7 @@ export function CheckoutPaymentForm({
 
     return existingOrder?.quantity ?? 1;
   }, [defaultQuantity, existingOrder?.quantity]);
-  const lockedSchool = defaultSchool ?? existingOrder?.customer.school ?? "";
   const totalAmount = product.price * quantity;
-  const hasUploadedSlip = Boolean(existingOrder?.slip);
-  const canSubmit = slipUploadEnabled && Boolean(lockedSchool);
 
   function handleEmailChange(value: string) {
     const nextValue = value.replace(/\s/g, "");
@@ -89,6 +76,7 @@ export function CheckoutPaymentForm({
       setCustomerEmail(localPart ? `${localPart}@${EMAIL_DOMAIN}` : `@${EMAIL_DOMAIN}`);
       return;
     }
+
     setCustomerEmail(nextValue);
   }
 
@@ -97,45 +85,24 @@ export function CheckoutPaymentForm({
     setSubmitState("loading");
     setSubmitError("");
 
-    if (!lockedSchool) {
-      setSubmitError("This item is missing school information. Please go back to cart and edit the product.");
-      setSubmitState("idle");
-      return;
-    }
-
-    if (!slipUploadEnabled) {
-      setSubmitError(slipUploadMessage ?? "Payment slip upload is not available right now.");
-      setSubmitState("idle");
-      return;
-    }
-
     const formData = new FormData(event.currentTarget);
-    const slip = formData.get("slip");
-    const hasNewSlip = slip instanceof File && slip.size > 0;
-
-    if (!hasNewSlip && !hasUploadedSlip) {
-      setSubmitError("Please attach your payment slip before continuing.");
-      setSubmitState("idle");
-      return;
-    }
-
     const payload = {
       product: product.slug,
       size: storedSize,
       quantity,
-      firstName: String(formData.get("firstName") ?? "").trim(),
-      lastName: String(formData.get("lastName") ?? "").trim(),
-      nickname: String(formData.get("nickname") ?? "").trim(),
+      studentCode: String(formData.get("studentCode") ?? "").trim(),
       email: String(formData.get("email") ?? "").trim(),
+      fullName: String(formData.get("fullName") ?? "").trim(),
       phone: String(formData.get("phone") ?? "").trim(),
-      school: lockedSchool
+      school: String(formData.get("school") ?? "").trim(),
+      parentPhone: String(formData.get("parentPhone") ?? "").trim()
     };
 
     const endpoint = activeOrderId ? `/api/order/${activeOrderId}` : "/api/order";
     const method = activeOrderId ? "PUT" : "POST";
 
     try {
-      const orderResponse = await fetch(endpoint, {
+      const response = await fetch(endpoint, {
         method,
         headers: {
           "Content-Type": "application/json"
@@ -143,55 +110,28 @@ export function CheckoutPaymentForm({
         body: JSON.stringify(payload)
       });
 
-      const orderResult = (await orderResponse.json().catch(() => null)) as
+      const result = (await response.json().catch(() => null)) as
         | {
             message?: string;
             orderId?: string;
           }
         | null;
 
-      if (!orderResponse.ok || !orderResult?.orderId) {
-        setSubmitError(orderResult?.message ?? "Unable to save your payment details right now.");
+      if (!response.ok || !result?.orderId) {
+        setSubmitError(result?.message ?? "Unable to save your order right now.");
         setSubmitState("idle");
         return;
       }
 
-      const orderId = orderResult.orderId;
-      setActiveOrderId(orderId);
-
-      if (hasNewSlip) {
-        const slipFormData = new FormData();
-        slipFormData.append("slip", slip);
-
-        const slipResponse = await fetch(`/api/order/${orderId}/payment`, {
-          method: "POST",
-          body: slipFormData
-        });
-
-        const slipResult = (await slipResponse.json().catch(() => null)) as
-          | {
-              message?: string;
-              orderId?: string;
-            }
-          | null;
-
-        if (!slipResponse.ok || !slipResult?.orderId) {
-          setSubmitError(
-            slipResult?.message ??
-              "Your order was saved, but the slip upload failed. Please attach the slip again and retry."
-          );
-          setSubmitState("idle");
-          return;
-        }
-      }
+      setActiveOrderId(result.orderId);
 
       if (cartItemId) {
         removeItem(cartItemId);
       }
 
-      router.push(`/checkout/complete/${orderId}`);
+      router.push(`/checkout/payment/${result.orderId}`);
     } catch {
-      setSubmitError("Unable to connect to the payment service right now.");
+      setSubmitError("Unable to connect to the ordering service right now.");
       setSubmitState("idle");
     }
   }
@@ -200,13 +140,24 @@ export function CheckoutPaymentForm({
     <form onSubmit={handleSubmit} className="grid gap-8 lg:grid-cols-[0.92fr_1.08fr] xl:gap-10">
       <div className="space-y-5">
         <div className="rounded-[2rem] border border-zinc-200 bg-white p-5 shadow-[0_18px_45px_rgba(17,17,17,0.06)]">
-          <p className="text-xs font-semibold tracking-[0.12em] text-zinc-500">PAYMENT</p>
+          <p className="text-xs font-semibold tracking-[0.12em] text-zinc-500">ORDER DETAILS</p>
           <h1 className="mt-3 text-3xl font-semibold tracking-tight text-zinc-900 md:text-4xl">
-            Checkout and Payment
+            Confirm your order
           </h1>
           <p className="mt-3 text-sm text-zinc-600">
-            Product details are now locked. If you need to change the item, quantity, or size, please go back to cart.
+            Review the selected product, complete your personal details, and create the order number before payment.
           </p>
+          {existingOrder ? (
+            <div className="mt-4 space-y-2 text-sm text-zinc-600">
+              <p>
+                Order {formatOrderNumber(existingOrder)} is currently{" "}
+                <span className="font-medium text-zinc-900">{getOrderStatusLabel(existingOrder.status)}</span>.
+              </p>
+              <p className={existingOrder.luckyTicket ? "text-emerald-700" : "text-amber-700"}>
+                {getLuckyTicketLabel(existingOrder.luckyTicket)}
+              </p>
+            </div>
+          ) : null}
         </div>
 
         <div className="overflow-hidden rounded-[2rem] border border-zinc-200 bg-white shadow-[0_18px_45px_rgba(17,17,17,0.06)]">
@@ -233,8 +184,6 @@ export function CheckoutPaymentForm({
               <p>{formatStoredProductSize(product.category, storedSize)}</p>
               <p className="text-zinc-500">Quantity</p>
               <p>{quantity}</p>
-              <p className="text-zinc-500">School</p>
-              <p>{lockedSchool || "-"}</p>
               <p className="text-zinc-500">Unit Price</p>
               <p>{formatPrice(product.price)}</p>
             </div>
@@ -261,37 +210,22 @@ export function CheckoutPaymentForm({
       <div className="space-y-5 rounded-[2rem] border border-zinc-200 bg-white p-6 shadow-[0_18px_45px_rgba(17,17,17,0.06)] md:p-8">
         <div>
           <p className="text-xs font-semibold tracking-[0.12em] text-zinc-500">PERSONAL DETAILS</p>
-          <div className="mt-4 grid gap-4 md:grid-cols-2">
+          <p className="mt-3 text-sm text-zinc-600">
+            Once you confirm this order, the system will generate an order number and move you to the payment step.
+          </p>
+
+          <div className="mt-5 grid gap-4 md:grid-cols-2">
             <label className="space-y-1">
-              <span className="text-xs font-semibold tracking-[0.08em] text-zinc-600">FIRST NAME</span>
+              <span className="text-xs font-semibold tracking-[0.08em] text-zinc-600">STUDENT CODE</span>
               <input
-                name="firstName"
+                name="studentCode"
                 required
-                defaultValue={existingOrder?.customer.firstName ?? ""}
+                defaultValue={existingOrder?.customer.studentCode ?? ""}
                 className={TEXT_FIELD_CLASSES}
-                placeholder="First name"
+                placeholder="6831501178"
               />
             </label>
-            <label className="space-y-1">
-              <span className="text-xs font-semibold tracking-[0.08em] text-zinc-600">LAST NAME</span>
-              <input
-                name="lastName"
-                required
-                defaultValue={existingOrder?.customer.lastName ?? ""}
-                className={TEXT_FIELD_CLASSES}
-                placeholder="Last name"
-              />
-            </label>
-            <label className="space-y-1">
-              <span className="text-xs font-semibold tracking-[0.08em] text-zinc-600">NICKNAME</span>
-              <input
-                name="nickname"
-                required
-                defaultValue={existingOrder?.customer.nickname ?? ""}
-                className={TEXT_FIELD_CLASSES}
-                placeholder="Nickname"
-              />
-            </label>
+
             <label className="space-y-1">
               <span className="text-xs font-semibold tracking-[0.08em] text-zinc-600">EMAIL</span>
               <input
@@ -304,8 +238,20 @@ export function CheckoutPaymentForm({
                 placeholder={`@${EMAIL_DOMAIN}`}
               />
             </label>
+
             <label className="space-y-1 md:col-span-2">
-              <span className="text-xs font-semibold tracking-[0.08em] text-zinc-600">TELEPHONE NUMBER</span>
+              <span className="text-xs font-semibold tracking-[0.08em] text-zinc-600">FULL NAME</span>
+              <input
+                name="fullName"
+                required
+                defaultValue={existingOrder?.customer.fullName ?? ""}
+                className={TEXT_FIELD_CLASSES}
+                placeholder="Name Surname"
+              />
+            </label>
+
+            <label className="space-y-1">
+              <span className="text-xs font-semibold tracking-[0.08em] text-zinc-600">PHONE NUMBER</span>
               <input
                 name="phone"
                 required
@@ -314,51 +260,36 @@ export function CheckoutPaymentForm({
                 placeholder="08x-xxx-xxxx"
               />
             </label>
-          </div>
-        </div>
 
-        <div className="border-t border-zinc-200 pt-5">
-          <p className="text-xs font-semibold tracking-[0.12em] text-zinc-500">BANK ACCOUNT</p>
-          <h3 className="mt-2 text-xl font-semibold tracking-tight text-zinc-900">
-            {PAYMENT_BANK_NAME}
-          </h3>
-          <BankAccountCopyField
-            formattedAccountNumber={PAYMENT_ACCOUNT_NUMBER}
-            copyValue={PAYMENT_ACCOUNT_COPY_VALUE}
-          />
+            <label className="space-y-1">
+              <span className="text-xs font-semibold tracking-[0.08em] text-zinc-600">PARENT PHONE</span>
+              <input
+                name="parentPhone"
+                required
+                defaultValue={existingOrder?.customer.parentPhone ?? ""}
+                className={TEXT_FIELD_CLASSES}
+                placeholder="08x-xxx-xxxx"
+              />
+            </label>
 
-          <div className="mt-5 rounded-2xl border border-zinc-200 bg-[#f7f7f9] p-4">
-            <p className="text-xs font-semibold tracking-[0.08em] text-zinc-500">TOTAL AMOUNT</p>
-            <p className="mt-1 text-3xl font-semibold tracking-tight text-apple-blue">
-              {formatPrice(totalAmount)}
-            </p>
-            <p className="mt-2 text-xs text-zinc-500">
-              Transfer the exact amount above, then attach your payment slip below to complete the order.
-            </p>
-          </div>
-        </div>
-
-        <div className="border-t border-zinc-200 pt-5">
-          <p className="text-xs font-semibold tracking-[0.12em] text-zinc-500">UPLOAD SLIP</p>
-          <div className="mt-3">
-            {slipUploadEnabled ? (
-              <>
-                <input
-                  name="slip"
-                  type="file"
-                  accept=".jpg,.jpeg,.png,.webp,.pdf"
-                  required={!hasUploadedSlip}
-                  className={FILE_INPUT_CLASSES}
-                />
-                <p className="mt-2 text-xs text-zinc-500">
-                  Supports JPG, PNG, WEBP, or PDF up to 5 MB.
-                </p>
-              </>
-            ) : (
-              <div className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
-                {slipUploadMessage ?? "Payment slip upload is not available right now."}
-              </div>
-            )}
+            <label className="space-y-1 md:col-span-2">
+              <span className="text-xs font-semibold tracking-[0.08em] text-zinc-600">SCHOOL</span>
+              <select
+                name="school"
+                required
+                defaultValue={existingOrder?.customer.school ?? ""}
+                className={SELECT_FIELD_CLASSES}
+              >
+                <option value="" disabled>
+                  Select school
+                </option>
+                {SCHOOL_OPTIONS.map((school) => (
+                  <option key={school} value={school}>
+                    {school}
+                  </option>
+                ))}
+              </select>
+            </label>
           </div>
         </div>
 
@@ -368,13 +299,15 @@ export function CheckoutPaymentForm({
           </div>
         ) : null}
 
-        <button
-          type="submit"
-          disabled={submitState === "loading" || !canSubmit}
-          className={`${PRIMARY_BUTTON_CLASSES} w-full`}
-        >
-          {submitState === "loading" ? "SUBMITTING PAYMENT..." : "SUBMIT PAYMENT"}
-        </button>
+        <div className="border-t border-zinc-200 pt-5">
+          <button
+            type="submit"
+            disabled={submitState === "loading"}
+            className={`${PRIMARY_BUTTON_CLASSES} w-full`}
+          >
+            {submitState === "loading" ? "CONFIRMING..." : "CONFIRM ORDER"}
+          </button>
+        </div>
       </div>
     </form>
   );

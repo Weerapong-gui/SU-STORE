@@ -1,7 +1,7 @@
 import { redirect } from "next/navigation";
 import { CheckoutPaymentForm } from "@/components/CheckoutPaymentForm";
 import { Container } from "@/components/ui/Container";
-import { getOrderById, getPaymentSlipUploadAvailability } from "@/lib/orderStore";
+import { getOrderById } from "@/lib/orderStore";
 
 export const dynamic = "force-dynamic";
 
@@ -11,7 +11,6 @@ type CheckoutPaymentPageProps = {
     orderId?: string;
     size?: string;
     quantity?: string;
-    school?: string;
     itemId?: string;
   };
 };
@@ -19,10 +18,13 @@ type CheckoutPaymentPageProps = {
 export default async function CheckoutPaymentPage({ searchParams }: CheckoutPaymentPageProps) {
   const orderId = searchParams?.orderId;
   const existingOrder = orderId ? await getOrderById(orderId) : null;
-  const slipUploadAvailability = await getPaymentSlipUploadAvailability();
 
   if (!existingOrder && !searchParams?.product) {
     redirect("/checkout");
+  }
+
+  if (existingOrder && existingOrder.status !== "pending_payment") {
+    redirect(`/checkout/payment/${existingOrder.id}`);
   }
 
   return (
@@ -33,10 +35,7 @@ export default async function CheckoutPaymentPage({ searchParams }: CheckoutPaym
           defaultProduct={searchParams?.product}
           defaultSize={searchParams?.size}
           defaultQuantity={searchParams?.quantity}
-          defaultSchool={searchParams?.school}
           cartItemId={searchParams?.itemId}
-          slipUploadEnabled={slipUploadAvailability.enabled}
-          slipUploadMessage={slipUploadAvailability.message}
         />
       </Container>
     </section>

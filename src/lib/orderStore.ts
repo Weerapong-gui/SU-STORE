@@ -5,6 +5,7 @@ import path from "node:path";
 import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
 import { DEFAULT_ORDER_ROUND, ORDER_PREFIX } from "@/lib/formatOrderNumber";
+import { normalizeOrder } from "@/lib/orderStatus";
 import {
   createRemoteOrder,
   getRemoteOrderById,
@@ -28,6 +29,9 @@ const LOCAL_ORDER_SEQUENCE_COOKIE_NAME = "su-order-sequence";
 const ORDER_COOKIE_MAX_AGE_SECONDS = 60 * 60 * 24 * 7;
 const LOCAL_ORDER_SEQUENCE_BLOB_PATH = "orders/_sequence.json";
 const LOCAL_ORDER_SEQUENCE_FILE_PATH = path.join(DATA_ROOT, "order-sequence.json");
+const LOCAL_LUCKY_TICKET_STATE_BLOB_PATH = "orders/_lucky-ticket-claims.json";
+const LOCAL_LUCKY_TICKET_STATE_FILE_PATH = path.join(DATA_ROOT, "lucky-ticket-claims.json");
+const MAX_LUCKY_TICKET_CLAIMS = 2000;
 
 type OrderStorageMode = "filesystem" | "blob" | "cookie";
 type CreateOrderResult = {
@@ -41,6 +45,13 @@ type SlipUploadAvailability = {
 type LocalOrderNumber = {
   roundNumber: number;
   sequenceNumber: number;
+};
+type LocalLuckyTicketState = {
+  claims: Record<string, string>;
+};
+type LuckyTicketAllocation = {
+  luckyTicket: boolean;
+  luckyTicketClaimedAt: string | null;
 };
 
 const BLOB_STORAGE_DISABLED_MESSAGE =
@@ -84,7 +95,8 @@ function buildOrderFromInput(
   orderId: string,
   input: ValidatedOrderInput,
   existingOrder?: Order,
-  localOrderNumber?: LocalOrderNumber
+  localOrderNumber?: LocalOrderNumber,
+  luckyTicketAllocation?: LuckyTicketAllocation
 ): Order {
   const now = new Date().toISOString();
 
@@ -94,6 +106,9 @@ function buildOrderFromInput(
     roundNumber: existingOrder?.roundNumber ?? localOrderNumber?.roundNumber,
     status: "pending_payment",
     paymentStatus: "awaiting_payment",
+    luckyTicket: existingOrder?.luckyTicket ?? luckyTicketAllocation?.luckyTicket ?? false,
+    luckyTicketClaimedAt:
+      existingOrder?.luckyTicketClaimedAt ?? luckyTicketAllocation?.luckyTicketClaimedAt ?? null,
     createdAt: existingOrder?.createdAt ?? now,
     updatedAt: now,
     size: input.size,
@@ -109,12 +124,12 @@ function buildOrderFromInput(
       category: input.product.category
     },
     customer: {
-      firstName: input.firstName,
-      lastName: input.lastName,
-      nickname: input.nickname,
+      studentCode: input.studentCode,
       email: input.email,
+      fullName: input.fullName,
       phone: input.phone,
-      school: input.school
+      school: input.school,
+      parentPhone: input.parentPhone
     },
     slip: null
   };
@@ -294,6 +309,106 @@ async function writeStoredLocalSequenceNumber(sequenceNumber: number) {
   await fs.writeFile(LOCAL_ORDER_SEQUENCE_FILE_PATH, serializedState, "utf8");
 }
 
+async function readLocalLuckyTicketState() {
+  const storageMode = getOrderStorageMode();
+
+  if (storageMode === "blob") {
+    const blobResult = await get(LOCAL_LUCKY_TICKET_STATE_BLOB_PATH, {
+      access: "private"
+    });
+
+    if (!blobResult || blobResult.statusCode !== 200) {
+      return { claims: {} } satisfies LocalLuckyTicketState;
+    }
+
+    try {
+      const rawState = await new Response(blobResult.stream).text();
+      const state = JSON.parse(rawState) as LocalLuckyTicketState;
+      return typeof state === "object" && state && typeof state.claims === "object"
+        ? { claims: state.claims ?? {} }
+        : { claims: {} };
+    } catch {
+      return { claims: {} } satisfies LocalLuckyTicketState;
+    }
+  }
+
+  if (storageMode === "cookie") {
+    return { claims: {} } satisfies LocalLuckyTicketState;
+  }
+
+  try {
+    const rawState = await fs.readFile(LOCAL_LUCKY_TICKET_STATE_FILE_PATH, "utf8");
+    const state = JSON.parse(rawState) as LocalLuckyTicketState;
+    return typeof state === "object" && state && typeof state.claims === "object"
+      ? { claims: state.claims ?? {} }
+      : { claims: {} };
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === "ENOENT") {
+      return { claims: {} } satisfies LocalLuckyTicketState;
+    }
+
+    throw error;
+  }
+}
+
+async function writeLocalLuckyTicketState(state: LocalLuckyTicketState) {
+  const storageMode = getOrderStorageMode();
+  const serializedState = JSON.stringify(state, null, 2);
+
+  if (storageMode === "blob") {
+    await put(LOCAL_LUCKY_TICKET_STATE_BLOB_PATH, serializedState, {
+      access: "private",
+      addRandomSuffix: false,
+      allowOverwrite: true,
+      contentType: "application/json",
+      cacheControlMaxAge: 60
+    });
+    return;
+  }
+
+  if (storageMode === "cookie") {
+    return;
+  }
+
+  await ensureStorage();
+  await fs.writeFile(LOCAL_LUCKY_TICKET_STATE_FILE_PATH, serializedState, "utf8");
+}
+
+async function allocateLocalLuckyTicket(orderId: string): Promise<LuckyTicketAllocation> {
+  if (getOrderStorageMode() === "cookie") {
+    return {
+      luckyTicket: false,
+      luckyTicketClaimedAt: null
+    };
+  }
+
+  const state = await readLocalLuckyTicketState();
+  const existingClaim = state.claims[orderId];
+  if (existingClaim) {
+    return {
+      luckyTicket: true,
+      luckyTicketClaimedAt: existingClaim
+    };
+  }
+
+  const currentClaims = Object.keys(state.claims).length;
+  if (currentClaims >= MAX_LUCKY_TICKET_CLAIMS) {
+    return {
+      luckyTicket: false,
+      luckyTicketClaimedAt: null
+    };
+  }
+
+  const claimedAt = new Date().toISOString();
+  state.claims[orderId] = claimedAt;
+  await writeLocalLuckyTicketState(state);
+
+  return {
+    luckyTicket: true,
+    luckyTicketClaimedAt: claimedAt
+  };
+}
+
 async function allocateLocalOrderNumber() {
   const sequenceNumber = (await readStoredLocalSequenceNumber()) + 1;
 
@@ -340,7 +455,7 @@ async function getLocalOrderById(orderId: string) {
     }
 
     const rawOrder = await new Response(blobResult.stream).text();
-    return ensureLocalOrderNumber(JSON.parse(rawOrder) as Order);
+    return ensureLocalOrderNumber(normalizeOrder(JSON.parse(rawOrder) as Order));
   }
 
   if (storageMode === "cookie") {
@@ -350,7 +465,7 @@ async function getLocalOrderById(orderId: string) {
     }
 
     try {
-      return decodeOrderCookie(serializedOrder);
+      return normalizeOrder(decodeOrderCookie(serializedOrder));
     } catch {
       return null;
     }
@@ -358,7 +473,7 @@ async function getLocalOrderById(orderId: string) {
 
   try {
     const rawOrder = await fs.readFile(getOrderFilePath(orderId), "utf8");
-    return ensureLocalOrderNumber(JSON.parse(rawOrder) as Order);
+    return ensureLocalOrderNumber(normalizeOrder(JSON.parse(rawOrder) as Order));
   } catch (error) {
     if ((error as NodeJS.ErrnoException).code === "ENOENT") {
       return null;
@@ -420,7 +535,7 @@ export async function getOrderById(orderId: string) {
   if (hasRemoteOrderApi()) {
     const remoteOrder = await getRemoteOrderById(orderId, getRemoteOrderAccessToken(orderId));
     if (remoteOrder) {
-      return remoteOrder;
+      return normalizeOrder(remoteOrder);
     }
   }
 
@@ -433,7 +548,7 @@ export async function createOrder(input: ValidatedOrderInput) {
       const order = await createRemoteOrder(input);
       if (order) {
         return {
-          order,
+          order: normalizeOrder(order),
           accessToken: order.accessToken
         } satisfies CreateOrderResult;
       }
@@ -444,7 +559,14 @@ export async function createOrder(input: ValidatedOrderInput) {
     }
   }
 
-  const order = buildOrderFromInput(generateOrderId(), input, undefined, await allocateLocalOrderNumber());
+  const orderId = generateOrderId();
+  const order = buildOrderFromInput(
+    orderId,
+    input,
+    undefined,
+    await allocateLocalOrderNumber(),
+    await allocateLocalLuckyTicket(orderId)
+  );
   await writeOrder(order);
   return { order } satisfies CreateOrderResult;
 }
@@ -454,7 +576,7 @@ export async function updateOrder(orderId: string, input: ValidatedOrderInput) {
     try {
       const remoteOrder = await updateRemoteOrder(orderId, input, getRemoteOrderAccessToken(orderId));
       if (remoteOrder) {
-        return remoteOrder;
+        return normalizeOrder(remoteOrder);
       }
 
       console.warn(`Remote order API returned no order while updating ${orderId}. Falling back to local storage.`);
@@ -566,7 +688,7 @@ export async function attachSlipToOrder(orderId: string, file: File) {
         getRemoteOrderAccessToken(orderId)
       );
       if (remoteOrder) {
-        return remoteOrder;
+        return normalizeOrder(remoteOrder);
       }
 
       console.warn(`Remote order API returned no order while uploading slip for ${orderId}. Falling back to local storage.`);
@@ -614,8 +736,8 @@ export async function attachSlipToOrder(orderId: string, file: File) {
 
   const updatedOrder: Order = {
     ...existingOrder,
-    status: "payment_submitted",
-    paymentStatus: "slip_uploaded",
+    status: "waiting_confirm",
+    paymentStatus: "waiting_confirm",
     updatedAt: new Date().toISOString(),
     slip
   };

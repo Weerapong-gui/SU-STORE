@@ -86,7 +86,7 @@ export function PaymentSlipUploadForm({
           ? "UPLOADING..."
           : hasUploadedSlip
             ? "REPLACE SLIP"
-            : "SUBMIT PAYMENT SLIP"}
+            : "SUBMIT SLIP FOR REVIEW"}
       </button>
     </form>
   );

@@ -28,6 +28,7 @@ ORDER_ROUND = int(os.environ.get("ORDER_ROUND", "1"))
 ORDER_API_TOKEN = os.environ.get("ORDER_API_TOKEN", "")
 GOOGLE_SHEETS_WEBHOOK_URL = os.environ.get("GOOGLE_SHEETS_WEBHOOK_URL", "").strip()
 GOOGLE_SHEETS_WEBHOOK_TOKEN = os.environ.get("GOOGLE_SHEETS_WEBHOOK_TOKEN", "").strip()
+LUCKY_TICKET_QUOTA = int(os.environ.get("LUCKY_TICKET_QUOTA", "2000"))
 ORDER_ID_PATTERN = re.compile(r"^[A-Z0-9-]+$")
 ALLOWED_SLIP_TYPES = {"image/jpeg", "image/png", "image/webp", "application/pdf"}
 MAX_SLIP_SIZE_BYTES = 5 * 1024 * 1024
@@ -49,6 +50,8 @@ def ensure_db() -> None:
               round_number INTEGER NOT NULL,
               status TEXT NOT NULL,
               payment_status TEXT NOT NULL,
+              lucky_ticket INTEGER NOT NULL DEFAULT 0,
+              lucky_ticket_claimed_at TEXT,
               created_at TEXT NOT NULL,
               updated_at TEXT NOT NULL,
               product_slug TEXT NOT NULL,
@@ -61,6 +64,9 @@ def ensure_db() -> None:
               size TEXT NOT NULL,
               quantity INTEGER NOT NULL,
               total_amount INTEGER NOT NULL,
+              student_code TEXT NOT NULL DEFAULT '',
+              full_name TEXT NOT NULL DEFAULT '',
+              parent_phone TEXT NOT NULL DEFAULT '',
               first_name TEXT NOT NULL,
               last_name TEXT NOT NULL,
               nickname TEXT NOT NULL,
@@ -85,6 +91,16 @@ def ensure_db() -> None:
           connection.execute("ALTER TABLE orders ADD COLUMN access_token TEXT")
       if "slip_storage_path" not in columns:
           connection.execute("ALTER TABLE orders ADD COLUMN slip_storage_path TEXT")
+      if "lucky_ticket" not in columns:
+          connection.execute("ALTER TABLE orders ADD COLUMN lucky_ticket INTEGER NOT NULL DEFAULT 0")
+      if "lucky_ticket_claimed_at" not in columns:
+          connection.execute("ALTER TABLE orders ADD COLUMN lucky_ticket_claimed_at TEXT")
+      if "student_code" not in columns:
+          connection.execute("ALTER TABLE orders ADD COLUMN student_code TEXT NOT NULL DEFAULT ''")
+      if "full_name" not in columns:
+          connection.execute("ALTER TABLE orders ADD COLUMN full_name TEXT NOT NULL DEFAULT ''")
+      if "parent_phone" not in columns:
+          connection.execute("ALTER TABLE orders ADD COLUMN parent_phone TEXT NOT NULL DEFAULT ''")
       existing_rows = connection.execute(
           "SELECT internal_id FROM orders WHERE access_token IS NULL OR access_token = ''"
       ).fetchall()
@@ -93,6 +109,16 @@ def ensure_db() -> None:
               "UPDATE orders SET access_token = ? WHERE internal_id = ?",
               (create_order_access_token(), row[0]),
           )
+      connection.execute(
+          """
+          CREATE TABLE IF NOT EXISTS lucky_ticket_claims (
+              id INTEGER PRIMARY KEY AUTOINCREMENT,
+              order_id INTEGER NOT NULL UNIQUE,
+              claimed_at TEXT NOT NULL,
+              FOREIGN KEY (order_id) REFERENCES orders(internal_id)
+          )
+          """
+      )
       connection.execute("CREATE UNIQUE INDEX IF NOT EXISTS idx_orders_order_code ON orders(order_code)")
 
 
@@ -249,6 +275,8 @@ def serialize_order(row: sqlite3.Row, include_access_token: bool = False) -> dic
         "roundNumber": row["round_number"],
         "status": row["status"],
         "paymentStatus": row["payment_status"],
+        "luckyTicket": bool(row["lucky_ticket"]),
+        "luckyTicketClaimedAt": row["lucky_ticket_claimed_at"],
         "createdAt": row["created_at"],
         "updatedAt": row["updated_at"],
         "size": row["size"],
@@ -264,12 +292,14 @@ def serialize_order(row: sqlite3.Row, include_access_token: bool = False) -> dic
             "category": row["product_category"],
         },
         "customer": {
-            "firstName": row["first_name"],
-            "lastName": row["last_name"],
-            "nickname": row["nickname"],
+            "studentCode": row["student_code"] or "",
             "email": row["email"],
+            "fullName": row["full_name"] or " ".join(
+                value for value in [row["first_name"], row["last_name"]] if value
+            ).strip(),
             "phone": row["phone"],
             "school": row["school"],
+            "parentPhone": row["parent_phone"] or "",
         },
         "slip": slip,
     }
@@ -289,6 +319,8 @@ def create_sheet_row_payload(order: dict[str, Any], event: str) -> dict[str, Any
         "sequenceNumber": order.get("sequenceNumber", ""),
         "status": order.get("status", ""),
         "paymentStatus": order.get("paymentStatus", ""),
+        "luckyTicket": order.get("luckyTicket", False),
+        "luckyTicketClaimedAt": order.get("luckyTicketClaimedAt", ""),
         "createdAt": order.get("createdAt", ""),
         "updatedAt": order.get("updatedAt", ""),
         "lastEvent": event,
@@ -303,12 +335,12 @@ def create_sheet_row_payload(order: dict[str, Any], event: str) -> dict[str, Any
         "size": order.get("size", ""),
         "quantity": order.get("quantity", ""),
         "totalAmount": order.get("totalAmount", ""),
-        "firstName": customer.get("firstName", ""),
-        "lastName": customer.get("lastName", ""),
-        "nickname": customer.get("nickname", ""),
+        "studentCode": customer.get("studentCode", ""),
         "email": customer.get("email", ""),
+        "fullName": customer.get("fullName", ""),
         "phone": customer.get("phone", ""),
         "school": customer.get("school", ""),
+        "parentPhone": customer.get("parentPhone", ""),
         "slipOriginalName": slip.get("originalName", ""),
         "slipStoredName": slip.get("storedName", ""),
         "slipStoredPath": slip.get("storedPath", ""),
@@ -362,7 +394,14 @@ def validate_order_payload(payload: Any) -> tuple[dict[str, Any] | None, str | N
         if field not in product or product[field] in (None, ""):
             return None, f"product.{field} is required"
 
-    required_customer_fields = ["firstName", "lastName", "nickname", "email", "phone", "school"]
+    required_customer_fields = [
+        "studentCode",
+        "email",
+        "fullName",
+        "phone",
+        "school",
+        "parentPhone",
+    ]
     for field in required_customer_fields:
         if field not in customer or customer[field] in (None, ""):
             return None, f"customer.{field} is required"
@@ -416,6 +455,26 @@ def fetch_order_by_code(connection: sqlite3.Connection, order_code: str) -> sqli
     ).fetchone()
 
 
+def reserve_lucky_ticket(connection: sqlite3.Connection, order_id: int) -> tuple[bool, str | None]:
+    existing_claim = connection.execute(
+        "SELECT claimed_at FROM lucky_ticket_claims WHERE order_id = ?",
+        (order_id,),
+    ).fetchone()
+    if existing_claim is not None:
+        return True, str(existing_claim["claimed_at"])
+
+    current_claims = connection.execute("SELECT COUNT(*) AS count FROM lucky_ticket_claims").fetchone()
+    if current_claims is not None and int(current_claims["count"]) >= LUCKY_TICKET_QUOTA:
+        return False, None
+
+    claimed_at = now_iso()
+    connection.execute(
+        "INSERT INTO lucky_ticket_claims (order_id, claimed_at) VALUES (?, ?)",
+        (order_id, claimed_at),
+    )
+    return True, claimed_at
+
+
 def create_order(connection: sqlite3.Connection, payload: dict[str, Any]) -> dict[str, Any]:
     now = now_iso()
     access_token = create_order_access_token()
@@ -425,8 +484,9 @@ def create_order(connection: sqlite3.Connection, payload: dict[str, Any]) -> dic
             round_number, status, payment_status, created_at, updated_at,
             product_slug, product_name, product_short_name, product_tagline, product_price, product_image, product_category,
             size, quantity, total_amount, access_token,
+            student_code, full_name, parent_phone,
             first_name, last_name, nickname, email, phone, school
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """,
         (
             ORDER_ROUND,
@@ -445,9 +505,12 @@ def create_order(connection: sqlite3.Connection, payload: dict[str, Any]) -> dic
             payload["quantity"],
             payload["total_amount"],
             access_token,
-            payload["customer"]["firstName"],
-            payload["customer"]["lastName"],
-            payload["customer"]["nickname"],
+            payload["customer"]["studentCode"],
+            payload["customer"]["fullName"],
+            payload["customer"]["parentPhone"],
+            payload["customer"]["fullName"],
+            "",
+            "",
             payload["customer"]["email"],
             payload["customer"]["phone"],
             payload["customer"]["school"],
@@ -459,6 +522,11 @@ def create_order(connection: sqlite3.Connection, payload: dict[str, Any]) -> dic
         "UPDATE orders SET order_code = ? WHERE internal_id = ?",
         (order_code, sequence_number),
     )
+    lucky_ticket, lucky_ticket_claimed_at = reserve_lucky_ticket(connection, sequence_number)
+    connection.execute(
+        "UPDATE orders SET lucky_ticket = ?, lucky_ticket_claimed_at = ? WHERE internal_id = ?",
+        (1 if lucky_ticket else 0, lucky_ticket_claimed_at, sequence_number),
+    )
     row = fetch_order_by_code(connection, order_code)
     assert row is not None
     return serialize_order(row, include_access_token=True)
@@ -469,6 +537,7 @@ def update_order(connection: sqlite3.Connection, order_code: str, payload: dict[
     if existing_order is None:
         return None
 
+    delete_local_slip_file(existing_order["slip_stored_name"], existing_order["slip_storage_path"])
     now = now_iso()
     connection.execute(
         """
@@ -487,6 +556,9 @@ def update_order(connection: sqlite3.Connection, order_code: str, payload: dict[
             size = ?,
             quantity = ?,
             total_amount = ?,
+            student_code = ?,
+            full_name = ?,
+            parent_phone = ?,
             first_name = ?,
             last_name = ?,
             nickname = ?,
@@ -515,9 +587,12 @@ def update_order(connection: sqlite3.Connection, order_code: str, payload: dict[
             payload["size"],
             payload["quantity"],
             payload["total_amount"],
-            payload["customer"]["firstName"],
-            payload["customer"]["lastName"],
-            payload["customer"]["nickname"],
+            payload["customer"]["studentCode"],
+            payload["customer"]["fullName"],
+            payload["customer"]["parentPhone"],
+            payload["customer"]["fullName"],
+            "",
+            "",
             payload["customer"]["email"],
             payload["customer"]["phone"],
             payload["customer"]["school"],
@@ -551,8 +626,8 @@ def update_order_slip(connection: sqlite3.Connection, order_code: str, slip: dic
         WHERE order_code = ?
         """,
         (
-            "payment_submitted",
-            "slip_uploaded",
+            "waiting_confirm",
+            "waiting_confirm",
             now,
             slip["originalName"],
             slip["storedName"],
@@ -685,10 +760,19 @@ class OrderRequestHandler(BaseHTTPRequestHandler):
             return
 
         with open_db() as connection:
+            connection.execute("BEGIN IMMEDIATE")
             order = create_order(connection, validated_payload)
             connection.commit()
             sync_order_to_google_sheets(order, "order_created")
-            self._send_json(HTTPStatus.CREATED, order)
+            self._send_json(
+                HTTPStatus.CREATED,
+                {
+                    **order,
+                    "success": True,
+                    "ticket": bool(order.get("luckyTicket")),
+                    "message": "ได้รับบัตรจับโชค" if order.get("luckyTicket") else "สิทธิ์เต็มแล้ว",
+                },
+            )
 
     def do_PUT(self) -> None:
         path = urlparse(self.path).path

@@ -9,23 +9,25 @@ export async function POST(request: Request) {
     const validation = validateOrderInput(body);
 
     if (!validation.data) {
-      return NextResponse.json({ message: validation.message }, { status: 400 });
+      return NextResponse.json({ success: false, message: validation.message }, { status: 400 });
     }
 
     const { order, accessToken } = await createOrder(validation.data);
 
     const response = NextResponse.json({
-      message: `สร้างคำสั่งซื้อเรียบร้อย หมายเลขออเดอร์ ${formatOrderNumber(order)}`,
-      orderId: order.id
+      success: true,
+      ticket: order.luckyTicket,
+      message: order.luckyTicket ? "ได้รับบัตรจับโชค" : "สิทธิ์เต็มแล้ว",
+      orderId: order.id,
+      orderNumber: formatOrderNumber(order)
     });
 
     setOrderResponseCookie(response, order, { accessToken });
     return response;
-
   } catch (error) {
     console.error("Failed to create order", error);
     return NextResponse.json(
-      { message: "ไม่สามารถสร้างคำสั่งซื้อได้ในขณะนี้" },
+      { success: false, message: "ไม่สามารถสร้างคำสั่งซื้อได้ในขณะนี้" },
       { status: 500 }
     );
   }

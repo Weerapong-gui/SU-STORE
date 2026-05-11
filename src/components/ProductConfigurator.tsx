@@ -5,7 +5,7 @@ import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useCart } from "@/components/CartProvider";
 import { MobileProductSlider } from "@/components/MobileProductSlider";
-import { SCHOOL_OPTIONS, SIZE_OPTIONS } from "@/lib/checkoutOptions";
+import { SIZE_OPTIONS } from "@/lib/checkoutOptions";
 import {
   clampCartQuantity,
   ConfigureIntent,
@@ -28,15 +28,12 @@ type ProductConfiguratorProps = {
   editingItemId?: string;
   defaultSize?: string;
   defaultQuantity?: string;
-  defaultSchool?: string;
 };
 
 const SIZE_OPTION_BASE_CLASSES =
   "h-11 rounded-2xl border border-zinc-300 bg-white px-4 text-xs font-semibold text-zinc-800 transition focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-apple-blue/15 hover:border-apple-blue/30 hover:bg-apple-blue-soft";
 const SIZE_OPTION_SELECTED_CLASSES =
   "border-apple-blue bg-apple-blue text-white shadow-[0_8px_20px_rgba(0,113,227,0.22)]";
-const SELECT_FIELD_CLASSES =
-  "h-11 w-full rounded-2xl border border-zinc-300 bg-white px-4 text-sm text-zinc-900 outline-none transition focus:border-apple-blue focus:ring-4 focus:ring-apple-blue/10";
 const QUANTITY_CONTROL_BUTTON_CLASSES =
   "flex h-11 w-11 items-center justify-center rounded-2xl border border-zinc-300 bg-white text-lg font-semibold text-zinc-800 transition focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-apple-blue/15 hover:border-apple-blue/30 hover:bg-apple-blue-soft disabled:cursor-not-allowed disabled:opacity-50";
 const PRIMARY_BUTTON_CLASSES =
@@ -49,8 +46,7 @@ export function ProductConfigurator({
   intent,
   editingItemId,
   defaultSize,
-  defaultQuantity,
-  defaultSchool
+  defaultQuantity
 }: ProductConfiguratorProps) {
   const router = useRouter();
   const { addItem, replaceItem } = useCart();
@@ -64,8 +60,6 @@ export function ProductConfigurator({
   const [selectedBundleSize, setSelectedBundleSize] = useState(() =>
     parseBundleSizeSelection(defaultSize)
   );
-  const [selectedSchool, setSelectedSchool] = useState(defaultSchool ?? "");
-  const [errorMessage, setErrorMessage] = useState("");
   const bundleProduct = isBundleProduct(product);
 
   const totalPrice = useMemo(() => product.price * selectedQuantity, [product.price, selectedQuantity]);
@@ -78,32 +72,18 @@ export function ProductConfigurator({
     setSelectedQuantity(clampCartQuantity(nextQuantity));
   }
 
-  function validateSelection() {
-    if (product.requiresSchool && !selectedSchool) {
-      setErrorMessage("Please choose a school before continuing.");
-      return false;
-    }
-
-    setErrorMessage("");
-    return true;
-  }
-
   function handleAddToCart() {
-    if (!validateSelection()) {
-      return;
-    }
-
     if (editingItemId) {
       replaceItem(editingItemId, product, {
         quantity: selectedQuantity,
         size: storedSize,
-        school: selectedSchool
+        school: ""
       });
     } else {
       addItem(product, {
         quantity: selectedQuantity,
         size: storedSize,
-        school: selectedSchool
+        school: ""
       });
     }
 
@@ -111,16 +91,11 @@ export function ProductConfigurator({
   }
 
   function handlePayment() {
-    if (!validateSelection()) {
-      return;
-    }
-
     router.push(
       createBuyNowHref({
         productSlug: product.slug,
         size: storedSize,
-        quantity: selectedQuantity,
-        school: selectedSchool
+        quantity: selectedQuantity
       })
     );
   }
@@ -266,24 +241,6 @@ export function ProductConfigurator({
           </div>
         </div>
 
-        <label className="block space-y-2">
-          <span className="text-xs font-semibold tracking-[0.1em] text-zinc-700">SCHOOL</span>
-          <select
-            value={selectedSchool}
-            onChange={(event) => setSelectedSchool(event.target.value)}
-            className={SELECT_FIELD_CLASSES}
-          >
-            <option value="" disabled>
-              Select school
-            </option>
-            {SCHOOL_OPTIONS.map((school) => (
-              <option key={school} value={school}>
-                {school}
-              </option>
-            ))}
-          </select>
-        </label>
-
         <div className="rounded-3xl border border-zinc-300 bg-white p-5">
           <p className="text-xs font-semibold tracking-[0.1em] text-zinc-500">ORDER PREVIEW</p>
           <div className="mt-3 space-y-2 text-sm text-zinc-700">
@@ -297,19 +254,12 @@ export function ProductConfigurator({
             ) : (
               <p>Size: {product.requiresSize ? selectedSize : "ONE SIZE"}</p>
             )}
-            <p>School: {selectedSchool || "-"}</p>
           </div>
           <div className="mt-4 flex items-center justify-between border-t border-zinc-200 pt-4">
             <span className="text-sm text-zinc-600">Total</span>
             <span className="text-xl font-semibold text-apple-blue">{formatPrice(totalPrice)}</span>
           </div>
         </div>
-
-        {errorMessage ? (
-          <div className="rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">
-            {errorMessage}
-          </div>
-        ) : null}
 
         <div className="flex flex-wrap gap-3">
           {primaryMode === "payment" ? (

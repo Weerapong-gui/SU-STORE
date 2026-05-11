@@ -7,12 +7,12 @@ export type ValidatedOrderInput = {
   product: Product;
   size: string;
   quantity: number;
-  firstName: string;
-  lastName: string;
-  nickname: string;
+  studentCode: string;
   email: string;
+  fullName: string;
   phone: string;
   school: (typeof SCHOOL_OPTIONS)[number];
+  parentPhone: string;
 };
 
 type ValidationResult =
@@ -32,12 +32,12 @@ function readString(value: unknown) {
 export function validateOrderInput(payload: Record<string, unknown>): ValidationResult {
   const productSlug = readString(payload.product);
   const size = readString(payload.size);
-  const firstName = readString(payload.firstName);
-  const lastName = readString(payload.lastName);
-  const nickname = readString(payload.nickname);
+  const studentCode = readString(payload.studentCode);
   const email = readString(payload.email);
+  const fullName = readString(payload.fullName);
   const phone = readString(payload.phone);
   const school = readString(payload.school);
+  const parentPhone = readString(payload.parentPhone);
 
   const parsedQuantity =
     typeof payload.quantity === "number"
@@ -66,8 +66,12 @@ export function validateOrderInput(payload: Record<string, unknown>): Validation
     return { message: "Please enter a valid quantity." };
   }
 
-  if (!firstName || !lastName || !nickname) {
-    return { message: "Please complete your first name, last name, and nickname." };
+  if (!studentCode) {
+    return { message: "Please enter your student code." };
+  }
+
+  if (!fullName) {
+    return { message: "Please enter your full name." };
   }
 
   if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
@@ -79,6 +83,11 @@ export function validateOrderInput(payload: Record<string, unknown>): Validation
     return { message: "Please enter a valid phone number." };
   }
 
+  const parentPhoneDigits = parentPhone.replace(/\D/g, "");
+  if (!parentPhone || parentPhoneDigits.length < 9) {
+    return { message: "Please enter a valid parent phone number." };
+  }
+
   if (!SCHOOL_OPTIONS.includes(school as (typeof SCHOOL_OPTIONS)[number])) {
     return { message: "Please choose a school." };
   }
@@ -88,12 +97,12 @@ export function validateOrderInput(payload: Record<string, unknown>): Validation
       product,
       size: product.requiresSize ? getStoredProductSize(product, size) : ONE_SIZE_OPTION,
       quantity: parsedQuantity,
-      firstName,
-      lastName,
-      nickname,
+      studentCode,
       email,
+      fullName,
       phone,
-      school: school as (typeof SCHOOL_OPTIONS)[number]
+      school: school as (typeof SCHOOL_OPTIONS)[number],
+      parentPhone
     }
   };
 }

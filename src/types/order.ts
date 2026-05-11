@@ -1,16 +1,23 @@
 import { ProductCategory } from "@/types/product";
 
-export type OrderStatus = "pending_payment" | "payment_submitted";
+export type OrderStatus =
+  | "pending_payment"
+  | "waiting_confirm"
+  | "paid"
+  | "preparing"
+  | "shipped"
+  | "cancelled"
+  | "rejected";
 
-export type PaymentStatus = "awaiting_payment" | "slip_uploaded";
+export type PaymentStatus = "awaiting_payment" | "waiting_confirm" | "paid" | "rejected";
 
 export type OrderCustomer = {
-  firstName: string;
-  lastName: string;
-  nickname: string;
+  studentCode: string;
   email: string;
+  fullName: string;
   phone: string;
   school: string;
+  parentPhone: string;
 };
 
 export type OrderProductSnapshot = {
@@ -38,6 +45,8 @@ export type Order = {
   roundNumber?: number;
   status: OrderStatus;
   paymentStatus: PaymentStatus;
+  luckyTicket: boolean;
+  luckyTicketClaimedAt: string | null;
   createdAt: string;
   updatedAt: string;
   size: string;

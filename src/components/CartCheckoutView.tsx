@@ -128,8 +128,6 @@ export function CartCheckoutView() {
                 <div className="mt-4 grid gap-x-6 gap-y-1 text-sm text-zinc-700 md:grid-cols-[auto_1fr]">
                   <p className="text-zinc-500">Size</p>
                   <p>{formatStoredProductSize(item.productCategory, item.size)}</p>
-                  <p className="text-zinc-500">School</p>
-                  <p>{item.school}</p>
                   <p className="text-zinc-500">Unit Price</p>
                   <p>{formatPrice(item.unitPrice)}</p>
                   <p className="text-zinc-500">Total</p>
@@ -235,8 +233,8 @@ export function CartCheckoutView() {
             <div className="flex items-start gap-3">
               <Lock className="mt-0.5 h-5 w-5 shrink-0 text-zinc-500" />
               <p>
-                The next step will lock this item for payment. If you want to change the product,
-                quantity, or size, please do it here in your cart first.
+                The next step will collect personal details and create your order number. If you want
+                to change the product, quantity, or size, please do it here in your cart first.
               </p>
             </div>
           </div>
