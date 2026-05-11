@@ -3,7 +3,6 @@ from __future__ import annotations
 
 import base64
 import binascii
-import cgi
 import io
 import json
 import os
@@ -13,6 +12,8 @@ import sqlite3
 import urllib.error
 import urllib.request
 from datetime import datetime, timezone
+from email.parser import BytesParser
+from email.policy import default
 from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
@@ -670,36 +671,57 @@ class OrderRequestHandler(BaseHTTPRequestHandler):
         if content_length <= 0:
             return None, "request body is empty"
 
-        form = cgi.FieldStorage(
-            fp=io.BytesIO(self.rfile.read(content_length)),
-            headers=self.headers,
-            environ={
-                "REQUEST_METHOD": "POST",
-                "CONTENT_TYPE": content_type,
-                "CONTENT_LENGTH": str(content_length),
-            },
-            keep_blank_values=True,
+        raw_body = self.rfile.read(content_length)
+        message = BytesParser(policy=default).parsebytes(
+            (
+                f"Content-Type: {content_type}\r\n"
+                "MIME-Version: 1.0\r\n"
+                "\r\n"
+            ).encode("utf-8")
+            + raw_body
         )
 
-        if "slip" not in form:
+        if not message.is_multipart():
+            return None, "multipart form data is invalid"
+
+        slip_filename = ""
+        slip_mime_type = "application/octet-stream"
+        file_content = b""
+        uploaded_at = now_iso()
+        slip_count = 0
+
+        for part in message.iter_parts():
+            if part.get_content_disposition() != "form-data":
+                continue
+
+            field_name = str(part.get_param("name", header="content-disposition") or "")
+            filename = part.get_filename()
+
+            if field_name == "uploadedAt":
+                uploaded_at = str(part.get_content() or uploaded_at)
+                continue
+
+            if field_name != "slip":
+                continue
+
+            slip_count += 1
+            if slip_count > 1:
+                return None, "multiple slip files are not supported"
+
+            if not filename:
+                return None, "slip filename is required"
+
+            slip_filename = str(filename)
+            slip_mime_type = str(part.get_content_type() or "application/octet-stream")
+            file_content = part.get_payload(decode=True) or b""
+
+        if slip_count == 0:
             return None, "slip is required"
-
-        slip_field = form["slip"]
-        if isinstance(slip_field, list):
-            return None, "multiple slip files are not supported"
-        if not getattr(slip_field, "filename", ""):
-            return None, "slip filename is required"
-        if slip_field.file is None:
-            return None, "slip file is required"
-
-        uploaded_at = str(form.getfirst("uploadedAt") or now_iso())
-        mime_type = str(slip_field.type or "application/octet-stream")
-        file_content = slip_field.file.read()
 
         return persist_slip_file(
             order_code,
-            str(slip_field.filename),
-            mime_type,
+            slip_filename,
+            slip_mime_type,
             uploaded_at,
             file_content,
         )
