@@ -58,8 +58,7 @@ export function PaymentSlipUploadForm({
 
   return (
     <form onSubmit={handleSubmit} className="space-y-3">
-      <label className="block space-y-2">
-        <span className="text-xs font-semibold tracking-[0.1em] text-zinc-500">UPLOAD SLIP</span>
+      <label className="block">
         <input
           name="slip"
           type="file"

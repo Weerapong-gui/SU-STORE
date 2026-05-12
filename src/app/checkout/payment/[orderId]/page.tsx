@@ -3,7 +3,6 @@ import { BankAccountCopyField } from "@/components/BankAccountCopyField";
 import { OrderAccessFallback } from "@/components/OrderAccessFallback";
 import { PaymentSlipUploadForm } from "@/components/PaymentSlipUploadForm";
 import { Container } from "@/components/ui/Container";
-import { formatOrderNumber } from "@/lib/formatOrderNumber";
 import { formatPrice } from "@/lib/formatPrice";
 import {
   PAYMENT_ACCOUNT_COPY_VALUE,
@@ -41,9 +40,6 @@ export default async function CheckoutPaymentPage({ params }: CheckoutPaymentPag
           <h1 className="mt-2 text-2xl font-semibold tracking-tight text-zinc-900 md:text-3xl">
             Pay and upload your slip
           </h1>
-          <p className="mt-2 text-sm text-zinc-600">
-            Order {formatOrderNumber(order)} has been created. Complete the transfer, then upload the payment slip for review.
-          </p>
 
           <div className="mt-6 space-y-4">
             <div className={INFO_CARD_CLASSES}>
@@ -80,22 +76,25 @@ export default async function CheckoutPaymentPage({ params }: CheckoutPaymentPag
             <div className={INFO_CARD_CLASSES}>
               <p className="text-xs font-semibold tracking-[0.1em] text-zinc-500">BANK ACCOUNT</p>
               <h2 className="mt-2 text-xl font-semibold text-zinc-900">{PAYMENT_BANK_NAME}</h2>
-              <div className="mt-4 flex justify-center">
-                <Image
-                  src="/images/Logo_Bangkok_Bank_Public_Company_Limited.svg.png"
-                  alt="Bangkok Bank"
-                  width={360}
-                  height={120}
-                  className="h-12 w-auto object-contain md:h-14"
+
+              <div className="mx-auto mt-4 max-w-[48rem]">
+                <div className="flex min-h-20 items-center justify-center rounded-[1.75rem] border border-zinc-200 bg-white px-5 py-4">
+                  <Image
+                    src="/images/Logo_Bangkok_Bank_Public_Company_Limited.svg.png"
+                    alt="Bangkok Bank"
+                    width={360}
+                    height={120}
+                    className="h-12 w-auto object-contain md:h-14"
+                  />
+                </div>
+
+                <BankAccountCopyField
+                  formattedAccountNumber={PAYMENT_ACCOUNT_NUMBER}
+                  copyValue={PAYMENT_ACCOUNT_COPY_VALUE}
                 />
               </div>
 
-              <BankAccountCopyField
-                formattedAccountNumber={PAYMENT_ACCOUNT_NUMBER}
-                copyValue={PAYMENT_ACCOUNT_COPY_VALUE}
-              />
-
-              <div className="mt-5 rounded-2xl border border-zinc-200 bg-[#f7f7f9] p-4">
+              <div className="mx-auto mt-5 max-w-[48rem] rounded-2xl border border-zinc-200 bg-[#f7f7f9] p-4">
                 <p className="text-xs font-semibold tracking-[0.08em] text-zinc-500">TOTAL AMOUNT</p>
                 <p className="mt-1 text-3xl font-semibold tracking-tight text-apple-blue">
                   {formatPrice(order.totalAmount)}
