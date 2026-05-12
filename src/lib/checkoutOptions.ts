@@ -1,4 +1,17 @@
-export const SIZE_OPTIONS = ["XS", "S", "M", "L", "XL", "XXL", "3XL", "4XL"] as const;
+export const SIZE_OPTIONS = [
+  "3S",
+  "2S",
+  "S",
+  "M",
+  "L",
+  "XL",
+  "2XL",
+  "3XL",
+  "4XL",
+  "5XL",
+  "6XL",
+  "7XL"
+] as const;
 export const ONE_SIZE_OPTION = "ONE SIZE" as const;
 
 export const EMAIL_DOMAIN = "lamduan.mfu.ac.th";

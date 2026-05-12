@@ -5,6 +5,7 @@ import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useCart } from "@/components/CartProvider";
 import { MobileProductSlider } from "@/components/MobileProductSlider";
+import { SizeGuideModal } from "@/components/SizeGuideModal";
 import { SIZE_OPTIONS } from "@/lib/checkoutOptions";
 import {
   clampCartQuantity,
@@ -60,6 +61,7 @@ export function ProductConfigurator({
   const [selectedBundleSize, setSelectedBundleSize] = useState(() =>
     parseBundleSizeSelection(defaultSize)
   );
+  const [sizeGuideOpen, setSizeGuideOpen] = useState(false);
   const bundleProduct = isBundleProduct(product);
 
   const totalPrice = useMemo(() => product.price * selectedQuantity, [product.price, selectedQuantity]);
@@ -140,15 +142,26 @@ export function ProductConfigurator({
         </div>
 
         <div className="space-y-3">
-          <p className="text-xs font-semibold tracking-[0.1em] text-zinc-700">
-            {product.requiresSize ? "SELECT SIZE" : "SIZE"}
-          </p>
+          <div className="flex items-center justify-between gap-4">
+            <p className="text-xs font-semibold tracking-[0.1em] text-zinc-700">
+              {product.requiresSize ? "SELECT SIZE" : "SIZE"}
+            </p>
+            {product.requiresSize ? (
+              <button
+                type="button"
+                onClick={() => setSizeGuideOpen(true)}
+                className="text-xs font-medium text-apple-blue transition hover:text-apple-blue-dark"
+              >
+                size guide
+              </button>
+            ) : null}
+          </div>
 
           {product.requiresSize && bundleProduct ? (
             <div className="space-y-4">
               <div className="space-y-2">
                 <p className="text-xs font-medium tracking-[0.08em] text-zinc-500">POLO SIZE</p>
-                <div className="grid grid-cols-4 gap-2 md:grid-cols-8">
+                <div className="grid grid-cols-4 gap-2 sm:grid-cols-6 xl:grid-cols-12">
                   {SIZE_OPTIONS.map((size) => (
                     <button
                       key={`polo-${size}`}
@@ -169,7 +182,7 @@ export function ProductConfigurator({
 
               <div className="space-y-2">
                 <p className="text-xs font-medium tracking-[0.08em] text-zinc-500">JACKET SIZE</p>
-                <div className="grid grid-cols-4 gap-2 md:grid-cols-8">
+                <div className="grid grid-cols-4 gap-2 sm:grid-cols-6 xl:grid-cols-12">
                   {SIZE_OPTIONS.map((size) => (
                     <button
                       key={`jacket-${size}`}
@@ -192,7 +205,7 @@ export function ProductConfigurator({
               </div>
             </div>
           ) : product.requiresSize ? (
-            <div className="grid grid-cols-4 gap-2 md:grid-cols-8">
+            <div className="grid grid-cols-4 gap-2 sm:grid-cols-6 xl:grid-cols-12">
               {SIZE_OPTIONS.map((size) => (
                 <button
                   key={size}
@@ -283,6 +296,8 @@ export function ProductConfigurator({
           )}
         </div>
       </div>
+
+      <SizeGuideModal open={sizeGuideOpen} onClose={() => setSizeGuideOpen(false)} />
     </div>
   );
 }

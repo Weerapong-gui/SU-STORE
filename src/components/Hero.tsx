@@ -21,7 +21,7 @@ export function Hero() {
             width={1235}
             height={1009}
             priority
-            className="h-auto w-[min(82vw,21rem)] md:w-[min(56vw,28rem)] lg:w-[min(42vw,32rem)]"
+            className="h-auto w-[min(56vw,10.5rem)] md:w-[min(34vw,14rem)] lg:w-[min(24vw,16rem)]"
           />
         </motion.div>
 
@@ -32,9 +32,6 @@ export function Hero() {
           className="mt-10 flex flex-wrap items-center justify-center gap-4"
         >
           <BuyButton href="/products">Shop Now</BuyButton>
-          <BuyButton href="/products" variant="secondary">
-            View Products
-          </BuyButton>
         </motion.div>
       </Container>
 

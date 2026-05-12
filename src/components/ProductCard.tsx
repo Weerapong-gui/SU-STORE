@@ -1,6 +1,7 @@
 import Image from "next/image";
 import Link from "next/link";
 import { Product } from "@/types/product";
+import { createConfiguratorHref } from "@/lib/cart";
 import { formatPrice } from "@/lib/formatPrice";
 
 type ProductCardProps = {
@@ -15,7 +16,7 @@ export function ProductCard({ product }: ProductCardProps) {
 
   return (
     <article className={cardClasses}>
-      <Link href={`/products/${product.slug}`} className={productLinkClasses}>
+      <Link href={createConfiguratorHref(product.slug, "payment")} className={productLinkClasses}>
         <div className="relative aspect-[4/3] overflow-hidden bg-zinc-100">
           <Image
             src={product.images[0]}
