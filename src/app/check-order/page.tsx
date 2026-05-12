@@ -136,8 +136,7 @@ function CheckOrderContent() {
     router.replace(`/check-order?${param}`, { scroll: false });
 
     try {
-      const apiBase = process.env.NEXT_PUBLIC_ORDER_API_BASE_URL ?? "";
-      const res = await fetch(`${apiBase}/check-order?${param}`, { cache: "no-store" });
+      const res = await fetch(`/api/check-order?${param}`, { cache: "no-store" });
       if (res.status === 404) { setOrders([]); setLoading(false); return; }
       if (!res.ok) throw new Error(await res.text());
       const data = await res.json();
