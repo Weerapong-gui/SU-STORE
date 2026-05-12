@@ -50,6 +50,11 @@ Admin page:
 - Auth: paste `ORDER_API_TOKEN` into the token field
 - Features: list orders, open uploaded slips, and update order status
 
+Google Sheets webhook:
+
+- Orders are routed into product tabs named `POLO`, `BUNDLE`, `JACKET`, and `HEADBAND`
+- After updating Apps Script, run `resetOrderSheets()` once to clear old rows and rewrite headers
+
 เว็บขายเสื้อพี่เก็ต
 
 ## Order API

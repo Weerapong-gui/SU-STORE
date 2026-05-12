@@ -549,7 +549,7 @@ def open_db() -> sqlite3.Connection:
 
 
 def create_order_code(sequence_number: int) -> str:
-    return f"{ORDER_PREFIX}{sequence_number:04d}{ORDER_ROUND}"
+    return f"{ORDER_PREFIX}{sequence_number:05d}"
 
 
 def create_order_access_token() -> str:
