@@ -20,6 +20,7 @@ type RawOrder = Partial<Order> &
     items?: Partial<OrderItem>[];
     khantokTicket?: boolean | number | string;
     khantokTicketClaimedAt?: string | null;
+    khantokTicketAlreadyClaimed?: boolean | number;
     luckyTicket?: boolean | number | string;
     luckyTicketClaimedAt?: string | null;
   };
@@ -135,8 +136,15 @@ export function getOrderStatusLabel(status: OrderStatus) {
   }
 }
 
-export function getKhantokTicketLabel(hasKhantokTicket: boolean) {
-  return hasKhantokTicket ? "ได้รับ Khantok ticket" : "สิทธิ์ Khantok ticket เต็มแล้ว";
+export function getKhantokTicketLabel(
+  hasKhantokTicket: boolean,
+  alreadyClaimed?: boolean,
+  studentCode?: string
+) {
+  if (hasKhantokTicket) return "ได้รับ Khantok ticket";
+  if (alreadyClaimed && studentCode) return `รับไปแล้ว ${studentCode}`;
+  if (alreadyClaimed) return "รับไปแล้ว";
+  return "สิทธิ์ Khantok ticket เต็มแล้ว";
 }
 
 function normalizeProductSnapshot(product: Partial<OrderProductSnapshot>): OrderProductSnapshot {
@@ -219,6 +227,9 @@ export function normalizeOrder(rawOrder: RawOrder) {
       typeof rawKhantokTicketClaimedAt === "string" && rawKhantokTicketClaimedAt.trim()
         ? rawKhantokTicketClaimedAt
         : null,
+    khantokTicketAlreadyClaimed:
+      rawOrder.khantokTicketAlreadyClaimed === true ||
+      (rawOrder.khantokTicketAlreadyClaimed as unknown) === 1,
     createdAt: readString(rawOrder.createdAt),
     updatedAt: readString(rawOrder.updatedAt),
     size: readString(rawOrder.size),

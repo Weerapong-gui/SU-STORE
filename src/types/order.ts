@@ -56,6 +56,7 @@ export type Order = {
   paymentStatus: PaymentStatus;
   khantokTicket: boolean;
   khantokTicketClaimedAt: string | null;
+  khantokTicketAlreadyClaimed?: boolean;
   createdAt: string;
   updatedAt: string;
   size: string;

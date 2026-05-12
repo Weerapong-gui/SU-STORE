@@ -59,6 +59,7 @@ type LocalKhantokTicketState = {
 type KhantokTicketAllocation = {
   khantokTicket: boolean;
   khantokTicketClaimedAt: string | null;
+  khantokTicketAlreadyClaimed: boolean;
 };
 
 const BLOB_STORAGE_DISABLED_MESSAGE =
@@ -143,6 +144,10 @@ function buildOrderFromInput(
       existingOrder?.khantokTicketClaimedAt ??
       khantokTicketAllocation?.khantokTicketClaimedAt ??
       null,
+    khantokTicketAlreadyClaimed:
+      existingOrder?.khantokTicketAlreadyClaimed ??
+      khantokTicketAllocation?.khantokTicketAlreadyClaimed ??
+      false,
     createdAt: existingOrder?.createdAt ?? now,
     updatedAt: now,
     size: primaryItem.size,
@@ -438,29 +443,29 @@ async function allocateLocalKhantokTicket(
   items: { product: { slug: string } }[]
 ): Promise<KhantokTicketAllocation> {
   if (getOrderStorageMode() === "cookie") {
-    return { khantokTicket: false, khantokTicketClaimedAt: null };
+    return { khantokTicket: false, khantokTicketClaimedAt: null, khantokTicketAlreadyClaimed: false };
   }
 
   const isHeadbandOnly = items.length > 0 && items.every((i) => i.product.slug === HEADBAND_ONLY_SLUG);
   if (isHeadbandOnly) {
-    return { khantokTicket: false, khantokTicketClaimedAt: null };
+    return { khantokTicket: false, khantokTicketClaimedAt: null, khantokTicketAlreadyClaimed: false };
   }
 
   const state = await readLocalKhantokTicketState();
 
   const existingClaimByOrder = state.claims[orderId];
   if (existingClaimByOrder) {
-    return { khantokTicket: true, khantokTicketClaimedAt: existingClaimByOrder };
+    return { khantokTicket: true, khantokTicketClaimedAt: existingClaimByOrder, khantokTicketAlreadyClaimed: false };
   }
 
   const normalizedCode = studentCode.trim().toLowerCase();
   if (normalizedCode && state.studentCodes[normalizedCode]) {
-    return { khantokTicket: false, khantokTicketClaimedAt: null };
+    return { khantokTicket: false, khantokTicketClaimedAt: null, khantokTicketAlreadyClaimed: true };
   }
 
   const currentClaims = Object.keys(state.claims).length;
   if (currentClaims >= MAX_KHANTOK_TICKET_CLAIMS) {
-    return { khantokTicket: false, khantokTicketClaimedAt: null };
+    return { khantokTicket: false, khantokTicketClaimedAt: null, khantokTicketAlreadyClaimed: false };
   }
 
   const claimedAt = nowThaiISO();
@@ -470,7 +475,7 @@ async function allocateLocalKhantokTicket(
   }
   await writeLocalKhantokTicketState(state);
 
-  return { khantokTicket: true, khantokTicketClaimedAt: claimedAt };
+  return { khantokTicket: true, khantokTicketClaimedAt: claimedAt, khantokTicketAlreadyClaimed: false };
 }
 
 async function allocateLocalOrderNumber() {
