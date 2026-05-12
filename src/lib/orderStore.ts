@@ -50,8 +50,11 @@ type LocalOrderNumber = {
   roundNumber: number;
   sequenceNumber: number;
 };
+const HEADBAND_ONLY_SLUG = "fresh-headband";
+
 type LocalKhantokeTicketState = {
   claims: Record<string, string>;
+  studentCodes: Record<string, string>;
 };
 type KhantokeTicketAllocation = {
   khantokeTicket: boolean;
@@ -344,7 +347,7 @@ async function writeStoredLocalSequenceNumber(sequenceNumber: number) {
   await fs.writeFile(LOCAL_ORDER_SEQUENCE_FILE_PATH, serializedState, "utf8");
 }
 
-async function readLocalKhantokeTicketState() {
+async function readLocalKhantokeTicketState(): Promise<LocalKhantokeTicketState> {
   const storageMode = getOrderStorageMode();
 
   if (storageMode === "blob") {
@@ -357,30 +360,30 @@ async function readLocalKhantokeTicketState() {
       }));
 
     if (!blobResult || blobResult.statusCode !== 200) {
-      return { claims: {} } satisfies LocalKhantokeTicketState;
+      return { claims: {}, studentCodes: {} } satisfies LocalKhantokeTicketState;
     }
 
     try {
       const rawState = await new Response(blobResult.stream).text();
       const state = JSON.parse(rawState) as LocalKhantokeTicketState;
       return typeof state === "object" && state && typeof state.claims === "object"
-        ? { claims: state.claims ?? {} }
-        : { claims: {} };
+        ? { claims: state.claims ?? {}, studentCodes: state.studentCodes ?? {} }
+        : { claims: {}, studentCodes: {} };
     } catch {
-      return { claims: {} } satisfies LocalKhantokeTicketState;
+      return { claims: {}, studentCodes: {} } satisfies LocalKhantokeTicketState;
     }
   }
 
   if (storageMode === "cookie") {
-    return { claims: {} } satisfies LocalKhantokeTicketState;
+    return { claims: {}, studentCodes: {} } satisfies LocalKhantokeTicketState;
   }
 
   try {
     const rawState = await fs.readFile(LOCAL_KHANTOKE_TICKET_STATE_FILE_PATH, "utf8");
     const state = JSON.parse(rawState) as LocalKhantokeTicketState;
     return typeof state === "object" && state && typeof state.claims === "object"
-      ? { claims: state.claims ?? {} }
-      : { claims: {} };
+      ? { claims: state.claims ?? {}, studentCodes: state.studentCodes ?? {} }
+      : { claims: {}, studentCodes: {} };
   } catch (error) {
     if ((error as NodeJS.ErrnoException).code === "ENOENT") {
       try {
@@ -389,10 +392,10 @@ async function readLocalKhantokeTicketState() {
         return typeof legacyState === "object" &&
           legacyState &&
           typeof legacyState.claims === "object"
-          ? { claims: legacyState.claims ?? {} }
-          : { claims: {} };
+          ? { claims: legacyState.claims ?? {}, studentCodes: legacyState.studentCodes ?? {} }
+          : { claims: {}, studentCodes: {} };
       } catch {
-        return { claims: {} } satisfies LocalKhantokeTicketState;
+        return { claims: {}, studentCodes: {} } satisfies LocalKhantokeTicketState;
       }
     }
 
@@ -423,39 +426,45 @@ async function writeLocalKhantokeTicketState(state: LocalKhantokeTicketState) {
   await fs.writeFile(LOCAL_KHANTOKE_TICKET_STATE_FILE_PATH, serializedState, "utf8");
 }
 
-async function allocateLocalKhantokeTicket(orderId: string): Promise<KhantokeTicketAllocation> {
+async function allocateLocalKhantokeTicket(
+  orderId: string,
+  studentCode: string,
+  items: { product: { slug: string } }[]
+): Promise<KhantokeTicketAllocation> {
   if (getOrderStorageMode() === "cookie") {
-    return {
-      khantokeTicket: false,
-      khantokeTicketClaimedAt: null
-    };
+    return { khantokeTicket: false, khantokeTicketClaimedAt: null };
+  }
+
+  const isHeadbandOnly = items.length > 0 && items.every((i) => i.product.slug === HEADBAND_ONLY_SLUG);
+  if (isHeadbandOnly) {
+    return { khantokeTicket: false, khantokeTicketClaimedAt: null };
   }
 
   const state = await readLocalKhantokeTicketState();
-  const existingClaim = state.claims[orderId];
-  if (existingClaim) {
-    return {
-      khantokeTicket: true,
-      khantokeTicketClaimedAt: existingClaim
-    };
+
+  const existingClaimByOrder = state.claims[orderId];
+  if (existingClaimByOrder) {
+    return { khantokeTicket: true, khantokeTicketClaimedAt: existingClaimByOrder };
+  }
+
+  const normalizedCode = studentCode.trim().toLowerCase();
+  if (normalizedCode && state.studentCodes[normalizedCode]) {
+    return { khantokeTicket: false, khantokeTicketClaimedAt: null };
   }
 
   const currentClaims = Object.keys(state.claims).length;
   if (currentClaims >= MAX_KHANTOKE_TICKET_CLAIMS) {
-    return {
-      khantokeTicket: false,
-      khantokeTicketClaimedAt: null
-    };
+    return { khantokeTicket: false, khantokeTicketClaimedAt: null };
   }
 
   const claimedAt = new Date().toISOString();
   state.claims[orderId] = claimedAt;
+  if (normalizedCode) {
+    state.studentCodes[normalizedCode] = orderId;
+  }
   await writeLocalKhantokeTicketState(state);
 
-  return {
-    khantokeTicket: true,
-    khantokeTicketClaimedAt: claimedAt
-  };
+  return { khantokeTicket: true, khantokeTicketClaimedAt: claimedAt };
 }
 
 async function allocateLocalOrderNumber() {
@@ -614,7 +623,7 @@ export async function createOrder(input: ValidatedOrderInput) {
     input,
     undefined,
     await allocateLocalOrderNumber(),
-    await allocateLocalKhantokeTicket(orderId)
+    await allocateLocalKhantokeTicket(orderId, input.studentCode, input.items)
   );
   await writeOrder(order);
   return { order } satisfies CreateOrderResult;
