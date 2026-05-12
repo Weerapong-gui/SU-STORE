@@ -1,4 +1,5 @@
 import { ValidatedOrderInput } from "@/lib/orderValidation";
+import { productToSnapshot } from "@/lib/orderPayload";
 import { Order, OrderCustomer, OrderItem, OrderProductSnapshot } from "@/types/order";
 
 const REMOTE_ORDER_API_BASE_URL = process.env.ORDER_API_BASE_URL?.replace(/\/$/, "") ?? "";
@@ -24,18 +25,6 @@ type RemoteOrderRequestOptions = RequestInit & {
   orderAccessToken?: string;
 };
 
-function createProductSnapshot(input: ValidatedOrderInput): OrderProductSnapshot {
-  return {
-    slug: input.product.slug,
-    name: input.product.name,
-    shortName: input.product.shortName,
-    tagline: input.product.tagline,
-    price: input.product.price,
-    image: input.product.images[0],
-    category: input.product.category
-  };
-}
-
 function createCustomerSnapshot(input: ValidatedOrderInput): OrderCustomer {
   return {
     studentCode: input.studentCode,
@@ -49,7 +38,7 @@ function createCustomerSnapshot(input: ValidatedOrderInput): OrderCustomer {
 
 function createRemoteOrderPayload(input: ValidatedOrderInput): RemoteOrderPayload {
   const items = input.items.map((item, index) => {
-    const product = createProductSnapshot({ ...input, product: item.product });
+    const product = productToSnapshot(item.product);
 
     return {
       id: `${product.slug}-${index + 1}`,

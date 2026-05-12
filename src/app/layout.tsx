@@ -6,7 +6,7 @@ import { Footer } from "@/components/Footer";
 
 export const metadata: Metadata = {
   title: "Fresher Package 28th",
-  description: "เธฃเนเธฒเธเน€เธชเธทเนเธญเน€เธเธฃเธเธเธตเน SU STORE เธชเธณเธซเธฃเธฑเธเธชเธฑเนเธเธเธทเนเธญเน€เธชเธทเนเธญเน€เธ”เธตเนเธขเธงเนเธฅเธฐเธเธธเธ”เน€เธเธ•",
+  description: "ร้านเสื้อเฟรชเชอร์ SU STORE สำหรับสั่งซื้อเสื้อเดี่ยวและชุดเซต",
   icons: {
     icon: [
       { url: "/images/LOGO-01.png", media: "(prefers-color-scheme: light)" },

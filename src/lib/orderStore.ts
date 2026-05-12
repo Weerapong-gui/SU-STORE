@@ -1,5 +1,5 @@
 import { del, get, put } from "@vercel/blob";
-import { randomBytes } from "node:crypto";
+import { createHmac, randomBytes, timingSafeEqual } from "node:crypto";
 import { promises as fs } from "node:fs";
 import path from "node:path";
 import { cookies } from "next/headers";
@@ -15,8 +15,10 @@ import {
   updateRemoteOrder,
 } from "@/lib/remoteOrderApi";
 import { ValidatedOrderInput } from "@/lib/orderValidation";
-import { Order, OrderItem, OrderProductSnapshot, OrderSlip } from "@/types/order";
+import { productToSnapshot } from "@/lib/orderPayload";
+import { Order, OrderItem, OrderSlip } from "@/types/order";
 
+const COOKIE_SECRET = process.env.COOKIE_SECRET ?? "";
 const DATA_ROOT = path.join(process.cwd(), "data");
 const ORDERS_DIR = path.join(DATA_ROOT, "orders");
 const SLIPS_DIR = path.join(DATA_ROOT, "slips");
@@ -93,21 +95,9 @@ function isSafeOrderId(orderId: string) {
   return ORDER_ID_PATTERN.test(orderId);
 }
 
-function createProductSnapshot(input: ValidatedOrderInput["items"][number]["product"]): OrderProductSnapshot {
-  return {
-    slug: input.slug,
-    name: input.name,
-    shortName: input.shortName,
-    tagline: input.tagline,
-    price: input.price,
-    image: input.images[0],
-    category: input.category
-  };
-}
-
 function createOrderItems(input: ValidatedOrderInput): OrderItem[] {
   return input.items.map((item, index) => {
-    const product = createProductSnapshot(item.product);
+    const product = productToSnapshot(item.product);
 
     return {
       id: `${product.slug}-${index + 1}`,
@@ -198,10 +188,27 @@ function getStoredLocalSequenceNumberFromCookie() {
 }
 
 function encodeOrderCookie(order: Order) {
-  return Buffer.from(JSON.stringify(order), "utf8").toString("base64url");
+  const payload = Buffer.from(JSON.stringify(order), "utf8").toString("base64url");
+  if (!COOKIE_SECRET) return payload;
+  const sig = createHmac("sha256", COOKIE_SECRET).update(payload).digest("base64url");
+  return `${payload}.${sig}`;
 }
 
 function decodeOrderCookie(serializedOrder: string) {
+  if (COOKIE_SECRET) {
+    const dotIdx = serializedOrder.lastIndexOf(".");
+    if (dotIdx === -1) throw new Error("Cookie missing signature");
+    const payload = serializedOrder.slice(0, dotIdx);
+    const sig = Buffer.from(serializedOrder.slice(dotIdx + 1), "base64url");
+    const expected = Buffer.from(
+      createHmac("sha256", COOKIE_SECRET).update(payload).digest("base64url"),
+      "base64url"
+    );
+    if (sig.length !== expected.length || !timingSafeEqual(sig, expected)) {
+      throw new Error("Cookie signature invalid");
+    }
+    return JSON.parse(Buffer.from(payload, "base64url").toString("utf8")) as Order;
+  }
   return JSON.parse(Buffer.from(serializedOrder, "base64url").toString("utf8")) as Order;
 }
 
