@@ -19,14 +19,20 @@ body {
 
 body {
   background: #ffffff;
-  color: #111111;
-  font-family: "Sukhumvit Set", "Sukhumvit", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  color: #1d1d1f;
+  font-family: "Sukhumvit Set", "Sukhumvit", -apple-system, BlinkMacSystemFont, "SF Pro Display",
+    "SF Pro Text", "Helvetica Neue", Arial, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
 }
 
 ::selection {
-  background: rgba(0, 113, 227, 0.18);
+  background: rgba(0, 113, 227, 0.15);
 }
 
 .font-sf-pro {
-  font-family: "Sukhumvit Set", "Sukhumvit", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  font-family: "Sukhumvit Set", "Sukhumvit", -apple-system, BlinkMacSystemFont, "SF Pro Display",
+    "SF Pro Text", "Helvetica Neue", Arial, sans-serif;
+  -webkit-font-smoothing: antialiased;
 }

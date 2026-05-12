@@ -17,12 +17,14 @@ export function SectionTitle({
 
   return (
     <div className={textAlignmentClass}>
-      <h2 className={`text-4xl font-semibold tracking-tight md:text-6xl ${titleColorClass}`}>
+      {subtitle ? (
+        <p className={`mb-3 text-xs font-semibold tracking-[0.16em] ${subtitleColorClass}`}>
+          {subtitle.toUpperCase()}
+        </p>
+      ) : null}
+      <h2 className={`text-5xl font-bold tracking-tight md:text-6xl ${titleColorClass}`}>
         {title}
       </h2>
-      {subtitle ? (
-        <p className={`mt-4 text-lg md:text-2xl ${subtitleColorClass}`}>{subtitle}</p>
-      ) : null}
     </div>
   );
 }

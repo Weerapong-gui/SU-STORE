@@ -35,21 +35,21 @@ const MIN_QUANTITY = 1;
 const MAX_QUANTITY = 99;
 
 const TEXT_FIELD_CLASSES =
-  "h-11 w-full rounded-2xl border border-zinc-300 bg-white px-4 text-xs text-zinc-900 outline-none transition focus:border-apple-blue focus:ring-4 focus:ring-apple-blue/10";
+  "h-11 w-full rounded-xl border border-zinc-200 bg-white px-4 text-sm text-ink outline-none transition placeholder:text-zinc-400 focus:border-apple-blue focus:ring-4 focus:ring-apple-blue/10";
 const PRODUCT_OPTION_BASE_CLASSES =
   "w-full rounded-[1.8rem] border p-5 text-left transition focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-apple-blue/15";
 const PRODUCT_OPTION_SELECTED_CLASSES =
-  "border-apple-blue bg-white shadow-[0_12px_32px_rgba(0,113,227,0.12)]";
+  "border-apple-blue bg-white shadow-[0_8px_24px_rgba(0,113,227,0.10)]";
 const PRODUCT_OPTION_IDLE_CLASSES =
-  "border-zinc-300 bg-[#f5f5f7] hover:border-apple-blue/35 hover:bg-white";
+  "border-zinc-200 bg-mist hover:border-apple-blue/30 hover:bg-white";
 const SIZE_OPTION_BASE_CLASSES =
-  "h-11 rounded-2xl border border-zinc-300 bg-white text-xs font-semibold text-zinc-800 transition focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-apple-blue/15 hover:border-apple-blue/30 hover:bg-apple-blue-soft";
+  "h-10 rounded-xl border border-zinc-200 bg-white text-xs font-semibold text-ink transition focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-apple-blue/15 hover:border-apple-blue/30 hover:bg-apple-blue-soft";
 const SIZE_OPTION_SELECTED_CLASSES =
-  "z-10 border-apple-blue bg-apple-blue text-white shadow-[0_8px_20px_rgba(0,113,227,0.22)]";
+  "z-10 border-apple-blue bg-apple-blue text-white shadow-[0_4px_12px_rgba(0,113,227,0.28)]";
 const PRIMARY_SUBMIT_BUTTON_CLASSES =
-  "h-12 rounded-full bg-apple-blue px-6 text-xs font-semibold tracking-[0.04em] text-white shadow-[0_12px_28px_rgba(0,113,227,0.24)] transition hover:bg-apple-blue-dark focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-apple-blue/20 disabled:cursor-not-allowed disabled:opacity-70";
+  "h-11 rounded-full bg-apple-blue px-8 text-sm font-semibold tracking-[0.01em] text-white shadow-[0_4px_14px_rgba(0,113,227,0.35)] transition hover:bg-apple-blue-dark active:scale-[0.98] focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-apple-blue/20 disabled:cursor-not-allowed disabled:opacity-60";
 const QUANTITY_CONTROL_BUTTON_CLASSES =
-  "flex h-11 w-11 items-center justify-center rounded-2xl border border-zinc-300 bg-white text-lg font-semibold text-zinc-800 transition focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-apple-blue/15 hover:border-apple-blue/30 hover:bg-apple-blue-soft disabled:cursor-not-allowed disabled:opacity-50";
+  "flex h-10 w-10 items-center justify-center rounded-xl border border-zinc-200 bg-white text-base font-semibold text-ink transition focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-apple-blue/15 hover:border-apple-blue/30 hover:bg-apple-blue-soft disabled:cursor-not-allowed disabled:opacity-40";
 
 function clampQuantity(quantity: number) {
   return Math.min(MAX_QUANTITY, Math.max(MIN_QUANTITY, quantity));
@@ -214,7 +214,7 @@ export function CheckoutForm({
         </div>
       </div>
 
-      <div className="font-sf-pro space-y-5 rounded-[2rem] border border-zinc-300 bg-[#f5f5f7] p-6 lg:h-[calc(100vh-7rem)] lg:overflow-y-auto lg:overscroll-contain lg:p-8 lg:pr-6">
+      <div className="font-sf-pro space-y-5 rounded-[2rem] bg-mist p-6 lg:h-[calc(100vh-7rem)] lg:overflow-y-auto lg:overscroll-contain lg:p-8 lg:pr-6">
         <div>
           <p className="text-xs tracking-[0.08em] text-zinc-500">{activeProduct.shortName}</p>
           <h1 className="mt-2 text-lg font-semibold tracking-tight text-zinc-900 md:text-xl">
@@ -231,7 +231,7 @@ export function CheckoutForm({
         </div>
 
         <div className="space-y-4">
-          <p className="text-xs font-semibold tracking-[0.1em] text-zinc-700">PRODUCT OPTIONS</p>
+          <p className="text-xs font-semibold tracking-[0.1em] text-ink-tertiary">PRODUCT OPTIONS</p>
           <div className="space-y-3">
             {products.map((product) => (
               <button
@@ -271,7 +271,7 @@ export function CheckoutForm({
         </div>
 
         <div className="space-y-3">
-          <p className="text-xs font-semibold tracking-[0.1em] text-zinc-700">
+          <p className="text-xs font-semibold tracking-[0.1em] text-ink-tertiary">
             {activeProduct.requiresSize ? "SELECT SIZE" : "SIZE"}
           </p>
 
@@ -360,7 +360,7 @@ export function CheckoutForm({
         </div>
 
         <label className="block">
-          <span className="text-xs font-semibold tracking-[0.1em] text-zinc-700">QUANTITY</span>
+          <span className="text-xs font-semibold tracking-[0.1em] text-ink-tertiary">QUANTITY</span>
           <div className="mt-2 flex items-center gap-2">
             <button
               type="button"
@@ -371,7 +371,7 @@ export function CheckoutForm({
             >
               -
             </button>
-            <div className="flex h-11 min-w-[4.5rem] items-center justify-center rounded-2xl border border-zinc-300 bg-white px-4 text-sm font-medium text-zinc-900">
+            <div className="flex h-10 min-w-[4.5rem] items-center justify-center rounded-xl border border-zinc-200 bg-white px-4 text-sm font-semibold text-ink">
               {selectedQuantity}
             </div>
             <button
@@ -386,12 +386,12 @@ export function CheckoutForm({
           </div>
         </label>
 
-        <div className="space-y-3 border-t border-zinc-300/80 pt-6">
-          <p className="text-xs font-semibold tracking-[0.1em] text-zinc-700">PERSONAL DETAILS</p>
+        <div className="space-y-3 border-t border-zinc-200 pt-6">
+          <p className="text-xs font-semibold tracking-[0.1em] text-ink-tertiary">PERSONAL DETAILS</p>
 
           <div className="grid gap-3 md:grid-cols-2">
             <label className="space-y-1">
-              <span className="text-xs font-semibold tracking-[0.08em] text-zinc-600">FIRST NAME</span>
+              <span className="text-xs font-semibold tracking-[0.08em] text-ink-soft">FIRST NAME</span>
               <input
                 name="firstName"
                 required
@@ -401,7 +401,7 @@ export function CheckoutForm({
               />
             </label>
             <label className="space-y-1">
-              <span className="text-xs font-semibold tracking-[0.08em] text-zinc-600">LAST NAME</span>
+              <span className="text-xs font-semibold tracking-[0.08em] text-ink-soft">LAST NAME</span>
               <input
                 name="lastName"
                 required
@@ -414,7 +414,7 @@ export function CheckoutForm({
 
           <div className="grid gap-3 md:grid-cols-2">
             <label className="space-y-1">
-              <span className="text-xs font-semibold tracking-[0.08em] text-zinc-600">NICKNAME</span>
+              <span className="text-xs font-semibold tracking-[0.08em] text-ink-soft">NICKNAME</span>
               <input
                 name="nickname"
                 required
@@ -424,7 +424,7 @@ export function CheckoutForm({
               />
             </label>
             <label className="space-y-1">
-              <span className="text-xs font-semibold tracking-[0.08em] text-zinc-600">EMAIL</span>
+              <span className="text-xs font-semibold tracking-[0.08em] text-ink-soft">EMAIL</span>
               <input
                 name="email"
                 type="email"
@@ -439,7 +439,7 @@ export function CheckoutForm({
 
           <div className="grid gap-3 md:grid-cols-2">
             <label className="space-y-1">
-              <span className="text-xs font-semibold tracking-[0.08em] text-zinc-600">TELEPHONE NUMBER</span>
+              <span className="text-xs font-semibold tracking-[0.08em] text-ink-soft">TELEPHONE NUMBER</span>
               <input
                 name="phone"
                 required
@@ -451,7 +451,7 @@ export function CheckoutForm({
           </div>
 
           <label className="space-y-1">
-            <span className="text-xs font-semibold tracking-[0.08em] text-zinc-600">SCHOOL</span>
+            <span className="text-xs font-semibold tracking-[0.08em] text-ink-soft">SCHOOL</span>
             <select
               name="school"
               required

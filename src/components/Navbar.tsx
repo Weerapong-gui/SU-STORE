@@ -24,7 +24,7 @@ export function Navbar() {
   }
 
   return (
-    <header className="sticky top-0 z-50 border-b border-zinc-200/60 bg-white/70 backdrop-blur-md">
+    <header className="sticky top-0 z-50 border-b border-black/[0.06] bg-[rgba(255,255,255,0.88)] backdrop-blur-xl backdrop-saturate-150">
       <Container className="flex h-16 items-center justify-between">
         <Link
           href="/"
