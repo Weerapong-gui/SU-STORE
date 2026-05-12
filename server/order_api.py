@@ -336,6 +336,20 @@ ADMIN_HTML = r"""<!doctype html>
           <input id="orderDeadline" type="datetime-local" style="max-width:280px" />
         </div>
       </div>
+      <div class="settings-card">
+        <h3>Order Phase</h3>
+        <p style="color:var(--muted);font-size:13px;margin:0 0 12px">Phase ใช้กำหนด digit สุดท้ายของเลขออเดอร์ (FP28XXXX<b>P</b>) — auto จากวันที่ หรือ override ได้ที่นี่</p>
+        <div style="display:flex;align-items:center;gap:16px">
+          <button class="secondary" id="phaseDecBtn" style="width:36px;height:36px;font-size:18px;padding:0;border-radius:50%">−</button>
+          <div style="text-align:center;min-width:80px">
+            <div style="font-size:32px;font-weight:700;line-height:1" id="phaseDisplay">—</div>
+            <div style="font-size:11px;color:var(--muted);margin-top:4px" id="phaseLabel">loading...</div>
+          </div>
+          <button class="secondary" id="phaseIncBtn" style="width:36px;height:36px;font-size:18px;padding:0;border-radius:50%">+</button>
+          <button class="secondary" id="phaseClearBtn" style="font-size:12px;padding:6px 12px">Auto (จากวันที่)</button>
+        </div>
+        <p style="font-size:12px;color:var(--muted);margin:10px 0 0">Phase 0 = ก่อน 18 May &nbsp;|&nbsp; 1 = 18–23 May &nbsp;|&nbsp; 2 = 25–30 May &nbsp;|&nbsp; 3 = 1–7 Jun</p>
+      </div>
       <div style="display:flex;gap:10px;align-items:center">
         <button class="primary" id="saveSettingsBtn">Save Settings</button>
         <span id="settingsNotice" style="color:var(--muted);font-size:13px"></span>
@@ -795,6 +809,43 @@ ADMIN_HTML = r"""<!doctype html>
       el.textContent = msg; el.style.color = err ? "var(--danger)" : "var(--muted)";
     }
 
+    var currentPhaseOverride = null;
+
+    function renderPhase(s) {
+      var override = s.phaseOverride;
+      var current = s.currentPhase;
+      currentPhaseOverride = override;
+      document.querySelector("#phaseDisplay").textContent = current;
+      document.querySelector("#phaseLabel").textContent = override !== null && override !== undefined
+        ? "Override: Phase " + override
+        : "Auto (วันที่ปัจจุบัน)";
+    }
+
+    async function patchPhase(value) {
+      try {
+        var res = await fetch("/admin/site-settings", {
+          method: "PATCH", headers: authHeaders(),
+          body: JSON.stringify({ phaseOverride: value })
+        });
+        if (!res.ok) throw new Error(await res.text());
+        var s = await res.json();
+        renderPhase(s);
+        setSettingsNotice("Phase " + (value !== null ? "set to " + value : "set to auto"));
+      } catch(e) { setSettingsNotice(e.message, true); }
+    }
+
+    document.querySelector("#phaseDecBtn").addEventListener("click", function() {
+      var cur = currentPhaseOverride !== null ? currentPhaseOverride : 0;
+      patchPhase(Math.max(0, cur - 1));
+    });
+    document.querySelector("#phaseIncBtn").addEventListener("click", function() {
+      var cur = currentPhaseOverride !== null ? currentPhaseOverride : 0;
+      patchPhase(Math.min(9, cur + 1));
+    });
+    document.querySelector("#phaseClearBtn").addEventListener("click", function() {
+      patchPhase(null);
+    });
+
     async function loadSettings() {
       try {
         var res = await fetch("/site-settings", { cache: "no-store" });
@@ -804,6 +855,7 @@ ADMIN_HTML = r"""<!doctype html>
         document.querySelector("#bannerEnabled").checked = s.announcementBannerEnabled === true;
         document.querySelector("#storeOpen").checked = s.storeOpen !== false;
         if (s.orderDeadline) document.querySelector("#orderDeadline").value = s.orderDeadline.slice(0,16);
+        renderPhase(s);
         setSettingsNotice("Settings loaded");
       } catch(e) { setSettingsNotice(e.message, true); }
     }
@@ -1423,7 +1475,16 @@ def open_db() -> sqlite3.Connection:
     return connection
 
 
-def get_current_phase() -> int:
+def get_current_phase(connection: sqlite3.Connection | None = None) -> int:
+    if connection is not None:
+        row = connection.execute(
+            "SELECT value FROM site_settings WHERE key = 'phase_override'"
+        ).fetchone()
+        if row is not None and row["value"] not in ("", None):
+            try:
+                return int(row["value"])
+            except (ValueError, TypeError):
+                pass
     now = datetime.now(TZ_BANGKOK)
     m, d = now.month, now.day
     if m == 5 and 18 <= d <= 23: return 1
@@ -1432,8 +1493,8 @@ def get_current_phase() -> int:
     return 0
 
 
-def create_order_code(sequence_number: int) -> str:
-    return f"{ORDER_PREFIX}{sequence_number:04d}{get_current_phase()}"
+def create_order_code(sequence_number: int, connection: sqlite3.Connection | None = None) -> str:
+    return f"{ORDER_PREFIX}{sequence_number:04d}{get_current_phase(connection)}"
 
 
 def create_order_access_token() -> str:
@@ -1975,7 +2036,7 @@ def create_order(connection: sqlite3.Connection, payload: dict[str, Any]) -> dic
         ),
     )
     sequence_number = int(cursor.lastrowid)
-    order_code = create_order_code(sequence_number)
+    order_code = create_order_code(sequence_number, connection)
     connection.execute(
         "UPDATE orders SET order_code = ? WHERE internal_id = ?",
         (order_code, sequence_number),
@@ -2209,11 +2270,15 @@ def save_product_image_file(slug: str, original_name: str, mime_type: str, conte
 def get_site_settings(connection: sqlite3.Connection) -> dict[str, Any]:
     rows = connection.execute("SELECT key, value FROM site_settings").fetchall()
     settings: dict[str, str] = {row["key"]: row["value"] for row in rows}
+    phase_override_raw = settings.get("phase_override", "")
+    phase_override = int(phase_override_raw) if phase_override_raw not in ("", None) else None
     return {
         "announcementBanner": settings.get("announcement_banner", ""),
         "announcementBannerEnabled": settings.get("announcement_banner_enabled", "0") == "1",
         "storeOpen": settings.get("store_open", "1") == "1",
         "orderDeadline": settings.get("order_deadline", ""),
+        "phaseOverride": phase_override,
+        "currentPhase": get_current_phase(connection),
     }
 
 
@@ -2712,6 +2777,9 @@ class OrderRequestHandler(BaseHTTPRequestHandler):
                     upsert_site_setting(connection, "store_open", "1" if payload["storeOpen"] else "0")
                 if "orderDeadline" in payload:
                     upsert_site_setting(connection, "order_deadline", str(payload["orderDeadline"] or ""))
+                if "phaseOverride" in payload:
+                    v = payload["phaseOverride"]
+                    upsert_site_setting(connection, "phase_override", str(int(v)) if v is not None else "")
                 connection.commit()
                 settings = get_site_settings(connection)
             self._send_json(HTTPStatus.OK, settings)
