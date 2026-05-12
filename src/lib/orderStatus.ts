@@ -18,8 +18,8 @@ type RawOrder = Partial<Order> &
     customer?: LegacyCustomer | null;
     slip?: Order["slip"] | null;
     items?: Partial<OrderItem>[];
-    khantokeTicket?: boolean | number | string;
-    khantokeTicketClaimedAt?: string | null;
+    khantokTicket?: boolean | number | string;
+    khantokTicketClaimedAt?: string | null;
     luckyTicket?: boolean | number | string;
     luckyTicketClaimedAt?: string | null;
   };
@@ -135,8 +135,8 @@ export function getOrderStatusLabel(status: OrderStatus) {
   }
 }
 
-export function getKhantokeTicketLabel(hasKhantokeTicket: boolean) {
-  return hasKhantokeTicket ? "ได้รับ Khantoke ticket" : "สิทธิ์ Khantoke ticket เต็มแล้ว";
+export function getKhantokTicketLabel(hasKhantokTicket: boolean) {
+  return hasKhantokTicket ? "ได้รับ Khantok ticket" : "สิทธิ์ Khantok ticket เต็มแล้ว";
 }
 
 function normalizeProductSnapshot(product: Partial<OrderProductSnapshot>): OrderProductSnapshot {
@@ -166,11 +166,11 @@ export function normalizeOrder(rawOrder: RawOrder) {
   const quantity = typeof rawOrder.quantity === "number" && rawOrder.quantity > 0 ? rawOrder.quantity : 1;
   const totalAmount =
     typeof rawOrder.totalAmount === "number" && rawOrder.totalAmount >= 0 ? rawOrder.totalAmount : 0;
-  const rawKhantokeTicket = (rawOrder.khantokeTicket ?? rawOrder.luckyTicket) as unknown;
-  const khantokeTicket =
-    rawKhantokeTicket === true || rawKhantokeTicket === 1 || rawKhantokeTicket === "1";
-  const rawKhantokeTicketClaimedAt =
-    rawOrder.khantokeTicketClaimedAt ?? rawOrder.luckyTicketClaimedAt;
+  const rawKhantokTicket = (rawOrder.khantokTicket ?? rawOrder.luckyTicket) as unknown;
+  const khantokTicket =
+    rawKhantokTicket === true || rawKhantokTicket === 1 || rawKhantokTicket === "1";
+  const rawKhantokTicketClaimedAt =
+    rawOrder.khantokTicketClaimedAt ?? rawOrder.luckyTicketClaimedAt;
   const normalizedItems = Array.isArray(rawOrder.items)
     ? rawOrder.items
         .map((item, index) => {
@@ -214,10 +214,10 @@ export function normalizeOrder(rawOrder: RawOrder) {
     roundNumber,
     status: normalizeOrderStatus(rawOrder.status, rawOrder.paymentStatus),
     paymentStatus: normalizePaymentStatus(rawOrder.status, rawOrder.paymentStatus),
-    khantokeTicket,
-    khantokeTicketClaimedAt:
-      typeof rawKhantokeTicketClaimedAt === "string" && rawKhantokeTicketClaimedAt.trim()
-        ? rawKhantokeTicketClaimedAt
+    khantokTicket,
+    khantokTicketClaimedAt:
+      typeof rawKhantokTicketClaimedAt === "string" && rawKhantokTicketClaimedAt.trim()
+        ? rawKhantokTicketClaimedAt
         : null,
     createdAt: readString(rawOrder.createdAt),
     updatedAt: readString(rawOrder.updatedAt),

@@ -34,8 +34,8 @@ ORDER_ROUND = int(os.environ.get("ORDER_ROUND", "1"))
 ORDER_API_TOKEN = os.environ.get("ORDER_API_TOKEN", "")
 GOOGLE_SHEETS_WEBHOOK_URL = os.environ.get("GOOGLE_SHEETS_WEBHOOK_URL", "").strip()
 GOOGLE_SHEETS_WEBHOOK_TOKEN = os.environ.get("GOOGLE_SHEETS_WEBHOOK_TOKEN", "").strip()
-KHANTOKE_TICKET_QUOTA = int(
-    os.environ.get("KHANTOKE_TICKET_QUOTA", os.environ.get("LUCKY_TICKET_QUOTA", "2000"))
+KHANTOK_TICKET_QUOTA = int(
+    os.environ.get("KHANTOK_TICKET_QUOTA", os.environ.get("LUCKY_TICKET_QUOTA", "2000"))
 )
 ORDER_ID_PATTERN = re.compile(r"^[A-Z0-9-]+$")
 ALLOWED_SLIP_TYPES = {"image/jpeg", "image/png", "image/webp", "application/pdf"}
@@ -1108,16 +1108,16 @@ ORDER_VIEW_HTML = r"""<!doctype html>
 
     function renderSummary(orders) {
       const totalAmount = orders.reduce((sum, order) => sum + Number(order.totalAmount || 0), 0);
-      const khantokeUsed = Number(serverSummary.khantokeTicketUsed || 0);
-      const khantokeRemaining = Number(serverSummary.khantokeTicketRemaining || 0);
-      const khantokeQuota = Number(serverSummary.khantokeTicketQuota || 0);
+      const khantokUsed = Number(serverSummary.khantokTicketUsed || 0);
+      const khantokRemaining = Number(serverSummary.khantokTicketRemaining || 0);
+      const khantokQuota = Number(serverSummary.khantokTicketQuota || 0);
       const items = [
         ["Showing", orders.length],
         ["All Orders", serverSummary.total || allOrders.length],
         ["Waiting Confirm", serverSummary.waitingConfirm || 0],
         ["Total Amount", baht(totalAmount)],
-        ["Khantoke Used", `${khantokeUsed} ใบ`],
-        ["Khantoke Remaining", `${khantokeRemaining} / ${khantokeQuota} ใบ`]
+        ["Khantok Used", `${khantokUsed} ใบ`],
+        ["Khantok Remaining", `${khantokRemaining} / ${khantokQuota} ใบ`]
       ];
 
       summary.innerHTML = items.map(([label, value]) => `
@@ -1142,7 +1142,7 @@ ORDER_VIEW_HTML = r"""<!doctype html>
               <th style="width: 18%">Customer</th>
               <th style="width: 19%">Product</th>
               <th style="width: 9%">Amount</th>
-              <th style="width: 10%">Khantoke</th>
+              <th style="width: 10%">Khantok</th>
               <th style="width: 12%">Slip</th>
               <th style="width: 10%">Created</th>
             </tr>
@@ -1168,7 +1168,7 @@ ORDER_VIEW_HTML = r"""<!doctype html>
                     <span class="tiny muted">${text(customer.school || "")}</span>
                   </td>
                   <td class="money">${text(baht(order.totalAmount))}</td>
-                  <td>${order.khantokeTicket ? "ได้รับ" : "ไม่ได้รับ"}</td>
+                  <td>${order.khantokTicket ? "ได้รับ" : "ไม่ได้รับ"}</td>
                   <td>
                     <span class="tiny">${text(order.paymentStatus || "-")}</span><br />
                     <button class="secondary slipButton" data-order-id="${text(order.id || "")}" ${slip ? "" : "disabled"}>Open Slip</button>
@@ -1263,8 +1263,8 @@ def ensure_db() -> None:
               round_number INTEGER NOT NULL,
               status TEXT NOT NULL,
               payment_status TEXT NOT NULL,
-              khantoke_ticket INTEGER NOT NULL DEFAULT 0,
-              khantoke_ticket_claimed_at TEXT,
+              khantok_ticket INTEGER NOT NULL DEFAULT 0,
+              khantok_ticket_claimed_at TEXT,
               created_at TEXT NOT NULL,
               updated_at TEXT NOT NULL,
               product_slug TEXT NOT NULL,
@@ -1305,25 +1305,25 @@ def ensure_db() -> None:
           connection.execute("ALTER TABLE orders ADD COLUMN access_token TEXT")
       if "slip_storage_path" not in columns:
           connection.execute("ALTER TABLE orders ADD COLUMN slip_storage_path TEXT")
-      if "khantoke_ticket" not in columns:
-          connection.execute("ALTER TABLE orders ADD COLUMN khantoke_ticket INTEGER NOT NULL DEFAULT 0")
-      if "khantoke_ticket_claimed_at" not in columns:
-          connection.execute("ALTER TABLE orders ADD COLUMN khantoke_ticket_claimed_at TEXT")
+      if "khantok_ticket" not in columns:
+          connection.execute("ALTER TABLE orders ADD COLUMN khantok_ticket INTEGER NOT NULL DEFAULT 0")
+      if "khantok_ticket_claimed_at" not in columns:
+          connection.execute("ALTER TABLE orders ADD COLUMN khantok_ticket_claimed_at TEXT")
       if "lucky_ticket" in columns:
           connection.execute(
               """
               UPDATE orders
-              SET khantoke_ticket = lucky_ticket
-              WHERE khantoke_ticket = 0 AND lucky_ticket = 1
+              SET khantok_ticket = lucky_ticket
+              WHERE khantok_ticket = 0 AND lucky_ticket = 1
               """
           )
       if "lucky_ticket_claimed_at" in columns:
           connection.execute(
               """
               UPDATE orders
-              SET khantoke_ticket_claimed_at = lucky_ticket_claimed_at
+              SET khantok_ticket_claimed_at = lucky_ticket_claimed_at
               WHERE
-                  (khantoke_ticket_claimed_at IS NULL OR khantoke_ticket_claimed_at = '')
+                  (khantok_ticket_claimed_at IS NULL OR khantok_ticket_claimed_at = '')
                   AND lucky_ticket_claimed_at IS NOT NULL
                   AND lucky_ticket_claimed_at != ''
               """
@@ -1346,7 +1346,7 @@ def ensure_db() -> None:
           )
       connection.execute(
           """
-          CREATE TABLE IF NOT EXISTS khantoke_ticket_claims (
+          CREATE TABLE IF NOT EXISTS khantok_ticket_claims (
               id INTEGER PRIMARY KEY AUTOINCREMENT,
               order_id INTEGER NOT NULL UNIQUE,
               claimed_at TEXT NOT NULL,
@@ -1361,7 +1361,7 @@ def ensure_db() -> None:
       if "lucky_ticket_claims" in existing_tables:
           connection.execute(
               """
-              INSERT OR IGNORE INTO khantoke_ticket_claims (order_id, claimed_at)
+              INSERT OR IGNORE INTO khantok_ticket_claims (order_id, claimed_at)
               SELECT order_id, claimed_at FROM lucky_ticket_claims
               """
           )
@@ -1597,12 +1597,12 @@ def serialize_order(row: sqlite3.Row, include_access_token: bool = False) -> dic
         "roundNumber": row["round_number"],
         "status": row["status"],
         "paymentStatus": row["payment_status"],
-        "khantokeTicket": bool(
-            row["khantoke_ticket"] if "khantoke_ticket" in row_keys else row["lucky_ticket"]
+        "khantokTicket": bool(
+            row["khantok_ticket"] if "khantok_ticket" in row_keys else row["lucky_ticket"]
         ),
-        "khantokeTicketClaimedAt": (
-            row["khantoke_ticket_claimed_at"]
-            if "khantoke_ticket_claimed_at" in row_keys
+        "khantokTicketClaimedAt": (
+            row["khantok_ticket_claimed_at"]
+            if "khantok_ticket_claimed_at" in row_keys
             else row["lucky_ticket_claimed_at"]
         ),
         "createdAt": row["created_at"],
@@ -1648,9 +1648,9 @@ def create_sheet_row_payload(order: dict[str, Any], event: str) -> dict[str, Any
         "sequenceNumber": order.get("sequenceNumber", ""),
         "status": order.get("status", ""),
         "paymentStatus": order.get("paymentStatus", ""),
-        "khantokeTicket": order.get("khantokeTicket", order.get("luckyTicket", False)),
-        "khantokeTicketClaimedAt": order.get(
-            "khantokeTicketClaimedAt", order.get("luckyTicketClaimedAt", "")
+        "khantokTicket": order.get("khantokTicket", order.get("luckyTicket", False)),
+        "khantokTicketClaimedAt": order.get(
+            "khantokTicketClaimedAt", order.get("luckyTicketClaimedAt", "")
         ),
         "createdAt": order.get("createdAt", ""),
         "updatedAt": order.get("updatedAt", ""),
@@ -1847,11 +1847,11 @@ def list_orders(connection: sqlite3.Connection) -> list[dict[str, Any]]:
 
 
 def create_orders_summary(connection: sqlite3.Connection, orders: list[dict[str, Any]]) -> dict[str, int]:
-    khantoke_ticket_used_row = connection.execute(
-        "SELECT COUNT(*) AS count FROM khantoke_ticket_claims"
+    khantok_ticket_used_row = connection.execute(
+        "SELECT COUNT(*) AS count FROM khantok_ticket_claims"
     ).fetchone()
-    khantoke_ticket_used = int(khantoke_ticket_used_row["count"] if khantoke_ticket_used_row else 0)
-    khantoke_ticket_quota = max(KHANTOKE_TICKET_QUOTA, 0)
+    khantok_ticket_used = int(khantok_ticket_used_row["count"] if khantok_ticket_used_row else 0)
+    khantok_ticket_quota = max(KHANTOK_TICKET_QUOTA, 0)
 
     return {
         "total": len(orders),
@@ -1860,9 +1860,9 @@ def create_orders_summary(connection: sqlite3.Connection, orders: list[dict[str,
         "paid": sum(1 for order in orders if order.get("status") in {"paid", "preparing", "shipped"}),
         "rejected": sum(1 for order in orders if order.get("status") == "rejected"),
         "cancelled": sum(1 for order in orders if order.get("status") == "cancelled"),
-        "khantokeTicketQuota": khantoke_ticket_quota,
-        "khantokeTicketUsed": khantoke_ticket_used,
-        "khantokeTicketRemaining": max(khantoke_ticket_quota - khantoke_ticket_used, 0),
+        "khantokTicketQuota": khantok_ticket_quota,
+        "khantokTicketUsed": khantok_ticket_used,
+        "khantokTicketRemaining": max(khantok_ticket_quota - khantok_ticket_used, 0),
     }
 
 
@@ -1889,21 +1889,21 @@ def update_order_status(
     return serialize_order(row)
 
 
-def reserve_khantoke_ticket(connection: sqlite3.Connection, order_id: int) -> tuple[bool, str | None]:
+def reserve_khantok_ticket(connection: sqlite3.Connection, order_id: int) -> tuple[bool, str | None]:
     existing_claim = connection.execute(
-        "SELECT claimed_at FROM khantoke_ticket_claims WHERE order_id = ?",
+        "SELECT claimed_at FROM khantok_ticket_claims WHERE order_id = ?",
         (order_id,),
     ).fetchone()
     if existing_claim is not None:
         return True, str(existing_claim["claimed_at"])
 
-    current_claims = connection.execute("SELECT COUNT(*) AS count FROM khantoke_ticket_claims").fetchone()
-    if current_claims is not None and int(current_claims["count"]) >= KHANTOKE_TICKET_QUOTA:
+    current_claims = connection.execute("SELECT COUNT(*) AS count FROM khantok_ticket_claims").fetchone()
+    if current_claims is not None and int(current_claims["count"]) >= KHANTOK_TICKET_QUOTA:
         return False, None
 
     claimed_at = now_iso()
     connection.execute(
-        "INSERT INTO khantoke_ticket_claims (order_id, claimed_at) VALUES (?, ?)",
+        "INSERT INTO khantok_ticket_claims (order_id, claimed_at) VALUES (?, ?)",
         (order_id, claimed_at),
     )
     return True, claimed_at
@@ -1957,10 +1957,10 @@ def create_order(connection: sqlite3.Connection, payload: dict[str, Any]) -> dic
         "UPDATE orders SET order_code = ? WHERE internal_id = ?",
         (order_code, sequence_number),
     )
-    khantoke_ticket, khantoke_ticket_claimed_at = reserve_khantoke_ticket(connection, sequence_number)
+    khantok_ticket, khantok_ticket_claimed_at = reserve_khantok_ticket(connection, sequence_number)
     connection.execute(
-        "UPDATE orders SET khantoke_ticket = ?, khantoke_ticket_claimed_at = ? WHERE internal_id = ?",
-        (1 if khantoke_ticket else 0, khantoke_ticket_claimed_at, sequence_number),
+        "UPDATE orders SET khantok_ticket = ?, khantok_ticket_claimed_at = ? WHERE internal_id = ?",
+        (1 if khantok_ticket else 0, khantok_ticket_claimed_at, sequence_number),
     )
     row = fetch_order_by_code(connection, order_code)
     assert row is not None
@@ -2203,7 +2203,7 @@ def export_orders_csv(orders: list[dict[str, Any]]) -> str:
     writer.writerow([
         "order_id", "status", "payment_status", "total_amount", "size", "quantity",
         "created_at", "full_name", "student_code", "phone", "email", "school", "parent_phone",
-        "product_name", "product_category", "khantoke_ticket",
+        "product_name", "product_category", "khantok_ticket",
     ])
     for order in orders:
         c = order.get("customer") or {}
@@ -2224,7 +2224,7 @@ def export_orders_csv(orders: list[dict[str, Any]]) -> str:
             c.get("parentPhone", ""),
             p.get("name", ""),
             p.get("category", ""),
-            "yes" if order.get("khantokeTicket") else "no",
+            "yes" if order.get("khantokTicket") else "no",
         ])
     return output.getvalue()
 
@@ -2552,8 +2552,8 @@ class OrderRequestHandler(BaseHTTPRequestHandler):
                 {
                     **order,
                     "success": True,
-                    "khantokeTicket": bool(order.get("khantokeTicket")),
-                    "message": "ได้รับ Khantoke ticket" if order.get("khantokeTicket") else "สิทธิ์ Khantoke ticket เต็มแล้ว",
+                    "khantokTicket": bool(order.get("khantokTicket")),
+                    "message": "ได้รับ Khantok ticket" if order.get("khantokTicket") else "สิทธิ์ Khantok ticket เต็มแล้ว",
                 },
             )
 
