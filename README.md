@@ -8,6 +8,7 @@ and a persistent disk for SQLite + uploaded slips.
 Files added for this:
 
 - `server/Dockerfile`: Docker image for `server/order_api.py`
+- `docker-compose.order-api.yml`: local/server Docker Compose runner with a persistent named volume
 - `render.yaml`: Render Blueprint for a Docker web service with a 1 GB persistent disk mounted at `/var/data`
 
 Recommended Render environment values:
@@ -31,6 +32,16 @@ Then redeploy the Vercel app. Check:
 ```bash
 curl https://su-order-api.onrender.com/health
 ```
+
+For local or self-hosted Docker testing:
+
+```bash
+docker compose --env-file .env.order-api.example -f docker-compose.order-api.yml up --build -d
+curl http://localhost:3010/health
+```
+
+Docker Compose stores the SQLite database and uploaded slips in the named volume
+`su-store_order-api-data`.
 เว็บขายเสื้อพี่เก็ต
 
 ## Order API
