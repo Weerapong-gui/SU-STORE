@@ -424,6 +424,400 @@ ADMIN_HTML = r"""<!doctype html>
 </html>"""
 
 
+ORDER_VIEW_HTML = r"""<!doctype html>
+<html lang="th">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>SU STORE Orders</title>
+  <style>
+    :root {
+      color-scheme: light;
+      --bg: #f5f5f7;
+      --panel: #ffffff;
+      --ink: #111114;
+      --muted: #6b7280;
+      --line: #dedee4;
+      --blue: #0071e3;
+      --green: #027a48;
+      --orange: #b45309;
+      --red: #b42318;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      background:
+        radial-gradient(circle at top left, rgba(0, 113, 227, .12), transparent 32rem),
+        linear-gradient(180deg, #fff 0, var(--bg) 22rem);
+      color: var(--ink);
+      font-family: ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }
+    header {
+      padding: 28px clamp(18px, 4vw, 56px) 16px;
+    }
+    .eyebrow {
+      margin: 0 0 8px;
+      color: var(--muted);
+      font-size: 12px;
+      font-weight: 800;
+      letter-spacing: .18em;
+      text-transform: uppercase;
+    }
+    h1 {
+      margin: 0;
+      font-size: clamp(36px, 7vw, 78px);
+      letter-spacing: -.06em;
+      line-height: .94;
+    }
+    main {
+      width: min(1280px, calc(100% - 32px));
+      margin: 0 auto 56px;
+    }
+    .toolbar, .stat, .order-card {
+      border: 1px solid var(--line);
+      background: rgba(255, 255, 255, .86);
+      box-shadow: 0 24px 70px rgba(15, 23, 42, .08);
+      backdrop-filter: blur(18px);
+    }
+    .toolbar {
+      position: sticky;
+      top: 0;
+      z-index: 4;
+      display: grid;
+      grid-template-columns: minmax(220px, 1.4fr) minmax(160px, .8fr) minmax(160px, .8fr) auto;
+      gap: 10px;
+      padding: 12px;
+      border-radius: 22px;
+      margin-bottom: 16px;
+    }
+    input, select, button {
+      min-height: 44px;
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      background: #fff;
+      color: var(--ink);
+      font: inherit;
+    }
+    input, select { width: 100%; padding: 0 14px; }
+    button {
+      cursor: pointer;
+      padding: 0 18px;
+      font-weight: 800;
+    }
+    button.primary {
+      border-color: var(--blue);
+      background: var(--blue);
+      color: #fff;
+    }
+    button:disabled {
+      cursor: not-allowed;
+      opacity: .5;
+    }
+    .stats {
+      display: grid;
+      grid-template-columns: repeat(5, minmax(0, 1fr));
+      gap: 10px;
+      margin-bottom: 18px;
+    }
+    .stat {
+      border-radius: 20px;
+      padding: 18px;
+    }
+    .stat span {
+      display: block;
+      color: var(--muted);
+      font-size: 12px;
+      font-weight: 800;
+      letter-spacing: .12em;
+      text-transform: uppercase;
+    }
+    .stat strong {
+      display: block;
+      margin-top: 8px;
+      font-size: 30px;
+      letter-spacing: -.04em;
+    }
+    .orders {
+      display: grid;
+      gap: 12px;
+    }
+    .order-card {
+      display: grid;
+      grid-template-columns: 1.05fr 1.1fr 1.15fr .9fr auto;
+      gap: 18px;
+      align-items: start;
+      border-radius: 24px;
+      padding: 18px;
+    }
+    .label {
+      display: block;
+      margin-bottom: 6px;
+      color: var(--muted);
+      font-size: 11px;
+      font-weight: 900;
+      letter-spacing: .14em;
+      text-transform: uppercase;
+    }
+    .order-no {
+      font-size: 24px;
+      font-weight: 900;
+      letter-spacing: -.04em;
+    }
+    .line { margin: 4px 0; }
+    .muted { color: var(--muted); }
+    .money {
+      color: var(--blue);
+      font-size: 24px;
+      font-weight: 900;
+      letter-spacing: -.04em;
+    }
+    .badge {
+      display: inline-flex;
+      align-items: center;
+      min-height: 28px;
+      margin-top: 8px;
+      padding: 0 10px;
+      border-radius: 999px;
+      background: #eef2ff;
+      font-size: 12px;
+      font-weight: 900;
+    }
+    .badge.waiting_confirm { background: #fff7ed; color: var(--orange); }
+    .badge.paid, .badge.preparing, .badge.shipped { background: #ecfdf3; color: var(--green); }
+    .badge.rejected, .badge.cancelled { background: #fef3f2; color: var(--red); }
+    .notice {
+      min-height: 26px;
+      margin: 8px 4px 18px;
+      color: var(--muted);
+    }
+    .empty {
+      padding: 48px 20px;
+      text-align: center;
+      color: var(--muted);
+      border: 1px dashed var(--line);
+      border-radius: 24px;
+      background: rgba(255, 255, 255, .6);
+    }
+    @media (max-width: 980px) {
+      .toolbar { grid-template-columns: 1fr 1fr; }
+      .stats { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+      .order-card { grid-template-columns: 1fr 1fr; }
+    }
+    @media (max-width: 640px) {
+      main { width: min(100% - 24px, 1280px); }
+      .toolbar, .order-card { grid-template-columns: 1fr; }
+      .stats { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <p class="eyebrow">SU STORE SERVER</p>
+    <h1>Order Display</h1>
+  </header>
+  <main>
+    <section class="toolbar">
+      <input id="tokenInput" type="password" autocomplete="current-password" placeholder="ORDER_API_TOKEN" />
+      <input id="searchInput" type="search" placeholder="Search order, name, phone, school" />
+      <select id="statusFilter">
+        <option value="">All status</option>
+        <option value="pending_payment">pending_payment</option>
+        <option value="waiting_confirm">waiting_confirm</option>
+        <option value="paid">paid</option>
+        <option value="preparing">preparing</option>
+        <option value="shipped">shipped</option>
+        <option value="cancelled">cancelled</option>
+        <option value="rejected">rejected</option>
+      </select>
+      <button class="primary" id="refreshButton">Refresh</button>
+    </section>
+    <section class="stats" id="stats"></section>
+    <p class="notice" id="notice"></p>
+    <section class="orders" id="orders"></section>
+  </main>
+  <script>
+    const tokenInput = document.querySelector("#tokenInput");
+    const searchInput = document.querySelector("#searchInput");
+    const statusFilter = document.querySelector("#statusFilter");
+    const refreshButton = document.querySelector("#refreshButton");
+    const notice = document.querySelector("#notice");
+    const stats = document.querySelector("#stats");
+    const ordersContainer = document.querySelector("#orders");
+    let allOrders = [];
+
+    tokenInput.value = localStorage.getItem("suStoreOrderViewToken") || localStorage.getItem("suStoreAdminToken") || "";
+
+    function text(value) {
+      return String(value ?? "").replace(/[&<>"']/g, (match) => ({
+        "&": "&amp;",
+        "<": "&lt;",
+        ">": "&gt;",
+        '"': "&quot;",
+        "'": "&#039;"
+      })[match]);
+    }
+
+    function baht(value) {
+      return new Intl.NumberFormat("th-TH", {
+        style: "currency",
+        currency: "THB",
+        maximumFractionDigits: 0
+      }).format(Number(value || 0));
+    }
+
+    function setNotice(message, isError = false) {
+      notice.textContent = message;
+      notice.style.color = isError ? "var(--red)" : "var(--muted)";
+    }
+
+    function renderStats(orders) {
+      const totalAmount = orders.reduce((sum, order) => sum + Number(order.totalAmount || 0), 0);
+      const items = [
+        ["Orders", orders.length],
+        ["Waiting Slip", orders.filter((order) => order.status === "pending_payment").length],
+        ["Waiting Confirm", orders.filter((order) => order.status === "waiting_confirm").length],
+        ["Paid", orders.filter((order) => ["paid", "preparing", "shipped"].includes(order.status)).length],
+        ["Total", baht(totalAmount)]
+      ];
+      stats.innerHTML = items.map(([label, value]) => `
+        <div class="stat"><span>${text(label)}</span><strong>${text(value)}</strong></div>
+      `).join("");
+    }
+
+    function filteredOrders() {
+      const query = searchInput.value.trim().toLowerCase();
+      const status = statusFilter.value;
+      return allOrders.filter((order) => {
+        const customer = order.customer || {};
+        const product = order.product || {};
+        const haystack = [
+          order.id,
+          order.status,
+          product.name,
+          product.category,
+          customer.fullName,
+          customer.studentCode,
+          customer.email,
+          customer.phone,
+          customer.school,
+          order.size
+        ].join(" ").toLowerCase();
+        return (!status || order.status === status) && (!query || haystack.includes(query));
+      });
+    }
+
+    function renderOrders() {
+      const orders = filteredOrders();
+      renderStats(orders);
+      if (!orders.length) {
+        ordersContainer.innerHTML = '<div class="empty">No orders to display</div>';
+        return;
+      }
+
+      ordersContainer.innerHTML = orders.map((order) => {
+        const customer = order.customer || {};
+        const product = order.product || {};
+        const slip = order.slip;
+        return `
+          <article class="order-card">
+            <section>
+              <span class="label">Order</span>
+              <div class="order-no">${text(order.id || "-")}</div>
+              <div class="badge ${text(order.status || "")}">${text(order.status || "-")}</div>
+              <p class="line muted">${text(order.createdAt || "")}</p>
+            </section>
+            <section>
+              <span class="label">Customer</span>
+              <strong>${text(customer.fullName || "-")}</strong>
+              <p class="line">${text(customer.studentCode || "-")}</p>
+              <p class="line muted">${text(customer.email || "")}</p>
+              <p class="line muted">${text(customer.phone || "")}</p>
+              <p class="line muted">${text(customer.school || "")}</p>
+            </section>
+            <section>
+              <span class="label">Product</span>
+              <strong>${text(product.name || "-")}</strong>
+              <p class="line">Size: ${text(order.size || "-")}</p>
+              <p class="line">Quantity: ${text(order.quantity || 0)}</p>
+              <p class="line">Khantoke ticket: ${order.khantokeTicket ? "Yes" : "No"}</p>
+            </section>
+            <section>
+              <span class="label">Payment</span>
+              <div class="money">${text(baht(order.totalAmount))}</div>
+              <p class="line">${text(order.paymentStatus || "-")}</p>
+              <p class="line muted">${slip ? "Slip uploaded" : "No slip"}</p>
+              <p class="line muted">${text(slip?.uploadedAt || "")}</p>
+            </section>
+            <section>
+              <span class="label">Slip</span>
+              <button class="primary slipButton" data-order-id="${text(order.id || "")}" ${slip ? "" : "disabled"}>Open Slip</button>
+            </section>
+          </article>
+        `;
+      }).join("");
+    }
+
+    async function loadOrders() {
+      const token = tokenInput.value.trim();
+      if (!token) {
+        setNotice("Enter ORDER_API_TOKEN to load orders", true);
+        return;
+      }
+      localStorage.setItem("suStoreOrderViewToken", token);
+      refreshButton.disabled = true;
+      setNotice("Loading orders...");
+      try {
+        const response = await fetch("/admin/orders", {
+          headers: { "Authorization": `Bearer ${token}` },
+          cache: "no-store"
+        });
+        if (!response.ok) {
+          throw new Error(await response.text());
+        }
+        const payload = await response.json();
+        allOrders = payload.orders || [];
+        renderOrders();
+        setNotice(`Loaded ${allOrders.length} orders`);
+      } finally {
+        refreshButton.disabled = false;
+      }
+    }
+
+    async function openSlip(orderId) {
+      const response = await fetch(`/admin/orders/${encodeURIComponent(orderId)}/slip`, {
+        headers: { "Authorization": `Bearer ${tokenInput.value.trim()}` }
+      });
+      if (!response.ok) {
+        throw new Error(await response.text());
+      }
+      const blob = await response.blob();
+      const url = URL.createObjectURL(blob);
+      window.open(url, "_blank", "noopener,noreferrer");
+      setTimeout(() => URL.revokeObjectURL(url), 60000);
+    }
+
+    refreshButton.addEventListener("click", () => loadOrders().catch((error) => setNotice(error.message, true)));
+    searchInput.addEventListener("input", renderOrders);
+    statusFilter.addEventListener("change", renderOrders);
+    document.addEventListener("click", (event) => {
+      const slipButton = event.target.closest(".slipButton");
+      if (slipButton) {
+        openSlip(slipButton.dataset.orderId).catch((error) => setNotice(error.message, true));
+      }
+    });
+
+    if (tokenInput.value) {
+      loadOrders().catch((error) => setNotice(error.message, true));
+    } else {
+      setNotice("Enter ORDER_API_TOKEN to load orders");
+      renderStats([]);
+      renderOrders();
+    }
+  </script>
+</body>
+</html>"""
+
+
 def now_iso() -> str:
     return datetime.now(timezone.utc).replace(microsecond=0).isoformat().replace("+00:00", "Z")
 
@@ -1247,6 +1641,10 @@ class OrderRequestHandler(BaseHTTPRequestHandler):
 
         if path == "/admin":
             self._send_html(HTTPStatus.OK, ADMIN_HTML)
+            return
+
+        if path == "/orders":
+            self._send_html(HTTPStatus.OK, ORDER_VIEW_HTML)
             return
 
         if path == "/admin/orders":
