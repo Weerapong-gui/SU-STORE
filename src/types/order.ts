@@ -30,6 +30,15 @@ export type OrderProductSnapshot = {
   category: ProductCategory;
 };
 
+export type OrderItem = {
+  id?: string;
+  product: OrderProductSnapshot;
+  size: string;
+  quantity: number;
+  unitPrice: number;
+  totalAmount: number;
+};
+
 export type OrderSlip = {
   originalName: string;
   storedName: string;
@@ -53,6 +62,7 @@ export type Order = {
   quantity: number;
   totalAmount: number;
   product: OrderProductSnapshot;
+  items: OrderItem[];
   customer: OrderCustomer;
   slip: OrderSlip | null;
 };

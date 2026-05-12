@@ -2,9 +2,9 @@
 
 import Image from "next/image";
 import Link from "next/link";
-import { Lock, Minus, Pencil, Plus, Trash2 } from "lucide-react";
+import { Minus, Pencil, Plus, Trash2 } from "lucide-react";
 import { useCart } from "@/components/CartProvider";
-import { createBuyNowHref, createCartEditHref } from "@/lib/cart";
+import { createCartEditHref } from "@/lib/cart";
 import { formatPrice } from "@/lib/formatPrice";
 import { formatStoredProductSize } from "@/lib/productSizing";
 
@@ -17,15 +17,7 @@ const QUANTITY_BUTTON_CLASSES =
 
 export function CartCheckoutView() {
   const { items, subtotal, itemCount, removeItem, updateItemQuantity, clearCart } = useCart();
-  const checkoutTarget = items[0]
-    ? createBuyNowHref({
-        itemId: items[0].id,
-        productSlug: items[0].productSlug,
-        size: items[0].size,
-        quantity: items[0].quantity,
-        school: items[0].school
-      })
-    : "/buy-now";
+  const checkoutTarget = "/checkout/payment?cart=1";
 
   if (items.length === 0) {
     return (
@@ -39,10 +31,7 @@ export function CartCheckoutView() {
         </p>
         <div className="mt-6 flex flex-wrap gap-3">
           <Link href="/products" className={PRIMARY_LINK_CLASSES}>
-            Browse Products
-          </Link>
-          <Link href="/" className={SECONDARY_LINK_CLASSES}>
-            Back to Home
+            add more products
           </Link>
         </div>
       </div>
@@ -200,14 +189,7 @@ export function CartCheckoutView() {
 
       <aside className="space-y-5 self-start xl:sticky xl:top-24">
         <div className="rounded-[2rem] border border-zinc-200 bg-white p-6 shadow-[0_18px_45px_rgba(17,17,17,0.06)]">
-          <div className="flex items-center justify-between gap-3 border-b border-zinc-200 pb-5">
-            <p className="text-lg font-semibold tracking-tight text-zinc-900">
-              Voucher and Discounts
-            </p>
-            <span className="text-sm font-semibold tracking-[0.08em] text-zinc-900">ADD</span>
-          </div>
-
-          <div className="mt-6 space-y-4 text-sm text-zinc-700">
+          <div className="space-y-4 text-sm text-zinc-700">
             <div className="flex items-center justify-between gap-4">
               <span>Order Value</span>
               <span className="font-semibold text-zinc-900">{formatPrice(subtotal)}</span>
@@ -229,24 +211,9 @@ export function CartCheckoutView() {
             CONTINUE TO CHECKOUT
           </Link>
 
-          <div className="mt-5 rounded-[1.5rem] bg-[#f5f5f7] p-4 text-sm text-zinc-600">
-            <div className="flex items-start gap-3">
-              <Lock className="mt-0.5 h-5 w-5 shrink-0 text-zinc-500" />
-              <p>
-                The next step will collect personal details and create your order number. If you want
-                to change the product, quantity, or size, please do it here in your cart first.
-              </p>
-            </div>
-          </div>
-
-          <div className="mt-5 flex flex-wrap gap-3">
-            <Link href="/products" className={SECONDARY_LINK_CLASSES}>
-              View Products
-            </Link>
-            <Link href="/" className={SECONDARY_LINK_CLASSES}>
-              Back to Home
-            </Link>
-          </div>
+          <Link href="/products" className={`${SECONDARY_LINK_CLASSES} mt-4 w-full`}>
+            add more products
+          </Link>
         </div>
       </aside>
     </div>

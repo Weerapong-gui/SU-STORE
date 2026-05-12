@@ -3,10 +3,17 @@ import { ONE_SIZE_OPTION, SCHOOL_OPTIONS, SIZE_OPTIONS } from "@/lib/checkoutOpt
 import { getStoredProductSize, isBundleProduct, parseBundleSizeSelection } from "@/lib/productSizing";
 import { Product } from "@/types/product";
 
+export type ValidatedOrderItemInput = {
+  product: Product;
+  size: string;
+  quantity: number;
+};
+
 export type ValidatedOrderInput = {
   product: Product;
   size: string;
   quantity: number;
+  items: ValidatedOrderItemInput[];
   studentCode: string;
   email: string;
   fullName: string;
@@ -29,16 +36,9 @@ function readString(value: unknown) {
   return typeof value === "string" ? value.trim() : "";
 }
 
-export function validateOrderInput(payload: Record<string, unknown>): ValidationResult {
+function validateOrderItemPayload(payload: Record<string, unknown>): ValidationResult {
   const productSlug = readString(payload.product);
   const size = readString(payload.size);
-  const studentCode = readString(payload.studentCode);
-  const email = readString(payload.email);
-  const fullName = readString(payload.fullName);
-  const phone = readString(payload.phone);
-  const school = readString(payload.school);
-  const parentPhone = readString(payload.parentPhone);
-
   const parsedQuantity =
     typeof payload.quantity === "number"
       ? payload.quantity
@@ -64,6 +64,57 @@ export function validateOrderInput(payload: Record<string, unknown>): Validation
 
   if (!Number.isInteger(parsedQuantity) || parsedQuantity < 1 || parsedQuantity > 99) {
     return { message: "Please enter a valid quantity." };
+  }
+
+  return {
+    data: {
+      product,
+      size: product.requiresSize ? getStoredProductSize(product, size) : ONE_SIZE_OPTION,
+      quantity: parsedQuantity,
+      studentCode: "",
+      email: "",
+      fullName: "",
+      phone: "",
+      school: SCHOOL_OPTIONS[0],
+      parentPhone: "",
+      items: []
+    }
+  };
+}
+
+export function validateOrderInput(payload: Record<string, unknown>): ValidationResult {
+  const studentCode = readString(payload.studentCode);
+  const email = readString(payload.email);
+  const fullName = readString(payload.fullName);
+  const phone = readString(payload.phone);
+  const school = readString(payload.school);
+  const parentPhone = readString(payload.parentPhone);
+  const itemPayloads = Array.isArray(payload.items) && payload.items.length > 0
+    ? payload.items
+    : [
+        {
+          product: payload.product,
+          size: payload.size,
+          quantity: payload.quantity
+        }
+      ];
+
+  const items: ValidatedOrderItemInput[] = [];
+  for (const itemPayload of itemPayloads) {
+    if (!itemPayload || typeof itemPayload !== "object") {
+      return { message: "Please select at least one product." };
+    }
+
+    const validation = validateOrderItemPayload(itemPayload as Record<string, unknown>);
+    if (!validation.data) {
+      return { message: validation.message };
+    }
+
+    items.push({
+      product: validation.data.product,
+      size: validation.data.size,
+      quantity: validation.data.quantity
+    });
   }
 
   if (!studentCode) {
@@ -94,9 +145,10 @@ export function validateOrderInput(payload: Record<string, unknown>): Validation
 
   return {
     data: {
-      product,
-      size: product.requiresSize ? getStoredProductSize(product, size) : ONE_SIZE_OPTION,
-      quantity: parsedQuantity,
+      product: items[0].product,
+      size: items[0].size,
+      quantity: items[0].quantity,
+      items,
       studentCode,
       email,
       fullName,

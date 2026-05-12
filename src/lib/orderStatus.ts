@@ -1,4 +1,11 @@
-import { Order, OrderCustomer, OrderStatus, PaymentStatus } from "@/types/order";
+import {
+  Order,
+  OrderCustomer,
+  OrderItem,
+  OrderProductSnapshot,
+  OrderStatus,
+  PaymentStatus
+} from "@/types/order";
 
 type LegacyCustomer = Partial<OrderCustomer> & {
   firstName?: string;
@@ -10,6 +17,7 @@ type RawOrder = Partial<Order> &
   Record<string, unknown> & {
     customer?: LegacyCustomer | null;
     slip?: Order["slip"] | null;
+    items?: Partial<OrderItem>[];
     khantokeTicket?: boolean | number | string;
     khantokeTicketClaimedAt?: string | null;
     luckyTicket?: boolean | number | string;
@@ -131,9 +139,27 @@ export function getKhantokeTicketLabel(hasKhantokeTicket: boolean) {
   return hasKhantokeTicket ? "ได้รับ Khantoke ticket" : "สิทธิ์ Khantoke ticket เต็มแล้ว";
 }
 
+function normalizeProductSnapshot(product: Partial<OrderProductSnapshot>): OrderProductSnapshot {
+  return {
+    slug: readString(product.slug),
+    name: readString(product.name),
+    shortName: readString(product.shortName),
+    tagline: readString(product.tagline),
+    price: typeof product.price === "number" ? product.price : 0,
+    image: readString(product.image),
+    category:
+      product.category === "bundle" ||
+      product.category === "jacket" ||
+      product.category === "headband"
+        ? product.category
+        : "single"
+  };
+}
+
 export function normalizeOrder(rawOrder: RawOrder) {
   const customer = (rawOrder.customer ?? {}) as LegacyCustomer;
   const rawProduct = (rawOrder.product ?? {}) as Partial<Order["product"]>;
+  const product = normalizeProductSnapshot(rawProduct);
   const sequenceNumber =
     typeof rawOrder.sequenceNumber === "number" ? rawOrder.sequenceNumber : undefined;
   const roundNumber = typeof rawOrder.roundNumber === "number" ? rawOrder.roundNumber : undefined;
@@ -145,6 +171,42 @@ export function normalizeOrder(rawOrder: RawOrder) {
     rawKhantokeTicket === true || rawKhantokeTicket === 1 || rawKhantokeTicket === "1";
   const rawKhantokeTicketClaimedAt =
     rawOrder.khantokeTicketClaimedAt ?? rawOrder.luckyTicketClaimedAt;
+  const normalizedItems = Array.isArray(rawOrder.items)
+    ? rawOrder.items
+        .map((item, index) => {
+          const productSnapshot = normalizeProductSnapshot(item.product ?? product);
+          const itemQuantity =
+            typeof item.quantity === "number" && item.quantity > 0 ? item.quantity : 1;
+          const unitPrice =
+            typeof item.unitPrice === "number" ? item.unitPrice : productSnapshot.price;
+
+          return {
+            id: readString(item.id) || `${productSnapshot.slug || "item"}-${index + 1}`,
+            product: productSnapshot,
+            size: readString(item.size),
+            quantity: itemQuantity,
+            unitPrice,
+            totalAmount:
+              typeof item.totalAmount === "number" && item.totalAmount >= 0
+                ? item.totalAmount
+                : unitPrice * itemQuantity
+          } satisfies OrderItem;
+        })
+        .filter((item) => item.product.slug || item.product.name)
+    : [];
+  const items =
+    normalizedItems.length > 0
+      ? normalizedItems
+      : [
+          {
+            id: product.slug || "item-1",
+            product,
+            size: readString(rawOrder.size),
+            quantity,
+            unitPrice: product.price,
+            totalAmount: product.price * quantity
+          }
+        ];
 
   return {
     id: readString(rawOrder.id),
@@ -162,20 +224,8 @@ export function normalizeOrder(rawOrder: RawOrder) {
     size: readString(rawOrder.size),
     quantity,
     totalAmount,
-    product: {
-      slug: readString(rawProduct.slug),
-      name: readString(rawProduct.name),
-      shortName: readString(rawProduct.shortName),
-      tagline: readString(rawProduct.tagline),
-      price: typeof rawProduct.price === "number" ? rawProduct.price : 0,
-      image: readString(rawProduct.image),
-      category:
-        rawProduct.category === "bundle" ||
-        rawProduct.category === "jacket" ||
-        rawProduct.category === "headband"
-          ? rawProduct.category
-          : "single"
-    },
+    product,
+    items,
     customer: {
       studentCode: readString(customer.studentCode),
       email: readString(customer.email),

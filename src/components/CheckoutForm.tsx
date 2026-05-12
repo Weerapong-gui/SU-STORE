@@ -5,7 +5,7 @@ import { FormEvent, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { MobileProductSlider } from "@/components/MobileProductSlider";
 import { products } from "@/data/products";
-import { EMAIL_DOMAIN, ONE_SIZE_OPTION, SCHOOL_OPTIONS, SIZE_OPTIONS } from "@/lib/checkoutOptions";
+import { ONE_SIZE_OPTION, SCHOOL_OPTIONS, SIZE_OPTIONS } from "@/lib/checkoutOptions";
 import { formatPrice } from "@/lib/formatPrice";
 import {
   getStoredProductSize,
@@ -128,13 +128,7 @@ export function CheckoutForm({
   }, [activeProduct, defaultProductData.slug, defaultSize]);
 
   function handleEmailChange(value: string) {
-    const nextValue = value.replace(/\s/g, "");
-    if (nextValue.endsWith("@")) {
-      const localPart = nextValue.slice(0, -1);
-      setCustomerEmail(localPart ? `${localPart}@${EMAIL_DOMAIN}` : `@${EMAIL_DOMAIN}`);
-      return;
-    }
-    setCustomerEmail(nextValue);
+    setCustomerEmail(value.replace(/\s/g, ""));
   }
 
   function updateQuantity(nextQuantity: number) {
@@ -438,7 +432,7 @@ export function CheckoutForm({
                 value={customerEmail}
                 onChange={(event) => handleEmailChange(event.target.value)}
                 className={TEXT_FIELD_CLASSES}
-                placeholder={`@${EMAIL_DOMAIN}`}
+                placeholder="name@example.com"
               />
             </label>
           </div>

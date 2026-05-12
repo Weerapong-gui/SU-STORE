@@ -12,14 +12,16 @@ type CheckoutPaymentPageProps = {
     size?: string;
     quantity?: string;
     itemId?: string;
+    cart?: string;
   };
 };
 
 export default async function CheckoutPaymentPage({ searchParams }: CheckoutPaymentPageProps) {
   const orderId = searchParams?.orderId;
   const existingOrder = orderId ? await getOrderById(orderId) : null;
+  const cartMode = searchParams?.cart === "1";
 
-  if (!existingOrder && !searchParams?.product) {
+  if (!existingOrder && !searchParams?.product && !cartMode) {
     redirect("/checkout");
   }
 
@@ -36,6 +38,7 @@ export default async function CheckoutPaymentPage({ searchParams }: CheckoutPaym
           defaultSize={searchParams?.size}
           defaultQuantity={searchParams?.quantity}
           cartItemId={searchParams?.itemId}
+          cartMode={cartMode}
         />
       </Container>
     </section>

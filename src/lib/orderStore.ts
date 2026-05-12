@@ -15,7 +15,7 @@ import {
   updateRemoteOrder,
 } from "@/lib/remoteOrderApi";
 import { ValidatedOrderInput } from "@/lib/orderValidation";
-import { Order, OrderSlip } from "@/types/order";
+import { Order, OrderItem, OrderProductSnapshot, OrderSlip } from "@/types/order";
 
 const DATA_ROOT = path.join(process.cwd(), "data");
 const ORDERS_DIR = path.join(DATA_ROOT, "orders");
@@ -93,6 +93,33 @@ function isSafeOrderId(orderId: string) {
   return ORDER_ID_PATTERN.test(orderId);
 }
 
+function createProductSnapshot(input: ValidatedOrderInput["items"][number]["product"]): OrderProductSnapshot {
+  return {
+    slug: input.slug,
+    name: input.name,
+    shortName: input.shortName,
+    tagline: input.tagline,
+    price: input.price,
+    image: input.images[0],
+    category: input.category
+  };
+}
+
+function createOrderItems(input: ValidatedOrderInput): OrderItem[] {
+  return input.items.map((item, index) => {
+    const product = createProductSnapshot(item.product);
+
+    return {
+      id: `${product.slug}-${index + 1}`,
+      product,
+      size: item.size,
+      quantity: item.quantity,
+      unitPrice: item.product.price,
+      totalAmount: item.product.price * item.quantity
+    };
+  });
+}
+
 function buildOrderFromInput(
   orderId: string,
   input: ValidatedOrderInput,
@@ -101,6 +128,9 @@ function buildOrderFromInput(
   khantokeTicketAllocation?: KhantokeTicketAllocation
 ): Order {
   const now = new Date().toISOString();
+  const items = createOrderItems(input);
+  const primaryItem = items[0];
+  const totalAmount = items.reduce((sum, item) => sum + item.totalAmount, 0);
 
   return {
     id: orderId,
@@ -116,18 +146,11 @@ function buildOrderFromInput(
       null,
     createdAt: existingOrder?.createdAt ?? now,
     updatedAt: now,
-    size: input.size,
-    quantity: input.quantity,
-    totalAmount: input.product.price * input.quantity,
-    product: {
-      slug: input.product.slug,
-      name: input.product.name,
-      shortName: input.product.shortName,
-      tagline: input.product.tagline,
-      price: input.product.price,
-      image: input.product.images[0],
-      category: input.product.category
-    },
+    size: primaryItem.size,
+    quantity: primaryItem.quantity,
+    totalAmount,
+    product: primaryItem.product,
+    items,
     customer: {
       studentCode: input.studentCode,
       email: input.email,

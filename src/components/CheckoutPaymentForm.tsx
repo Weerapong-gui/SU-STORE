@@ -1,17 +1,18 @@
 "use client";
 
-import Image from "next/image";
 import Link from "next/link";
 import { FormEvent, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useCart } from "@/components/CartProvider";
 import { products } from "@/data/products";
-import { EMAIL_DOMAIN, SCHOOL_OPTIONS } from "@/lib/checkoutOptions";
+import { SCHOOL_OPTIONS } from "@/lib/checkoutOptions";
 import { formatOrderNumber } from "@/lib/formatOrderNumber";
 import { formatPrice } from "@/lib/formatPrice";
-import { getKhantokeTicketLabel, getOrderStatusLabel } from "@/lib/orderStatus";
+import { getOrderStatusLabel } from "@/lib/orderStatus";
 import { formatStoredProductSize } from "@/lib/productSizing";
-import { Order } from "@/types/order";
+import { CartItem } from "@/types/cart";
+import { Order, OrderItem } from "@/types/order";
+import { ProductCategory } from "@/types/product";
 
 type CheckoutPaymentFormProps = {
   existingOrder?: Order | null;
@@ -19,6 +20,7 @@ type CheckoutPaymentFormProps = {
   defaultSize?: string;
   defaultQuantity?: string;
   cartItemId?: string;
+  cartMode?: boolean;
 };
 
 type SubmitState = "idle" | "loading";
@@ -32,6 +34,18 @@ const PRIMARY_BUTTON_CLASSES =
 const SECONDARY_LINK_CLASSES =
   "inline-flex items-center justify-center rounded-full border border-zinc-300 bg-white px-6 py-3 text-sm font-medium text-zinc-900 transition hover:border-zinc-400 hover:bg-zinc-50 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-zinc-200";
 
+type CheckoutDisplayItem = {
+  key: string;
+  productSlug: string;
+  productName: string;
+  productShortName: string;
+  productCategory: ProductCategory;
+  size: string;
+  quantity: number;
+  unitPrice: number;
+  totalAmount: number;
+};
+
 function getProductBySlug(productSlug?: string) {
   return products.find((product) => product.slug === productSlug) ?? products[0];
 }
@@ -40,15 +54,44 @@ function clampQuantity(quantity: number) {
   return Math.min(99, Math.max(1, quantity));
 }
 
+function createDisplayItemFromOrderItem(item: OrderItem, index: number): CheckoutDisplayItem {
+  return {
+    key: item.id ?? `${item.product.slug}-${index}`,
+    productSlug: item.product.slug,
+    productName: item.product.name,
+    productShortName: item.product.shortName,
+    productCategory: item.product.category,
+    size: item.size,
+    quantity: item.quantity,
+    unitPrice: item.unitPrice,
+    totalAmount: item.totalAmount
+  };
+}
+
+function createDisplayItemFromCartItem(item: CartItem): CheckoutDisplayItem {
+  return {
+    key: item.id,
+    productSlug: item.productSlug,
+    productName: item.productName,
+    productShortName: item.productShortName,
+    productCategory: item.productCategory,
+    size: item.size,
+    quantity: item.quantity,
+    unitPrice: item.unitPrice,
+    totalAmount: item.unitPrice * item.quantity
+  };
+}
+
 export function CheckoutPaymentForm({
   existingOrder,
   defaultProduct,
   defaultSize,
   defaultQuantity,
-  cartItemId
+  cartItemId,
+  cartMode = false
 }: CheckoutPaymentFormProps) {
   const router = useRouter();
-  const { removeItem } = useCart();
+  const { clearCart, hydrated, items: cartItems, removeItem } = useCart();
   const product = useMemo(
     () => getProductBySlug(defaultProduct ?? existingOrder?.product.slug),
     [defaultProduct, existingOrder?.product.slug]
@@ -59,7 +102,7 @@ export function CheckoutPaymentForm({
   const [activeOrderId, setActiveOrderId] = useState(existingOrder?.id ?? "");
 
   const storedSize = defaultSize ?? existingOrder?.size ?? "";
-  const quantity = useMemo(() => {
+  const defaultSingleQuantity = useMemo(() => {
     const parsedValue = Number.parseInt(defaultQuantity ?? "", 10);
     if (Number.isInteger(parsedValue)) {
       return clampQuantity(parsedValue);
@@ -67,29 +110,53 @@ export function CheckoutPaymentForm({
 
     return existingOrder?.quantity ?? 1;
   }, [defaultQuantity, existingOrder?.quantity]);
-  const totalAmount = product.price * quantity;
-
-  function handleEmailChange(value: string) {
-    const nextValue = value.replace(/\s/g, "");
-    if (nextValue.endsWith("@")) {
-      const localPart = nextValue.slice(0, -1);
-      setCustomerEmail(localPart ? `${localPart}@${EMAIL_DOMAIN}` : `@${EMAIL_DOMAIN}`);
-      return;
+  const selectedItems = useMemo<CheckoutDisplayItem[]>(() => {
+    if (existingOrder) {
+      return existingOrder.items.map(createDisplayItemFromOrderItem);
     }
 
-    setCustomerEmail(nextValue);
-  }
+    if (cartMode) {
+      return cartItems.map(createDisplayItemFromCartItem);
+    }
+
+    return [
+      {
+        key: product.slug,
+        productSlug: product.slug,
+        productName: product.name,
+        productShortName: product.shortName,
+        productCategory: product.category,
+        size: storedSize,
+        quantity: defaultSingleQuantity,
+        unitPrice: product.price,
+        totalAmount: product.price * defaultSingleQuantity
+      }
+    ];
+  }, [cartItems, cartMode, defaultSingleQuantity, existingOrder, product, storedSize]);
+  const totalAmount = selectedItems.reduce((sum, item) => sum + item.totalAmount, 0);
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setSubmitState("loading");
     setSubmitError("");
 
+    if (selectedItems.length === 0) {
+      setSubmitError("Please add at least one product before confirming your order.");
+      setSubmitState("idle");
+      return;
+    }
+
     const formData = new FormData(event.currentTarget);
+    const firstItem = selectedItems[0];
     const payload = {
-      product: product.slug,
-      size: storedSize,
-      quantity,
+      product: firstItem.productSlug,
+      size: firstItem.size,
+      quantity: firstItem.quantity,
+      items: selectedItems.map((item) => ({
+        product: item.productSlug,
+        size: item.size,
+        quantity: item.quantity
+      })),
       studentCode: String(formData.get("studentCode") ?? "").trim(),
       email: String(formData.get("email") ?? "").trim(),
       fullName: String(formData.get("fullName") ?? "").trim(),
@@ -125,7 +192,9 @@ export function CheckoutPaymentForm({
 
       setActiveOrderId(result.orderId);
 
-      if (cartItemId) {
+      if (cartMode) {
+        clearCart();
+      } else if (cartItemId) {
         removeItem(cartItemId);
       }
 
@@ -136,56 +205,92 @@ export function CheckoutPaymentForm({
     }
   }
 
-  return (
-    <form onSubmit={handleSubmit} className="grid gap-8 lg:grid-cols-[0.92fr_1.08fr] xl:gap-10">
-      <div className="space-y-5">
-        <div className="rounded-[2rem] border border-zinc-200 bg-white p-5 shadow-[0_18px_45px_rgba(17,17,17,0.06)]">
-          <p className="text-xs font-semibold tracking-[0.12em] text-zinc-500">ORDER DETAILS</p>
-          <h1 className="mt-3 text-3xl font-semibold tracking-tight text-zinc-900 md:text-4xl">
-            Confirm your order
-          </h1>
-          <p className="mt-3 text-sm text-zinc-600">
-            Review the selected product, complete your personal details, and create the order number before payment.
-          </p>
-          {existingOrder ? (
-            <div className="mt-4 space-y-2 text-sm text-zinc-600">
-              <p>
-                Order {formatOrderNumber(existingOrder)} is currently{" "}
-                <span className="font-medium text-zinc-900">{getOrderStatusLabel(existingOrder.status)}</span>.
-              </p>
-              <p className={existingOrder.khantokeTicket ? "text-emerald-700" : "text-amber-700"}>
-                {getKhantokeTicketLabel(existingOrder.khantokeTicket)}
-              </p>
-            </div>
-          ) : null}
-        </div>
+  if (cartMode && !hydrated) {
+    return (
+      <div className="font-sf-pro rounded-[2rem] border border-zinc-200 bg-white p-6 shadow-[0_18px_45px_rgba(17,17,17,0.06)] md:p-8">
+        <p className="text-xs font-semibold tracking-[0.12em] text-zinc-500">ORDER DETAILS</p>
+        <h1 className="mt-3 text-3xl font-semibold tracking-tight text-zinc-900 md:text-4xl">
+          Confirm your order
+        </h1>
+        <p className="mt-3 text-sm text-zinc-600">Loading your cart items...</p>
+      </div>
+    );
+  }
 
-        <div className="overflow-hidden rounded-[2rem] border border-zinc-200 bg-white shadow-[0_18px_45px_rgba(17,17,17,0.06)]">
-          <div className="relative aspect-[4/5] bg-[#f5f5f7]">
-            <Image
-              src={product.images[0]}
-              alt={product.name}
-              fill
-              sizes="(min-width: 1024px) 40vw, 100vw"
-              className="object-cover"
-            />
+  if (cartMode && selectedItems.length === 0) {
+    return (
+      <div className="font-sf-pro rounded-[2rem] border border-zinc-200 bg-white p-6 shadow-[0_18px_45px_rgba(17,17,17,0.06)] md:p-8">
+        <p className="text-xs font-semibold tracking-[0.12em] text-zinc-500">ORDER DETAILS</p>
+        <h1 className="mt-3 text-3xl font-semibold tracking-tight text-zinc-900 md:text-4xl">
+          Confirm your order
+        </h1>
+        <p className="mt-3 text-sm text-zinc-600">
+          Your cart is empty. Add products first, then come back to confirm your order.
+        </p>
+        <Link href="/products" className={`${PRIMARY_BUTTON_CLASSES} mt-6`}>
+          add more products
+        </Link>
+      </div>
+    );
+  }
+
+  return (
+    <form
+      onSubmit={handleSubmit}
+      className="font-sf-pro rounded-[2rem] border border-zinc-200 bg-white p-6 shadow-[0_18px_45px_rgba(17,17,17,0.06)] md:p-8"
+    >
+      <div className="grid gap-8 lg:grid-cols-[minmax(0,1fr)_minmax(22rem,0.84fr)]">
+        <div className="space-y-6">
+          <div>
+            <p className="text-xs font-semibold tracking-[0.12em] text-zinc-500">ORDER DETAILS</p>
+            <h1 className="mt-3 text-3xl font-semibold tracking-tight text-zinc-900 md:text-4xl">
+              Confirm your order
+            </h1>
+            <p className="mt-3 text-sm text-zinc-600">
+              Review the selected product, complete your personal details, and create the order number before payment.
+            </p>
+            {existingOrder ? (
+              <div className="mt-4 space-y-2 text-sm text-zinc-600">
+                <p>
+                  Order {formatOrderNumber(existingOrder)} is currently{" "}
+                  <span className="font-medium text-zinc-900">
+                    {getOrderStatusLabel(existingOrder.status)}
+                  </span>
+                  .
+                </p>
+              </div>
+            ) : null}
           </div>
 
-          <div className="p-5">
-            <p className="text-xs font-semibold tracking-[0.12em] text-zinc-500">
-              {product.shortName}
-            </p>
-            <h2 className="mt-2 text-2xl font-semibold tracking-tight text-zinc-900">
-              {product.name}
-            </h2>
+          <div className="rounded-3xl border border-zinc-200 bg-[#f5f5f7] p-5">
+            <p className="text-xs font-semibold tracking-[0.12em] text-zinc-500">ORDER SUMMARY</p>
+            <div className="mt-4 divide-y divide-zinc-200">
+              {selectedItems.map((item) => (
+                <div key={item.key} className="py-4 first:pt-0 last:pb-0">
+                  <div className="flex items-start justify-between gap-4">
+                    <div>
+                      <p className="text-xs font-semibold tracking-[0.12em] text-zinc-500">
+                        {item.productShortName}
+                      </p>
+                      <h2 className="mt-1 text-lg font-semibold tracking-tight text-zinc-900">
+                        {item.productName}
+                      </h2>
+                    </div>
+                    <p className="shrink-0 font-semibold text-zinc-900">
+                      {formatPrice(item.totalAmount)}
+                    </p>
+                  </div>
 
-            <div className="mt-5 grid gap-x-6 gap-y-2 text-sm text-zinc-700 md:grid-cols-[auto_1fr]">
-              <p className="text-zinc-500">Size</p>
-              <p>{formatStoredProductSize(product.category, storedSize)}</p>
-              <p className="text-zinc-500">Quantity</p>
-              <p>{quantity}</p>
-              <p className="text-zinc-500">Unit Price</p>
-              <p>{formatPrice(product.price)}</p>
+                  <div className="mt-3 grid gap-x-6 gap-y-1 text-sm text-zinc-700 sm:grid-cols-[auto_1fr]">
+                    <p className="text-zinc-500">Size</p>
+                    <p>{formatStoredProductSize(item.productCategory, item.size)}</p>
+                    <p className="text-zinc-500">Quantity</p>
+                    <p>{item.quantity}</p>
+                    <p className="text-zinc-500">Unit Price</p>
+                    <p>{formatPrice(item.unitPrice)}</p>
+                  </div>
+                </div>
+              ))}
             </div>
 
             <div className="mt-5 flex items-center justify-between border-t border-zinc-200 pt-5">
@@ -195,118 +300,113 @@ export function CheckoutPaymentForm({
               </span>
             </div>
           </div>
-        </div>
 
-        <div className="flex flex-wrap gap-3">
-          <Link href="/checkout" className={SECONDARY_LINK_CLASSES}>
-            Back to Cart
-          </Link>
           <Link href="/products" className={SECONDARY_LINK_CLASSES}>
-            View Products
+            add more products
           </Link>
         </div>
-      </div>
 
-      <div className="space-y-5 rounded-[2rem] border border-zinc-200 bg-white p-6 shadow-[0_18px_45px_rgba(17,17,17,0.06)] md:p-8">
-        <div>
-          <p className="text-xs font-semibold tracking-[0.12em] text-zinc-500">PERSONAL DETAILS</p>
-          <p className="mt-3 text-sm text-zinc-600">
-            Once you confirm this order, the system will generate an order number and move you to the payment step.
-          </p>
+        <div className="space-y-5">
+          <div>
+            <p className="text-xs font-semibold tracking-[0.12em] text-zinc-500">PERSONAL DETAILS</p>
+            <p className="mt-3 text-sm text-zinc-600">
+              Once you confirm this order, the system will generate an order number and move you to the payment step.
+            </p>
 
-          <div className="mt-5 grid gap-4 md:grid-cols-2">
-            <label className="space-y-1">
-              <span className="text-xs font-semibold tracking-[0.08em] text-zinc-600">STUDENT CODE</span>
-              <input
-                name="studentCode"
-                required
-                defaultValue={existingOrder?.customer.studentCode ?? ""}
-                className={TEXT_FIELD_CLASSES}
-                placeholder="6831501178"
-              />
-            </label>
+            <div className="mt-5 grid gap-4 md:grid-cols-2">
+              <label className="space-y-1">
+                <span className="text-xs font-semibold tracking-[0.08em] text-zinc-600">STUDENT CODE</span>
+                <input
+                  name="studentCode"
+                  required
+                  defaultValue={existingOrder?.customer.studentCode ?? ""}
+                  className={TEXT_FIELD_CLASSES}
+                  placeholder="6831501178"
+                />
+              </label>
 
-            <label className="space-y-1">
-              <span className="text-xs font-semibold tracking-[0.08em] text-zinc-600">EMAIL</span>
-              <input
-                name="email"
-                type="email"
-                required
-                value={customerEmail}
-                onChange={(event) => handleEmailChange(event.target.value)}
-                className={TEXT_FIELD_CLASSES}
-                placeholder={`@${EMAIL_DOMAIN}`}
-              />
-            </label>
+              <label className="space-y-1">
+                <span className="text-xs font-semibold tracking-[0.08em] text-zinc-600">EMAIL</span>
+                <input
+                  name="email"
+                  type="email"
+                  required
+                  value={customerEmail}
+                  onChange={(event) => setCustomerEmail(event.target.value.replace(/\s/g, ""))}
+                  className={TEXT_FIELD_CLASSES}
+                  placeholder="name@example.com"
+                />
+              </label>
 
-            <label className="space-y-1 md:col-span-2">
-              <span className="text-xs font-semibold tracking-[0.08em] text-zinc-600">FULL NAME</span>
-              <input
-                name="fullName"
-                required
-                defaultValue={existingOrder?.customer.fullName ?? ""}
-                className={TEXT_FIELD_CLASSES}
-                placeholder="Name Surname"
-              />
-            </label>
+              <label className="space-y-1 md:col-span-2">
+                <span className="text-xs font-semibold tracking-[0.08em] text-zinc-600">FULL NAME</span>
+                <input
+                  name="fullName"
+                  required
+                  defaultValue={existingOrder?.customer.fullName ?? ""}
+                  className={TEXT_FIELD_CLASSES}
+                  placeholder="Name Surname"
+                />
+              </label>
 
-            <label className="space-y-1">
-              <span className="text-xs font-semibold tracking-[0.08em] text-zinc-600">PHONE NUMBER</span>
-              <input
-                name="phone"
-                required
-                defaultValue={existingOrder?.customer.phone ?? ""}
-                className={TEXT_FIELD_CLASSES}
-                placeholder="08x-xxx-xxxx"
-              />
-            </label>
+              <label className="space-y-1">
+                <span className="text-xs font-semibold tracking-[0.08em] text-zinc-600">PHONE NUMBER</span>
+                <input
+                  name="phone"
+                  required
+                  defaultValue={existingOrder?.customer.phone ?? ""}
+                  className={TEXT_FIELD_CLASSES}
+                  placeholder="08x-xxx-xxxx"
+                />
+              </label>
 
-            <label className="space-y-1">
-              <span className="text-xs font-semibold tracking-[0.08em] text-zinc-600">PARENT PHONE</span>
-              <input
-                name="parentPhone"
-                required
-                defaultValue={existingOrder?.customer.parentPhone ?? ""}
-                className={TEXT_FIELD_CLASSES}
-                placeholder="08x-xxx-xxxx"
-              />
-            </label>
+              <label className="space-y-1">
+                <span className="text-xs font-semibold tracking-[0.08em] text-zinc-600">PARENT PHONE</span>
+                <input
+                  name="parentPhone"
+                  required
+                  defaultValue={existingOrder?.customer.parentPhone ?? ""}
+                  className={TEXT_FIELD_CLASSES}
+                  placeholder="08x-xxx-xxxx"
+                />
+              </label>
 
-            <label className="space-y-1 md:col-span-2">
-              <span className="text-xs font-semibold tracking-[0.08em] text-zinc-600">SCHOOL</span>
-              <select
-                name="school"
-                required
-                defaultValue={existingOrder?.customer.school ?? ""}
-                className={SELECT_FIELD_CLASSES}
-              >
-                <option value="" disabled>
-                  Select school
-                </option>
-                {SCHOOL_OPTIONS.map((school) => (
-                  <option key={school} value={school}>
-                    {school}
+              <label className="space-y-1 md:col-span-2">
+                <span className="text-xs font-semibold tracking-[0.08em] text-zinc-600">SCHOOL</span>
+                <select
+                  name="school"
+                  required
+                  defaultValue={existingOrder?.customer.school ?? ""}
+                  className={SELECT_FIELD_CLASSES}
+                >
+                  <option value="" disabled>
+                    Select school
                   </option>
-                ))}
-              </select>
-            </label>
+                  {SCHOOL_OPTIONS.map((school) => (
+                    <option key={school} value={school}>
+                      {school}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            </div>
           </div>
-        </div>
 
-        {submitError ? (
-          <div className="rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">
-            {submitError}
+          {submitError ? (
+            <div className="rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">
+              {submitError}
+            </div>
+          ) : null}
+
+          <div className="border-t border-zinc-200 pt-5">
+            <button
+              type="submit"
+              disabled={submitState === "loading"}
+              className={`${PRIMARY_BUTTON_CLASSES} w-full`}
+            >
+              {submitState === "loading" ? "CONFIRMING..." : "CONFIRM ORDER"}
+            </button>
           </div>
-        ) : null}
-
-        <div className="border-t border-zinc-200 pt-5">
-          <button
-            type="submit"
-            disabled={submitState === "loading"}
-            className={`${PRIMARY_BUTTON_CLASSES} w-full`}
-          >
-            {submitState === "loading" ? "CONFIRMING..." : "CONFIRM ORDER"}
-          </button>
         </div>
       </div>
     </form>

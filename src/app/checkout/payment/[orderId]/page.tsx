@@ -1,4 +1,4 @@
-import Link from "next/link";
+import Image from "next/image";
 import { BankAccountCopyField } from "@/components/BankAccountCopyField";
 import { OrderAccessFallback } from "@/components/OrderAccessFallback";
 import { PaymentSlipUploadForm } from "@/components/PaymentSlipUploadForm";
@@ -10,15 +10,13 @@ import {
   PAYMENT_ACCOUNT_NUMBER,
   PAYMENT_BANK_NAME
 } from "@/lib/paymentDetails";
-import { getKhantokeTicketLabel, getOrderCustomerName, getOrderStatusLabel } from "@/lib/orderStatus";
+import { getOrderCustomerName, getOrderStatusLabel } from "@/lib/orderStatus";
 import { getOrderById, getPaymentSlipUploadAvailability } from "@/lib/orderStore";
 import { formatStoredProductSize } from "@/lib/productSizing";
 
 export const dynamic = "force-dynamic";
 
 const INFO_CARD_CLASSES = "rounded-3xl border border-zinc-300 bg-white p-5";
-const SECONDARY_ACTION_LINK_CLASSES =
-  "inline-flex items-center justify-center rounded-full border border-apple-blue/20 bg-white px-5 py-2.5 text-sm font-medium text-apple-blue transition hover:bg-apple-blue-soft focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-apple-blue/15";
 
 type CheckoutPaymentPageProps = {
   params: {
@@ -50,24 +48,19 @@ export default async function CheckoutPaymentPage({ params }: CheckoutPaymentPag
           <div className="mt-6 space-y-4">
             <div className={INFO_CARD_CLASSES}>
               <p className="text-xs font-semibold tracking-[0.1em] text-zinc-500">ORDER SUMMARY</p>
-              <div
-                className={`mt-4 rounded-2xl border px-4 py-3 text-sm ${
-                  order.khantokeTicket
-                    ? "border-emerald-200 bg-emerald-50 text-emerald-800"
-                    : "border-amber-200 bg-amber-50 text-amber-800"
-                }`}
-              >
-                {getKhantokeTicketLabel(order.khantokeTicket)}
-              </div>
               <div className="mt-4 grid gap-6 md:grid-cols-2">
                 <div className="space-y-2 text-sm text-zinc-700">
-                  <h2 className="text-xl font-semibold text-zinc-900">{order.product.name}</h2>
-                  <p>Size: {formatStoredProductSize(order.product.category, order.size)}</p>
-                  <p>Quantity: {order.quantity}</p>
-                  <p>Unit Price: {formatPrice(order.product.price)}</p>
-                  <p className="font-semibold text-zinc-900">
-                    Total: <span className="text-apple-blue">{formatPrice(order.totalAmount)}</span>
-                  </p>
+                  {order.items.map((item) => (
+                    <div key={item.id ?? `${item.product.slug}-${item.size}`} className="rounded-2xl bg-[#f7f7f9] p-4">
+                      <h2 className="text-lg font-semibold text-zinc-900">{item.product.name}</h2>
+                      <p>Size: {formatStoredProductSize(item.product.category, item.size)}</p>
+                      <p>Quantity: {item.quantity}</p>
+                      <p>Unit Price: {formatPrice(item.unitPrice)}</p>
+                      <p className="font-semibold text-zinc-900">
+                        Total: <span className="text-apple-blue">{formatPrice(item.totalAmount)}</span>
+                      </p>
+                    </div>
+                  ))}
                 </div>
 
                 <div className="space-y-2 text-sm text-zinc-700">
@@ -87,6 +80,15 @@ export default async function CheckoutPaymentPage({ params }: CheckoutPaymentPag
             <div className={INFO_CARD_CLASSES}>
               <p className="text-xs font-semibold tracking-[0.1em] text-zinc-500">BANK ACCOUNT</p>
               <h2 className="mt-2 text-xl font-semibold text-zinc-900">{PAYMENT_BANK_NAME}</h2>
+              <div className="mt-4 flex justify-center">
+                <Image
+                  src="/images/Logo_Bangkok_Bank_Public_Company_Limited.svg.png"
+                  alt="Bangkok Bank"
+                  width={360}
+                  height={120}
+                  className="h-12 w-auto object-contain md:h-14"
+                />
+              </div>
 
               <BankAccountCopyField
                 formattedAccountNumber={PAYMENT_ACCOUNT_NUMBER}
@@ -117,15 +119,6 @@ export default async function CheckoutPaymentPage({ params }: CheckoutPaymentPag
                     {slipUploadAvailability.message ?? "Slip upload is not available right now."}
                   </div>
                 )}
-              </div>
-
-              <div className="mt-6 flex flex-wrap gap-3">
-                <Link href="/checkout" className={SECONDARY_ACTION_LINK_CLASSES}>
-                  Back to Cart
-                </Link>
-                <Link href="/" className={SECONDARY_ACTION_LINK_CLASSES}>
-                  Back to Home
-                </Link>
               </div>
             </div>
           </div>

@@ -3,7 +3,7 @@ import { OrderAccessFallback } from "@/components/OrderAccessFallback";
 import { Container } from "@/components/ui/Container";
 import { formatOrderNumber } from "@/lib/formatOrderNumber";
 import { formatPrice } from "@/lib/formatPrice";
-import { getKhantokeTicketLabel, getOrderCustomerName, getOrderStatusLabel } from "@/lib/orderStatus";
+import { getOrderCustomerName } from "@/lib/orderStatus";
 import { getOrderById } from "@/lib/orderStore";
 
 export const dynamic = "force-dynamic";
@@ -26,43 +26,26 @@ export default async function CheckoutCompletePage({ params }: CheckoutCompleteP
     return <OrderAccessFallback orderId={params.orderId} title="Unable to open the order status page" />;
   }
 
-  const isPaid = order.status === "paid" || order.status === "preparing" || order.status === "shipped";
-
   return (
     <section className="bg-[#ececec] py-6 md:py-10">
       <Container className="max-w-4xl">
         <div className="font-sf-pro rounded-[2rem] border border-zinc-300 bg-[#f5f5f7] p-6 md:p-8">
-          <p className="text-xs font-semibold tracking-[0.1em] text-zinc-500">ORDER STATUS</p>
-          <h1 className="mt-2 text-2xl font-semibold tracking-tight text-zinc-900 md:text-3xl">
-            {isPaid ? "Payment confirmed" : "Payment slip submitted"}
+          <h1 className="text-4xl font-semibold tracking-tight text-zinc-900 md:text-6xl">
+            Order Confirmed
           </h1>
           <p className="mt-2 text-sm text-zinc-600">
-            Order {formatOrderNumber(order)} is now{" "}
-            <span className="font-medium text-zinc-900">{getOrderStatusLabel(order.status)}</span>.
-            {isPaid
-              ? " Your payment has already been approved."
-              : " Our team will review the slip and update the order when payment is confirmed."}
+            We have received your payment slip for order{" "}
+            <span className="font-medium text-zinc-900">{formatOrderNumber(order)}</span>.
           </p>
-
-          <div
-            className={`mt-4 rounded-2xl border px-4 py-3 text-sm ${
-              order.khantokeTicket
-                ? "border-emerald-200 bg-emerald-50 text-emerald-800"
-                : "border-amber-200 bg-amber-50 text-amber-800"
-            }`}
-          >
-            {getKhantokeTicketLabel(order.khantokeTicket)}
-          </div>
 
           <div className="mt-6 rounded-3xl border border-zinc-300 bg-white p-5">
             <div className="grid gap-3 text-sm text-zinc-700 md:grid-cols-2">
-              <p>Product: {order.product.name}</p>
+              <p>Products: {order.items.map((item) => item.product.name).join(", ")}</p>
               <p>Amount: {formatPrice(order.totalAmount)}</p>
               <p>Name: {getOrderCustomerName(order.customer)}</p>
               <p>Student Code: {order.customer.studentCode || "-"}</p>
               <p>Phone: {order.customer.phone}</p>
               <p>Parent Phone: {order.customer.parentPhone || "-"}</p>
-              <p>Status: {getOrderStatusLabel(order.status)}</p>
               <p>Uploaded Slip: {order.slip?.originalName ?? "-"}</p>
             </div>
           </div>

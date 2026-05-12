@@ -862,6 +862,7 @@ def ensure_db() -> None:
               size TEXT NOT NULL,
               quantity INTEGER NOT NULL,
               total_amount INTEGER NOT NULL,
+              items_json TEXT NOT NULL DEFAULT '[]',
               student_code TEXT NOT NULL DEFAULT '',
               full_name TEXT NOT NULL DEFAULT '',
               parent_phone TEXT NOT NULL DEFAULT '',
@@ -918,6 +919,8 @@ def ensure_db() -> None:
           connection.execute("ALTER TABLE orders ADD COLUMN full_name TEXT NOT NULL DEFAULT ''")
       if "parent_phone" not in columns:
           connection.execute("ALTER TABLE orders ADD COLUMN parent_phone TEXT NOT NULL DEFAULT ''")
+      if "items_json" not in columns:
+          connection.execute("ALTER TABLE orders ADD COLUMN items_json TEXT NOT NULL DEFAULT '[]'")
       existing_rows = connection.execute(
           "SELECT internal_id FROM orders WHERE access_token IS NULL OR access_token = ''"
       ).fetchall()
@@ -1097,6 +1100,34 @@ def serialize_order(row: sqlite3.Row, include_access_token: bool = False) -> dic
             "size": row["slip_size"],
             "uploadedAt": row["slip_uploaded_at"],
         }
+    items: list[dict[str, Any]] = []
+    if "items_json" in row_keys and row["items_json"]:
+        try:
+            parsed_items = json.loads(row["items_json"])
+            if isinstance(parsed_items, list):
+                items = [item for item in parsed_items if isinstance(item, dict)]
+        except json.JSONDecodeError:
+            items = []
+
+    if not items:
+        items = [
+            {
+                "id": row["product_slug"],
+                "product": {
+                    "slug": row["product_slug"],
+                    "name": row["product_name"],
+                    "shortName": row["product_short_name"],
+                    "tagline": row["product_tagline"],
+                    "price": row["product_price"],
+                    "image": row["product_image"],
+                    "category": row["product_category"],
+                },
+                "size": row["size"],
+                "quantity": row["quantity"],
+                "unitPrice": row["product_price"],
+                "totalAmount": row["product_price"] * row["quantity"],
+            }
+        ]
 
     payload = {
         "id": row["order_code"],
@@ -1126,6 +1157,7 @@ def serialize_order(row: sqlite3.Row, include_access_token: bool = False) -> dic
             "image": row["product_image"],
             "category": row["product_category"],
         },
+        "items": items,
         "customer": {
             "studentCode": row["student_code"] or "",
             "email": row["email"],
@@ -1254,12 +1286,65 @@ def validate_order_payload(payload: Any) -> tuple[dict[str, Any] | None, str | N
     if not isinstance(total_amount, int) or total_amount < 0:
         return None, "totalAmount must be a non-negative integer"
 
+    raw_items = payload.get("items")
+    normalized_items: list[dict[str, Any]] = []
+    if isinstance(raw_items, list) and raw_items:
+        for index, item in enumerate(raw_items):
+            if not isinstance(item, dict):
+                return None, "items must contain objects"
+
+            item_product = item.get("product")
+            if not isinstance(item_product, dict):
+                return None, "item.product is required"
+
+            for field in required_product_fields:
+                if field not in item_product or item_product[field] in (None, ""):
+                    return None, f"items[{index}].product.{field} is required"
+
+            item_size = item.get("size")
+            item_quantity = item.get("quantity")
+            item_unit_price = item.get("unitPrice", item_product.get("price"))
+            item_total_amount = item.get("totalAmount")
+
+            if not isinstance(item_size, str) or not item_size.strip():
+                return None, f"items[{index}].size is required"
+            if not isinstance(item_quantity, int) or item_quantity < 1:
+                return None, f"items[{index}].quantity must be a positive integer"
+            if not isinstance(item_unit_price, int) or item_unit_price < 0:
+                return None, f"items[{index}].unitPrice must be a non-negative integer"
+            if not isinstance(item_total_amount, int):
+                item_total_amount = item_unit_price * item_quantity
+
+            normalized_items.append(
+                {
+                    "id": str(item.get("id") or f"{item_product.get('slug', 'item')}-{index + 1}"),
+                    "product": item_product,
+                    "size": item_size.strip(),
+                    "quantity": item_quantity,
+                    "unitPrice": item_unit_price,
+                    "totalAmount": item_total_amount,
+                }
+            )
+
+    if not normalized_items:
+        normalized_items = [
+            {
+                "id": str(product.get("slug") or "item-1"),
+                "product": product,
+                "size": size.strip(),
+                "quantity": quantity,
+                "unitPrice": int(product["price"]),
+                "totalAmount": int(product["price"]) * quantity,
+            }
+        ]
+
     return {
         "product": product,
         "customer": customer,
         "size": size.strip(),
         "quantity": quantity,
         "total_amount": total_amount,
+        "items": normalized_items,
     }, None
 
 
@@ -1370,10 +1455,10 @@ def create_order(connection: sqlite3.Connection, payload: dict[str, Any]) -> dic
         INSERT INTO orders (
             round_number, status, payment_status, created_at, updated_at,
             product_slug, product_name, product_short_name, product_tagline, product_price, product_image, product_category,
-            size, quantity, total_amount, access_token,
+            size, quantity, total_amount, items_json, access_token,
             student_code, full_name, parent_phone,
             first_name, last_name, nickname, email, phone, school
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """,
         (
             ORDER_ROUND,
@@ -1391,6 +1476,7 @@ def create_order(connection: sqlite3.Connection, payload: dict[str, Any]) -> dic
             payload["size"],
             payload["quantity"],
             payload["total_amount"],
+            json.dumps(payload["items"], ensure_ascii=False),
             access_token,
             payload["customer"]["studentCode"],
             payload["customer"]["fullName"],
@@ -1443,6 +1529,7 @@ def update_order(connection: sqlite3.Connection, order_code: str, payload: dict[
             size = ?,
             quantity = ?,
             total_amount = ?,
+            items_json = ?,
             student_code = ?,
             full_name = ?,
             parent_phone = ?,
@@ -1474,6 +1561,7 @@ def update_order(connection: sqlite3.Connection, order_code: str, payload: dict[
             payload["size"],
             payload["quantity"],
             payload["total_amount"],
+            json.dumps(payload["items"], ensure_ascii=False),
             payload["customer"]["studentCode"],
             payload["customer"]["fullName"],
             payload["customer"]["parentPhone"],

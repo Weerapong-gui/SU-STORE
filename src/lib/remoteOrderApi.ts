@@ -1,5 +1,5 @@
 import { ValidatedOrderInput } from "@/lib/orderValidation";
-import { Order, OrderCustomer, OrderProductSnapshot } from "@/types/order";
+import { Order, OrderCustomer, OrderItem, OrderProductSnapshot } from "@/types/order";
 
 const REMOTE_ORDER_API_BASE_URL = process.env.ORDER_API_BASE_URL?.replace(/\/$/, "") ?? "";
 const REMOTE_ORDER_API_TOKEN = process.env.ORDER_API_TOKEN ?? "";
@@ -17,6 +17,7 @@ type RemoteOrderPayload = {
   size: string;
   quantity: number;
   totalAmount: number;
+  items: OrderItem[];
 };
 
 type RemoteOrderRequestOptions = RequestInit & {
@@ -47,12 +48,27 @@ function createCustomerSnapshot(input: ValidatedOrderInput): OrderCustomer {
 }
 
 function createRemoteOrderPayload(input: ValidatedOrderInput): RemoteOrderPayload {
+  const items = input.items.map((item, index) => {
+    const product = createProductSnapshot({ ...input, product: item.product });
+
+    return {
+      id: `${product.slug}-${index + 1}`,
+      product,
+      size: item.size,
+      quantity: item.quantity,
+      unitPrice: item.product.price,
+      totalAmount: item.product.price * item.quantity
+    };
+  });
+  const totalAmount = items.reduce((sum, item) => sum + item.totalAmount, 0);
+
   return {
-    product: createProductSnapshot(input),
+    product: items[0].product,
     customer: createCustomerSnapshot(input),
-    size: input.size,
-    quantity: input.quantity,
-    totalAmount: input.product.price * input.quantity
+    size: items[0].size,
+    quantity: items[0].quantity,
+    totalAmount,
+    items
   };
 }
 

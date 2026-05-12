@@ -14,8 +14,6 @@ export const SIZE_OPTIONS = [
 ] as const;
 export const ONE_SIZE_OPTION = "ONE SIZE" as const;
 
-export const EMAIL_DOMAIN = "lamduan.mfu.ac.th";
-
 export const SCHOOL_OPTIONS = [
   "School of Agro-Industry",
   "School of Cosmetic Science",
