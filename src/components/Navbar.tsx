@@ -10,7 +10,7 @@ import { Container } from "@/components/ui/Container";
 const navigationLinks = [
   { href: "/", label: "Home" },
   { href: "/products", label: "Products" },
-  { href: "/check-order", label: "เช็คสถานะ" },
+  { href: "/check-order", label: "Track Order" },
   { href: "/checkout", label: "Checkout" }
 ];
 
