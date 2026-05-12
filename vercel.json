@@ -1,6 +1,6 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "env": {
-    "ORDER_API_BASE_URL": "https://933555f84d63d8.lhr.life"
+    "ORDER_API_BASE_URL": "https://houston-holder-popularity-signed.trycloudflare.com"
   }
 }
