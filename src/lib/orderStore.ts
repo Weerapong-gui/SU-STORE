@@ -84,6 +84,12 @@ function getOrderBlobPath(orderId: string) {
   return `orders/${orderId}.json`;
 }
 
+function nowThaiISO() {
+  const d = new Date();
+  const thai = new Date(d.getTime() + 7 * 60 * 60 * 1000);
+  return thai.toISOString().replace("Z", "+07:00");
+}
+
 function generateOrderId() {
   const suffix = randomBytes(3).toString("hex").toUpperCase();
   return `SU-${Date.now().toString(36).toUpperCase()}${suffix}`;
@@ -120,7 +126,7 @@ function buildOrderFromInput(
   localOrderNumber?: LocalOrderNumber,
   khantokeTicketAllocation?: KhantokeTicketAllocation
 ): Order {
-  const now = new Date().toISOString();
+  const now = nowThaiISO();
   const items = createOrderItems(input);
   const primaryItem = items[0];
   const totalAmount = items.reduce((sum, item) => sum + item.totalAmount, 0);
@@ -457,7 +463,7 @@ async function allocateLocalKhantokeTicket(
     return { khantokeTicket: false, khantokeTicketClaimedAt: null };
   }
 
-  const claimedAt = new Date().toISOString();
+  const claimedAt = nowThaiISO();
   state.claims[orderId] = claimedAt;
   if (normalizedCode) {
     state.studentCodes[normalizedCode] = orderId;
@@ -789,14 +795,14 @@ export async function attachSlipToOrder(orderId: string, file: File) {
     storedName: storageMode === "blob" ? `slips/${storedName}` : storedName,
     mimeType: file.type,
     size: file.size,
-    uploadedAt: new Date().toISOString()
+    uploadedAt: nowThaiISO()
   };
 
   const updatedOrder: Order = {
     ...existingOrder,
     status: "waiting_confirm",
     paymentStatus: "waiting_confirm",
-    updatedAt: new Date().toISOString(),
+    updatedAt: nowThaiISO(),
     slip
   };
 

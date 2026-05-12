@@ -13,7 +13,7 @@ import secrets
 import sqlite3
 import urllib.error
 import urllib.request
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 from email.parser import BytesParser
 from email.policy import default
 from http import HTTPStatus
@@ -1244,8 +1244,11 @@ ORDER_VIEW_HTML = r"""<!doctype html>
 </html>"""
 
 
+TZ_BANGKOK = timezone(timedelta(hours=7))
+
+
 def now_iso() -> str:
-    return datetime.now(timezone.utc).replace(microsecond=0).isoformat().replace("+00:00", "Z")
+    return datetime.now(TZ_BANGKOK).replace(microsecond=0).isoformat()
 
 
 def ensure_db() -> None:
@@ -2739,7 +2742,7 @@ class OrderRequestHandler(BaseHTTPRequestHandler):
             self._send_json(HTTPStatus.OK, order)
 
     def log_message(self, format: str, *args: Any) -> None:
-        timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        timestamp = datetime.now(TZ_BANGKOK).strftime("%Y-%m-%d %H:%M:%S")
         print(f"[{timestamp}] {self.client_address[0]} {format % args}")
 
 
