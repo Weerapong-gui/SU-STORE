@@ -185,6 +185,34 @@ ADMIN_HTML = r"""<!doctype html>
     .badge.waiting_confirm { background: #fff7ed; color: var(--warn); }
     .badge.paid, .badge.preparing, .badge.shipped { background: #ecfdf3; color: var(--ok); }
     .badge.rejected, .badge.cancelled { background: #fef3f2; color: var(--danger); }
+    .status-buttons { display: flex; flex-wrap: wrap; gap: 6px; max-width: 230px; }
+    .status-choice {
+      min-height: 30px; padding: 0 9px; border-radius: 999px;
+      border-color: var(--line); background: #fff; color: var(--muted);
+      font-size: 11px; font-weight: 800;
+    }
+    .status-choice.active { border-color: var(--accent); background: #eaf4ff; color: var(--accent); }
+    .status-choice[data-status="paid"], .status-choice[data-status="preparing"], .status-choice[data-status="shipped"] {
+      border-color: #bbf7d0; color: var(--ok);
+    }
+    .status-choice[data-status="rejected"], .status-choice[data-status="cancelled"] {
+      border-color: #fecaca; color: var(--danger);
+    }
+    .slip-popup {
+      display: none; position: fixed; right: 20px; top: 92px; z-index: 120;
+      width: min(420px, calc(100vw - 40px)); max-height: calc(100vh - 120px);
+      overflow: hidden; border: 1px solid var(--line); border-radius: 18px;
+      background: #fff; box-shadow: 0 28px 80px rgba(15, 23, 42, .24);
+    }
+    .slip-popup.open { display: block; }
+    .slip-popup header {
+      position: static; display: flex; align-items: center; justify-content: space-between;
+      padding: 12px 14px; border-bottom: 1px solid var(--line); background: #fff;
+    }
+    .slip-popup strong { font-size: 13px; }
+    .slip-popup button { min-height: 32px; padding: 0 10px; }
+    .slip-frame { width: 100%; height: min(68vh, 640px); border: 0; display: block; background: #f4f4f5; }
+    .slip-image { width: 100%; max-height: min(68vh, 640px); object-fit: contain; display: block; background: #f4f4f5; }
     .products-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px,1fr)); gap: 16px; }
     .product-card { background: #fff; border: 1px solid var(--line); border-radius: 12px; overflow: hidden; transition: box-shadow .2s; }
     .product-card:hover { box-shadow: 0 4px 20px rgba(0,0,0,.08); }
@@ -223,6 +251,8 @@ ADMIN_HTML = r"""<!doctype html>
     @media (max-width: 720px) {
       .analytics-grid { grid-template-columns: 1fr; }
       .toolbar input, .toolbar select { max-width: 100%; }
+      .slip-popup { left: 12px; right: 12px; top: auto; bottom: 12px; width: auto; max-height: 78vh; }
+      .slip-frame, .slip-image { height: 58vh; max-height: 58vh; }
     }
   </style>
 </head>
@@ -255,7 +285,7 @@ ADMIN_HTML = r"""<!doctype html>
           <option value="waiting_confirm">waiting_confirm</option>
           <option value="paid">paid</option>
           <option value="preparing">preparing</option>
-          <option value="shipped">shipped</option>
+          <option value="shipped">ready to receive</option>
           <option value="cancelled">cancelled</option>
           <option value="rejected">rejected</option>
         </select>
@@ -398,6 +428,15 @@ ADMIN_HTML = r"""<!doctype html>
     </div>
   </div>
 
+  <!-- SLIP POPUP -->
+  <div class="slip-popup" id="slipPopup" aria-live="polite">
+    <header>
+      <strong id="slipPopupTitle">Payment slip</strong>
+      <button class="ghost" id="closeSlipPopupBtn" type="button">Close</button>
+    </header>
+    <div id="slipPopupBody"></div>
+  </div>
+
   <script>
     // ── Token ──────────────────────────────────────────────────────────────────
     const tokenInput = document.querySelector("#tokenInput");
@@ -438,11 +477,24 @@ ADMIN_HTML = r"""<!doctype html>
         return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#039;" }[c];
       });
     }
+    function statusLabel(status) {
+      return statusLabels[status] || status || "-";
+    }
 
     // ── ORDERS ─────────────────────────────────────────────────────────────────
     var statuses = ["pending_payment","waiting_confirm","paid","preparing","shipped","cancelled","rejected"];
+    var statusLabels = {
+      pending_payment: "pending payment",
+      waiting_confirm: "waiting confirm",
+      paid: "paid",
+      preparing: "preparing",
+      shipped: "ready to receive",
+      cancelled: "cancelled",
+      rejected: "rejected"
+    };
     var allOrders = [];
     var serverSummary = {};
+    var activeSlipUrl = "";
 
     function setOrdersNotice(msg, err) {
       var el = document.querySelector("#ordersNotice");
@@ -479,17 +531,16 @@ ADMIN_HTML = r"""<!doctype html>
       document.querySelector("#ordersBody").innerHTML = orders.map(function(order) {
         var c = order.customer || {};
         var p = order.product || {};
-        var opts = statuses.map(function(s) {
-          return '<option value="' + s + '"' + (order.status === s ? " selected" : "") + '>' + s + '</option>';
+        var statusButtons = statuses.map(function(s) {
+          return '<button class="status-choice' + (order.status === s ? " active" : "") + '" data-oid="' + esc(order.id) + '" data-status="' + esc(s) + '" type="button">' + esc(statusLabel(s)) + '</button>';
         }).join("");
         return '<tr>' +
-          '<td><strong>' + esc(order.id) + '</strong><br/><span class="muted">' + esc(order.createdAt||"") + '</span><br/><span class="badge ' + esc(order.status) + '">' + esc(order.status) + '</span></td>' +
+          '<td><strong>' + esc(order.id) + '</strong><br/><span class="muted">' + esc(order.createdAt||"") + '</span><br/><span class="badge ' + esc(order.status) + '">' + esc(statusLabel(order.status)) + '</span></td>' +
           '<td><strong>' + esc(c.fullName||"-") + '</strong><br/><span class="muted">' + esc(c.studentCode||"-") + '</span><br/><span class="muted">' + esc(c.phone||"") + '</span></td>' +
           '<td><strong>' + esc(p.name||"-") + '</strong><br/><span class="muted">Size: ' + esc(order.size||"-") + ' / Qty: ' + esc(order.quantity||0) + '</span><br/><span class="money">' + esc(baht(order.totalAmount)) + '</span><br/><span class="muted">' + esc(c.school||"") + '</span></td>' +
           '<td><span class="muted">' + esc(order.paymentStatus||"-") + '</span><br/><span class="muted">' + (order.slip ? "Slip uploaded" : "No slip") + '</span></td>' +
-          '<td><select data-oid="' + esc(order.id) + '" class="statusSel" style="min-width:0;font-size:12px;min-height:36px">' + opts + '</select></td>' +
+          '<td><div class="status-buttons">' + statusButtons + '</div></td>' +
           '<td><div style="display:grid;gap:5px">' +
-            '<button class="primary updateBtn" data-oid="' + esc(order.id) + '" style="font-size:12px;min-height:32px">Update Status</button>' +
             '<button class="ok-btn confirmBtn" data-oid="' + esc(order.id) + '" style="font-size:12px;min-height:32px"' + (order.status==="waiting_confirm" ? "" : " disabled") + '>✓ Confirm Paid</button>' +
             '<button class="danger-btn rejectBtn" data-oid="' + esc(order.id) + '" style="font-size:12px;min-height:32px"' + (["waiting_confirm","pending_payment"].includes(order.status) ? "" : " disabled") + '>✗ Reject</button>' +
             '<button class="ghost slipBtn" data-oid="' + esc(order.id) + '" style="font-size:12px;min-height:32px"' + (order.slip ? "" : " disabled") + '>View Slip</button>' +
@@ -525,9 +576,29 @@ ADMIN_HTML = r"""<!doctype html>
       });
       if (!res.ok) throw new Error(await res.text());
       var blob = await res.blob();
+      showSlipPopup(orderId, blob);
+    }
+
+    function closeSlipPopup() {
+      var popup = document.querySelector("#slipPopup");
+      popup.classList.remove("open");
+      document.querySelector("#slipPopupBody").innerHTML = "";
+      if (activeSlipUrl) URL.revokeObjectURL(activeSlipUrl);
+      activeSlipUrl = "";
+    }
+
+    function showSlipPopup(orderId, blob) {
+      closeSlipPopup();
       var url = URL.createObjectURL(blob);
-      window.open(url, "_blank", "noopener,noreferrer");
-      setTimeout(function() { URL.revokeObjectURL(url); }, 60000);
+      activeSlipUrl = url;
+      document.querySelector("#slipPopupTitle").textContent = "Payment slip " + orderId;
+      var body = document.querySelector("#slipPopupBody");
+      if (blob.type === "application/pdf") {
+        body.innerHTML = '<iframe class="slip-frame" src="' + url + '" title="Payment slip"></iframe>';
+      } else {
+        body.innerHTML = '<img class="slip-image" src="' + url + '" alt="Payment slip for ' + esc(orderId) + '" />';
+      }
+      document.querySelector("#slipPopup").classList.add("open");
     }
 
     function exportCsv() {
@@ -554,11 +625,11 @@ ADMIN_HTML = r"""<!doctype html>
     document.querySelector("#statusFilter").addEventListener("change", renderOrders);
 
     document.addEventListener("click", async function(e) {
-      var updateBtn = e.target.closest(".updateBtn");
-      if (updateBtn) {
-        var oid = updateBtn.dataset.oid;
-        var sel = document.querySelector('select[data-oid="' + oid + '"]');
-        try { await patchStatus(oid, sel.value); setOrdersNotice("Updated " + oid); await loadOrders(); }
+      var statusBtn = e.target.closest(".status-choice");
+      if (statusBtn) {
+        var oid = statusBtn.dataset.oid;
+        var nextStatus = statusBtn.dataset.status;
+        try { await patchStatus(oid, nextStatus); setOrdersNotice("Updated " + oid + " to " + statusLabel(nextStatus)); await loadOrders(); }
         catch(err) { setOrdersNotice(err.message, true); }
         return;
       }
@@ -577,6 +648,10 @@ ADMIN_HTML = r"""<!doctype html>
       }
       var slipBtn = e.target.closest(".slipBtn");
       if (slipBtn) { viewSlip(slipBtn.dataset.oid).catch(function(err) { setOrdersNotice(err.message, true); }); return; }
+    });
+    document.querySelector("#closeSlipPopupBtn").addEventListener("click", closeSlipPopup);
+    document.addEventListener("keydown", function(e) {
+      if (e.key === "Escape") closeSlipPopup();
     });
 
     // ── PRODUCTS ───────────────────────────────────────────────────────────────
@@ -999,6 +1074,46 @@ ORDER_VIEW_HTML = r"""<!doctype html>
     .badge.waiting_confirm { background: #fff7ed; color: var(--orange); }
     .badge.paid, .badge.preparing, .badge.shipped { background: #ecfdf3; color: var(--green); }
     .badge.rejected, .badge.cancelled { background: #fef3f2; color: var(--red); }
+    .slip-popup {
+      display: none;
+      position: fixed;
+      right: 20px;
+      top: 92px;
+      z-index: 30;
+      width: min(420px, calc(100vw - 40px));
+      max-height: calc(100vh - 120px);
+      overflow: hidden;
+      border: 1px solid var(--line);
+      border-radius: 18px;
+      background: #fff;
+      box-shadow: 0 28px 80px rgba(15, 23, 42, .22);
+    }
+    .slip-popup.open { display: block; }
+    .slip-popup-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      padding: 12px 14px;
+      border-bottom: 1px solid var(--line);
+      background: #fff;
+    }
+    .slip-popup-header strong { font-size: 13px; }
+    .slip-popup-header button { min-height: 32px; padding: 0 12px; }
+    .slip-frame {
+      width: 100%;
+      height: min(68vh, 640px);
+      border: 0;
+      display: block;
+      background: #f4f4f5;
+    }
+    .slip-image {
+      width: 100%;
+      max-height: min(68vh, 640px);
+      object-fit: contain;
+      display: block;
+      background: #f4f4f5;
+    }
     .empty {
       padding: 28px;
       color: var(--muted);
@@ -1017,6 +1132,11 @@ ORDER_VIEW_HTML = r"""<!doctype html>
       .toolbar { grid-template-columns: 1fr; }
       .summary { grid-template-columns: 1fr; }
       .summary-item { border-right: 0; }
+      .slip-popup {
+        inset: auto 12px 12px 12px;
+        width: auto;
+        max-height: 72vh;
+      }
     }
   </style>
 </head>
@@ -1038,7 +1158,7 @@ ORDER_VIEW_HTML = r"""<!doctype html>
         <option value="waiting_confirm">waiting_confirm</option>
         <option value="paid">paid</option>
         <option value="preparing">preparing</option>
-        <option value="shipped">shipped</option>
+        <option value="shipped">ready to receive</option>
         <option value="cancelled">cancelled</option>
         <option value="rejected">rejected</option>
       </select>
@@ -1048,6 +1168,13 @@ ORDER_VIEW_HTML = r"""<!doctype html>
     <p class="notice" id="notice"></p>
     <section class="table-wrap" id="tableWrap"></section>
   </main>
+  <aside class="slip-popup" id="slipPopup" aria-live="polite">
+    <div class="slip-popup-header">
+      <strong id="slipPopupTitle">Payment slip</strong>
+      <button class="secondary" id="closeSlipPopupButton" type="button">Close</button>
+    </div>
+    <div id="slipPopupBody"></div>
+  </aside>
   <script>
     const tokenInput = document.querySelector("#tokenInput");
     const searchInput = document.querySelector("#searchInput");
@@ -1056,8 +1183,21 @@ ORDER_VIEW_HTML = r"""<!doctype html>
     const notice = document.querySelector("#notice");
     const summary = document.querySelector("#summary");
     const tableWrap = document.querySelector("#tableWrap");
+    const slipPopup = document.querySelector("#slipPopup");
+    const slipPopupTitle = document.querySelector("#slipPopupTitle");
+    const slipPopupBody = document.querySelector("#slipPopupBody");
     let allOrders = [];
     let serverSummary = {};
+    let activeSlipUrl = "";
+    const statusLabels = {
+      pending_payment: "pending payment",
+      waiting_confirm: "waiting confirm",
+      paid: "paid",
+      preparing: "preparing",
+      shipped: "ready to receive",
+      cancelled: "cancelled",
+      rejected: "rejected"
+    };
 
     tokenInput.value = localStorage.getItem("suStoreOrderViewToken") || localStorage.getItem("suStoreAdminToken") || "";
 
@@ -1077,6 +1217,10 @@ ORDER_VIEW_HTML = r"""<!doctype html>
         currency: "THB",
         maximumFractionDigits: 0
       }).format(Number(value || 0));
+    }
+
+    function statusLabel(status) {
+      return statusLabels[status] || status || "-";
     }
 
     function setNotice(message, isError = false) {
@@ -1155,7 +1299,7 @@ ORDER_VIEW_HTML = r"""<!doctype html>
               return `
                 <tr>
                   <td><strong>${text(order.id || "-")}</strong></td>
-                  <td><span class="badge ${text(order.status || "")}">${text(order.status || "-")}</span></td>
+                  <td><span class="badge ${text(order.status || "")}">${text(statusLabel(order.status))}</span></td>
                   <td>
                     <strong>${text(customer.fullName || "-")}</strong><br />
                     <span class="tiny">${text(customer.studentCode || "-")}</span><br />
@@ -1217,9 +1361,27 @@ ORDER_VIEW_HTML = r"""<!doctype html>
         throw new Error(await response.text());
       }
       const blob = await response.blob();
+      showSlipPopup(orderId, blob);
+    }
+
+    function closeSlipPopup() {
+      slipPopup.classList.remove("open");
+      slipPopupBody.innerHTML = "";
+      if (activeSlipUrl) URL.revokeObjectURL(activeSlipUrl);
+      activeSlipUrl = "";
+    }
+
+    function showSlipPopup(orderId, blob) {
+      closeSlipPopup();
       const url = URL.createObjectURL(blob);
-      window.open(url, "_blank", "noopener,noreferrer");
-      setTimeout(() => URL.revokeObjectURL(url), 60000);
+      activeSlipUrl = url;
+      slipPopupTitle.textContent = `Payment slip ${orderId}`;
+      if (blob.type === "application/pdf") {
+        slipPopupBody.innerHTML = `<iframe class="slip-frame" src="${url}" title="Payment slip"></iframe>`;
+      } else {
+        slipPopupBody.innerHTML = `<img class="slip-image" src="${url}" alt="Payment slip for ${text(orderId)}" />`;
+      }
+      slipPopup.classList.add("open");
     }
 
     refreshButton.addEventListener("click", () => loadOrders().catch((error) => setNotice(error.message, true)));
@@ -1230,6 +1392,10 @@ ORDER_VIEW_HTML = r"""<!doctype html>
       if (slipButton) {
         openSlip(slipButton.dataset.orderId).catch((error) => setNotice(error.message, true));
       }
+    });
+    document.querySelector("#closeSlipPopupButton").addEventListener("click", closeSlipPopup);
+    document.addEventListener("keydown", (event) => {
+      if (event.key === "Escape") closeSlipPopup();
     });
 
     if (tokenInput.value) {
