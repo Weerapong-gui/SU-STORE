@@ -70,7 +70,7 @@ export function ProductConfigurator({
     normalizeStandardProductSize(product, sizeOnly)
   );
   const [selectedBundleSize, setSelectedBundleSize] = useState(() =>
-    parseBundleSizeSelection(defaultSize)
+    parseBundleSizeSelection(sizeOnly)
   );
   const [selectedSchool, setSelectedSchool] = useState(
     product.category === "headband" ? (defaultSchool ?? "") : ""
@@ -83,7 +83,7 @@ export function ProductConfigurator({
   const baseStoredSize = bundleProduct
     ? getStoredProductSize(product, `POLO:${selectedBundleSize.polo}|JACKET:${selectedBundleSize.jacket}`)
     : getStoredProductSize(product, selectedSize);
-  const storedSize = selectedColor && !bundleProduct
+  const storedSize = selectedColor
     ? `${baseStoredSize} / ${selectedColor.name}`
     : baseStoredSize;
   const displayImages = selectedColor ? [selectedColor.image] : product.images;
@@ -328,11 +328,12 @@ export function ProductConfigurator({
               <>
                 <p>Polo Size: {selectedBundleSize.polo}</p>
                 <p>Jacket Size: {selectedBundleSize.jacket}</p>
+                {selectedColor && <p>Jacket Color: {selectedColor.name}</p>}
               </>
             ) : (
               <p>Size: {product.requiresSize ? selectedSize : "ONE SIZE"}</p>
             )}
-            {selectedColor && <p>Color: {selectedColor.name}</p>}
+            {!bundleProduct && selectedColor && <p>Color: {selectedColor.name}</p>}
             {selectedSchool && <p>School: {selectedSchool}</p>}
           </div>
           <div className="mt-4 flex items-center justify-between border-t border-zinc-200 pt-4">

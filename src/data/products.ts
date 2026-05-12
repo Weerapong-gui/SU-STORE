@@ -20,7 +20,12 @@ export const products: Product[] = [
     tagline: "A fuller set for students who want the complete look.",
     description: "ชุดเซตสำหรับคนที่อยากได้ลุคครบในคำสั่งซื้อเดียว พร้อมเลือกไซซ์และสำนักวิชาได้เหมือนกลุ่มเสื้อ.",
     price: 799,
-    images: ["/images/FRESHER BUNDLE.png", "/images/FRESHER BUNDLE.png"],
+    images: ["/Jacket/B.png"],
+    colors: [
+      { name: "Blue",  hex: "#0d0f40", image: "/Jacket/B.png" },
+      { name: "Red",   hex: "#9d1c1f", image: "/Jacket/R.png" },
+      { name: "White", hex: "#f7f9fc", image: "/Jacket/w.png" },
+    ],
     category: "bundle",
     requiresSize: true,
     requiresSchool: true
