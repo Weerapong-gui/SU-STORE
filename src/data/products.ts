@@ -32,7 +32,12 @@ export const products: Product[] = [
     tagline: "Layer up with a clean campus-ready jacket.",
     description: "แจ็กเก็ตสำหรับวันกิจกรรมหรือวันที่อยากได้เลเยอร์เพิ่ม โดยใช้ flow เลือกไซซ์ จำนวน และสำนักวิชาเหมือนสินค้ากลุ่มเสื้อ.",
     price: 899,
-    images: ["/images/Pr1.png", "/images/Pr1.png"],
+    images: ["/Jacket/B.png"],
+    colors: [
+      { name: "Blue",  hex: "#0d0f40", image: "/Jacket/B.png" },
+      { name: "Red",   hex: "#9d1c1f", image: "/Jacket/R.png" },
+      { name: "White", hex: "#f7f9fc", image: "/Jacket/w.png" },
+    ],
     category: "jacket",
     requiresSize: true,
     requiresSchool: true

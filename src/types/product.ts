@@ -1,5 +1,7 @@
 export type ProductCategory = "single" | "bundle" | "jacket" | "headband";
 
+export type ColorVariant = { name: string; hex: string; image: string };
+
 export type Product = {
   slug: string;
   name: string;
@@ -8,6 +10,7 @@ export type Product = {
   description: string;
   price: number;
   images: string[];
+  colors?: ColorVariant[];
   category: ProductCategory;
   requiresSize: boolean;
   requiresSchool: boolean;

@@ -21,7 +21,7 @@ import {
   ProductSizeOption
 } from "@/lib/productSizing";
 import { cn } from "@/lib/utils";
-import { Product } from "@/types/product";
+import { ColorVariant, Product } from "@/types/product";
 
 type ProductConfiguratorProps = {
   product: Product;
@@ -55,8 +55,17 @@ export function ProductConfigurator({
     const parsedQuantity = Number.parseInt(defaultQuantity ?? "1", 10);
     return Number.isNaN(parsedQuantity) ? 1 : clampCartQuantity(parsedQuantity);
   });
+  const [selectedColor, setSelectedColor] = useState<ColorVariant | null>(() => {
+    if (!product.colors?.length) return null;
+    if (defaultSize?.includes(" / ")) {
+      const colorName = defaultSize.split(" / ")[1]?.trim();
+      return product.colors.find((c) => c.name === colorName) ?? product.colors[0];
+    }
+    return product.colors[0];
+  });
+  const sizeOnly = defaultSize?.includes(" / ") ? defaultSize.split(" / ")[0]?.trim() : defaultSize;
   const [selectedSize, setSelectedSize] = useState<ProductSizeOption>(
-    normalizeStandardProductSize(product, defaultSize)
+    normalizeStandardProductSize(product, sizeOnly)
   );
   const [selectedBundleSize, setSelectedBundleSize] = useState(() =>
     parseBundleSizeSelection(defaultSize)
@@ -66,9 +75,13 @@ export function ProductConfigurator({
 
   const totalPrice = useMemo(() => product.price * selectedQuantity, [product.price, selectedQuantity]);
   const primaryMode = intent === "cart" ? "cart" : "payment";
-  const storedSize = bundleProduct
+  const baseStoredSize = bundleProduct
     ? getStoredProductSize(product, `POLO:${selectedBundleSize.polo}|JACKET:${selectedBundleSize.jacket}`)
     : getStoredProductSize(product, selectedSize);
+  const storedSize = selectedColor && !bundleProduct
+    ? `${baseStoredSize} / ${selectedColor.name}`
+    : baseStoredSize;
+  const displayImages = selectedColor ? [selectedColor.image] : product.images;
 
   function updateQuantity(nextQuantity: number) {
     setSelectedQuantity(clampCartQuantity(nextQuantity));
@@ -106,14 +119,14 @@ export function ProductConfigurator({
     <div className="grid gap-6 lg:grid-cols-[1.05fr_0.95fr]">
       <div>
         <MobileProductSlider
-          images={product.images}
+          images={displayImages}
           productName={product.name}
           className="pb-2"
           slideClassName="h-[56vh] min-h-[320px] border border-zinc-300 bg-white shadow-soft"
         />
 
         <div className="hidden space-y-4 lg:block">
-          {product.images.map((image, index) => (
+          {displayImages.map((image, index) => (
             <div
               key={`${image}-${index}`}
               className="relative min-h-[320px] overflow-hidden rounded-[2rem] border border-zinc-300 bg-white shadow-soft md:min-h-[520px]"
@@ -140,6 +153,36 @@ export function ProductConfigurator({
           <p className="mt-3 text-sm text-zinc-600">{product.description}</p>
           <p className="mt-4 text-2xl font-semibold text-apple-blue">{formatPrice(product.price)}</p>
         </div>
+
+        {product.colors && product.colors.length > 0 && (
+          <div className="space-y-3">
+            <div className="flex items-center justify-between">
+              <p className="text-xs font-semibold tracking-[0.1em] text-zinc-700">COLOR</p>
+              <p className="text-xs font-medium text-zinc-500">{selectedColor?.name}</p>
+            </div>
+            <div className="flex gap-3">
+              {product.colors.map((color) => {
+                const isSelected = selectedColor?.name === color.name;
+                const isLight = color.name === "White";
+                return (
+                  <button
+                    key={color.name}
+                    type="button"
+                    onClick={() => setSelectedColor(color)}
+                    aria-label={color.name}
+                    title={color.name}
+                    className={cn(
+                      "h-8 w-8 rounded-full transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-apple-blue focus-visible:ring-offset-2",
+                      isSelected ? "ring-2 ring-apple-blue ring-offset-2" : "hover:scale-110",
+                      isLight ? "border border-zinc-300" : ""
+                    )}
+                    style={{ backgroundColor: color.hex }}
+                  />
+                );
+              })}
+            </div>
+          </div>
+        )}
 
         <div className="space-y-3">
           <div className="flex items-center justify-between gap-4">
@@ -267,6 +310,7 @@ export function ProductConfigurator({
             ) : (
               <p>Size: {product.requiresSize ? selectedSize : "ONE SIZE"}</p>
             )}
+            {selectedColor && <p>Color: {selectedColor.name}</p>}
           </div>
           <div className="mt-4 flex items-center justify-between border-t border-zinc-200 pt-4">
             <span className="text-sm text-zinc-600">Total</span>
