@@ -116,23 +116,20 @@ function CheckOrderContent() {
   const searchParams = useSearchParams();
   const router = useRouter();
 
-  const [input, setInput] = useState(searchParams.get("code") ?? searchParams.get("studentCode") ?? "");
+  const [input, setInput] = useState(searchParams.get("studentCode") ?? "");
   const [orders, setOrders] = useState<PublicOrder[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [searched, setSearched] = useState(false);
 
   const search = useCallback(async (value: string) => {
-    const q = value.trim().toUpperCase();
+    const q = value.trim();
     if (!q) return;
     setLoading(true);
     setError(null);
     setSearched(true);
 
-    const isOrderCode = /^FP\d+$/.test(q);
-    const param = isOrderCode ? `code=${encodeURIComponent(q)}` : `studentCode=${encodeURIComponent(value.trim())}`;
-
-    // Update URL
+    const param = `studentCode=${encodeURIComponent(q)}`;
     router.replace(`/check-order?${param}`, { scroll: false });
 
     try {
@@ -150,7 +147,7 @@ function CheckOrderContent() {
 
   // Auto-search from URL params on mount
   useEffect(() => {
-    const code = searchParams.get("code") ?? searchParams.get("studentCode");
+    const code = searchParams.get("studentCode");
     if (code) search(code);
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -166,7 +163,7 @@ function CheckOrderContent() {
         {/* Title */}
         <div className="mb-8 text-center">
           <h1 className="text-3xl font-bold tracking-tight text-zinc-900">เช็คสถานะออเดอร์</h1>
-          <p className="mt-2 text-zinc-500">กรอกเลขออเดอร์ (FP28XXXXX) หรือ รหัสนักศึกษา</p>
+          <p className="mt-2 text-zinc-500">กรอกรหัสนักศึกษาเพื่อดูสถานะออเดอร์</p>
         </div>
 
         {/* Search form */}
@@ -178,7 +175,7 @@ function CheckOrderContent() {
                 type="text"
                 value={input}
                 onChange={(e) => setInput(e.target.value)}
-                placeholder="FP2800010 หรือ 6831501178"
+                placeholder="รหัสนักศึกษา เช่น 6831501178"
                 className="h-12 w-full rounded-xl border border-black/[0.1] bg-white pl-10 pr-4 text-sm shadow-sm outline-none ring-apple-blue focus:border-apple-blue focus:ring-1"
               />
             </div>
