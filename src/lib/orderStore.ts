@@ -4,7 +4,7 @@ import { promises as fs } from "node:fs";
 import path from "node:path";
 import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
-import { DEFAULT_ORDER_ROUND, ORDER_PREFIX, getCurrentPhase } from "@/lib/formatOrderNumber";
+import { ORDER_PREFIX, getCurrentPhase } from "@/lib/formatOrderNumber";
 import { normalizeOrder } from "@/lib/orderStatus";
 import {
   createRemoteOrder,
