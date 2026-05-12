@@ -1,8 +1,10 @@
 import { ProductCard } from "@/components/ProductCard";
 import { Container } from "@/components/ui/Container";
-import { products } from "@/data/products";
+import { getProducts } from "@/lib/getProducts";
 
-export default function ProductsPage() {
+export default async function ProductsPage() {
+  const products = await getProducts();
+
   return (
     <section className="bg-mist py-20 md:py-28">
       <Container>

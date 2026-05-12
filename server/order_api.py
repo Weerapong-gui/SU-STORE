@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import base64
 import binascii
+import csv
 import html
 import io
 import json
@@ -25,6 +26,9 @@ HOST = os.environ.get("ORDER_API_HOST", "0.0.0.0")
 PORT = int(os.environ.get("ORDER_API_PORT", os.environ.get("PORT", "3010")))
 DB_PATH = Path(os.environ.get("ORDER_API_DB_PATH", str(Path.home() / "su-order-api" / "data" / "orders.db")))
 SLIPS_DIR = Path(os.environ.get("ORDER_API_SLIPS_DIR", str(DB_PATH.parent / "slips")))
+PRODUCT_IMAGES_DIR = Path(os.environ.get("PRODUCT_IMAGES_DIR", str(DB_PATH.parent / "product-images")))
+ALLOWED_IMAGE_TYPES = {"image/jpeg", "image/png", "image/webp"}
+MAX_PRODUCT_IMAGE_SIZE_BYTES = 10 * 1024 * 1024
 ORDER_PREFIX = os.environ.get("ORDER_PREFIX", "FP28")
 ORDER_ROUND = int(os.environ.get("ORDER_ROUND", "1"))
 ORDER_API_TOKEN = os.environ.get("ORDER_API_TOKEN", "")
@@ -55,6 +59,61 @@ PAYMENT_STATUS_BY_ORDER_STATUS = {
     "rejected": "rejected",
 }
 
+DEFAULT_PRODUCTS = [
+    {
+        "slug": "single-shirt",
+        "name": "FRESHER POLO SHIRT",
+        "short_name": "เสื้อเดี่ยว",
+        "tagline": "Classic fresher polo for everyday campus wear.",
+        "description": "เสื้อเดี่ยวทรงเรียบ ใส่ง่าย และเป็นฐานหลักของคอลเลกชัน Fresher 28th.",
+        "price": 399,
+        "category": "single",
+        "requires_size": 1,
+        "requires_school": 1,
+        "image_path": "/images/polo.png",
+        "sort_order": 1,
+    },
+    {
+        "slug": "set-shirt",
+        "name": "FRESHER BUNDLE",
+        "short_name": "ชุดเซต",
+        "tagline": "A fuller set for students who want the complete look.",
+        "description": "ชุดเซตสำหรับคนที่อยากได้ลุคครบในคำสั่งซื้อเดียว พร้อมเลือกไซซ์และสำนักวิชาได้เหมือนกลุ่มเสื้อ.",
+        "price": 799,
+        "category": "bundle",
+        "requires_size": 1,
+        "requires_school": 1,
+        "image_path": "/images/FRESHER BUNDLE.png",
+        "sort_order": 2,
+    },
+    {
+        "slug": "fresh-jacket",
+        "name": "FRESHER JACKET",
+        "short_name": "แจ็กเก็ต",
+        "tagline": "Layer up with a clean campus-ready jacket.",
+        "description": "แจ็กเก็ตสำหรับวันกิจกรรมหรือวันที่อยากได้เลเยอร์เพิ่ม โดยใช้ flow เลือกไซซ์ จำนวน และสำนักวิชาเหมือนสินค้ากลุ่มเสื้อ.",
+        "price": 899,
+        "category": "jacket",
+        "requires_size": 1,
+        "requires_school": 1,
+        "image_path": "/images/Pr1.png",
+        "sort_order": 3,
+    },
+    {
+        "slug": "fresh-headband",
+        "name": "FRESHER HEADBAND",
+        "short_name": "เฮดแบนด์",
+        "tagline": "A lightweight accessory for sports day and activity looks.",
+        "description": "เฮดแบนด์ที่ใช้ขนาดแบบ one size โดยเลือกจำนวนและสำนักวิชาได้ก่อนเพิ่มลง cart หรือไปชำระเงินต่อ.",
+        "price": 35,
+        "category": "headband",
+        "requires_size": 0,
+        "requires_school": 1,
+        "image_path": "/images/Pr1.png",
+        "sort_order": 4,
+    },
+]
+
 
 ADMIN_HTML = r"""<!doctype html>
 <html lang="th">
@@ -65,359 +124,712 @@ ADMIN_HTML = r"""<!doctype html>
   <style>
     :root {
       color-scheme: light;
-      --bg: #f4f4f5;
-      --panel: #ffffff;
-      --line: #d8d8dd;
-      --text: #111114;
-      --muted: #666a73;
-      --accent: #0071e3;
-      --danger: #b42318;
-      --ok: #027a48;
+      --bg: #f4f4f5; --panel: #fff; --line: #d8d8dd; --text: #111114;
+      --muted: #666a73; --accent: #0071e3; --danger: #b42318; --ok: #027a48; --warn: #b45309;
     }
-    * { box-sizing: border-box; }
-    body {
-      margin: 0;
-      background: var(--bg);
-      color: var(--text);
-      font-family: ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-    }
+    * { box-sizing: border-box; margin: 0; }
+    body { background: var(--bg); color: var(--text); font-family: ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
     header {
-      position: sticky;
-      top: 0;
-      z-index: 3;
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      gap: 16px;
-      padding: 18px clamp(16px, 4vw, 44px);
-      border-bottom: 1px solid var(--line);
-      background: rgba(255, 255, 255, 0.9);
-      backdrop-filter: blur(18px);
+      position: sticky; top: 0; z-index: 10;
+      display: flex; align-items: center; justify-content: space-between; gap: 16px;
+      padding: 14px clamp(16px,4vw,44px); border-bottom: 1px solid var(--line);
+      background: rgba(255,255,255,.9); backdrop-filter: blur(18px);
     }
-    h1 {
-      margin: 0;
-      font-size: clamp(24px, 4vw, 44px);
-      letter-spacing: 0;
+    header h1 { font-size: 18px; font-weight: 700; letter-spacing: -.02em; }
+    .hdr-right { display: flex; gap: 8px; align-items: center; }
+    nav.tab-bar {
+      display: flex; overflow-x: auto;
+      border-bottom: 1px solid var(--line); background: #fff;
+      padding: 0 clamp(16px,4vw,44px);
     }
-    main {
-      width: min(1180px, calc(100% - 32px));
-      margin: 28px auto 56px;
+    .tab-btn {
+      flex-shrink: 0; padding: 12px 18px; border: none; background: none;
+      cursor: pointer; font: inherit; font-size: 14px; font-weight: 600;
+      color: var(--muted); border-bottom: 2px solid transparent;
+      transition: color .15s, border-color .15s;
     }
-    .toolbar, .stats, .orders {
-      background: var(--panel);
-      border: 1px solid var(--line);
-      border-radius: 8px;
-    }
-    .toolbar {
-      display: grid;
-      grid-template-columns: minmax(220px, 1fr) auto auto;
-      gap: 10px;
-      padding: 14px;
-      align-items: center;
-    }
-    input, select, button {
-      min-height: 42px;
-      border: 1px solid var(--line);
-      border-radius: 8px;
-      background: #fff;
-      color: var(--text);
-      font: inherit;
+    .tab-btn.active { color: var(--accent); border-bottom-color: var(--accent); }
+    .tab-pane { display: none; }
+    .tab-pane.active { display: block; }
+    main { width: min(1280px, calc(100% - 32px)); margin: 24px auto 56px; }
+    input, select, textarea, button {
+      border: 1px solid var(--line); border-radius: 8px;
+      background: #fff; color: var(--text); font: inherit; min-height: 40px;
     }
     input, select { padding: 0 12px; width: 100%; }
-    button {
-      cursor: pointer;
-      padding: 0 16px;
-      font-weight: 700;
-    }
-    button.primary {
-      border-color: var(--accent);
-      background: var(--accent);
-      color: #fff;
-    }
+    textarea { padding: 8px 12px; width: 100%; resize: vertical; }
+    button { cursor: pointer; padding: 0 16px; font-weight: 600; }
+    button.primary { border-color: var(--accent); background: var(--accent); color: #fff; }
+    button.danger-btn { border-color: var(--danger); background: var(--danger); color: #fff; }
+    button.ok-btn { border-color: var(--ok); background: var(--ok); color: #fff; }
     button.ghost { background: #fff; }
-    button:disabled { cursor: not-allowed; opacity: 0.55; }
+    button:disabled { cursor: not-allowed; opacity: .5; }
     .stats {
-      display: grid;
-      grid-template-columns: repeat(4, minmax(0, 1fr));
-      gap: 1px;
-      overflow: hidden;
-      margin: 16px 0;
+      display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
+      gap: 1px; background: var(--line); border: 1px solid var(--line);
+      border-radius: 8px; overflow: hidden; margin-bottom: 16px;
     }
-    .stat {
-      padding: 16px;
-      background: #fff;
-    }
-    .stat span {
-      display: block;
-      color: var(--muted);
-      font-size: 12px;
-      text-transform: uppercase;
-      letter-spacing: .12em;
-    }
-    .stat strong {
-      display: block;
-      margin-top: 8px;
-      font-size: 26px;
-    }
-    .orders { overflow: hidden; }
-    table {
-      width: 100%;
-      border-collapse: collapse;
-      table-layout: fixed;
-    }
-    th, td {
-      padding: 12px;
-      border-bottom: 1px solid var(--line);
-      text-align: left;
-      vertical-align: top;
-      word-wrap: break-word;
-    }
-    th {
-      color: var(--muted);
-      font-size: 12px;
-      text-transform: uppercase;
-      letter-spacing: .1em;
-      background: #fbfbfc;
-    }
+    .stat { background: #fff; padding: 14px 16px; }
+    .stat span { display: block; color: var(--muted); font-size: 11px; font-weight: 700; letter-spacing: .1em; text-transform: uppercase; }
+    .stat strong { display: block; margin-top: 6px; font-size: 24px; letter-spacing: -.04em; }
+    .toolbar { display: flex; flex-wrap: wrap; gap: 10px; margin-bottom: 14px; align-items: center; }
+    .toolbar input, .toolbar select { max-width: 220px; }
+    .table-card { border: 1px solid var(--line); border-radius: 8px; background: #fff; overflow: hidden; }
+    table { width: 100%; border-collapse: collapse; }
+    th, td { padding: 10px 12px; border-bottom: 1px solid var(--line); text-align: left; vertical-align: top; word-break: break-word; }
+    th { background: #f9f9fa; color: var(--muted); font-size: 11px; font-weight: 700; letter-spacing: .1em; text-transform: uppercase; }
     tr:last-child td { border-bottom: 0; }
-    .muted { color: var(--muted); }
-    .money { color: var(--accent); font-weight: 800; }
-    .badge {
-      display: inline-flex;
-      align-items: center;
-      min-height: 26px;
-      padding: 0 9px;
-      border-radius: 999px;
-      background: #eef2ff;
-      font-size: 12px;
-      font-weight: 800;
-      white-space: nowrap;
-    }
-    .badge.waiting_confirm { background: #fff7ed; color: #9a3412; }
+    .muted { color: var(--muted); font-size: 12px; }
+    .money { color: var(--accent); font-weight: 700; }
+    .badge { display: inline-flex; align-items: center; padding: 2px 9px; border-radius: 999px; background: #eef2ff; font-size: 12px; font-weight: 700; white-space: nowrap; }
+    .badge.waiting_confirm { background: #fff7ed; color: var(--warn); }
     .badge.paid, .badge.preparing, .badge.shipped { background: #ecfdf3; color: var(--ok); }
     .badge.rejected, .badge.cancelled { background: #fef3f2; color: var(--danger); }
-    .actions {
-      display: grid;
-      gap: 8px;
-    }
-    .notice {
-      margin-top: 12px;
-      color: var(--muted);
-      min-height: 24px;
-    }
-    @media (max-width: 860px) {
-      header { align-items: flex-start; flex-direction: column; }
-      .toolbar { grid-template-columns: 1fr; }
-      .stats { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-      table, thead, tbody, tr, th, td { display: block; }
-      thead { display: none; }
-      tr { border-bottom: 1px solid var(--line); padding: 12px; }
-      td { border-bottom: 0; padding: 6px 0; }
-      td::before {
-        content: attr(data-label);
-        display: block;
-        color: var(--muted);
-        font-size: 11px;
-        text-transform: uppercase;
-        letter-spacing: .1em;
-      }
+    .products-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px,1fr)); gap: 16px; }
+    .product-card { background: #fff; border: 1px solid var(--line); border-radius: 12px; overflow: hidden; transition: box-shadow .2s; }
+    .product-card:hover { box-shadow: 0 4px 20px rgba(0,0,0,.08); }
+    .product-card.unavailable { opacity: .5; filter: grayscale(.7); }
+    .product-img { width: 100%; aspect-ratio: 4/3; object-fit: cover; background: #f0f0f0; display: block; }
+    .product-body { padding: 14px; }
+    .product-name { font-size: 15px; font-weight: 700; }
+    .product-meta { color: var(--muted); font-size: 12px; margin-top: 2px; }
+    .product-price { font-size: 16px; font-weight: 700; color: var(--accent); margin-top: 6px; }
+    .product-actions { display: flex; gap: 8px; margin-top: 12px; align-items: center; }
+    .toggle { position: relative; display: inline-block; width: 44px; height: 24px; cursor: pointer; }
+    .toggle input { opacity: 0; width: 0; height: 0; }
+    .toggle-track { position: absolute; inset: 0; background: #d0d0d5; border-radius: 999px; transition: background .2s; }
+    .toggle input:checked + .toggle-track { background: var(--ok); }
+    .toggle-thumb { position: absolute; top: 3px; left: 3px; width: 18px; height: 18px; background: #fff; border-radius: 50%; transition: transform .2s; box-shadow: 0 1px 4px rgba(0,0,0,.2); pointer-events: none; }
+    .toggle input:checked ~ .toggle-thumb { transform: translateX(20px); }
+    .modal-backdrop { display: none; position: fixed; inset: 0; background: rgba(0,0,0,.45); z-index: 100; overflow-y: auto; padding: 32px 16px; }
+    .modal-backdrop.open { display: flex; align-items: flex-start; justify-content: center; }
+    .modal { background: #fff; border-radius: 16px; width: min(520px,100%); padding: 28px; }
+    .modal h2 { font-size: 20px; font-weight: 700; margin-bottom: 20px; }
+    .field { margin-bottom: 14px; }
+    .field label { display: block; font-size: 12px; font-weight: 700; color: var(--muted); letter-spacing: .08em; text-transform: uppercase; margin-bottom: 5px; }
+    .field-row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+    .notice { padding: 6px 0; color: var(--muted); font-size: 13px; min-height: 22px; }
+    .notice.err { color: var(--danger); }
+    .analytics-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+    .analytics-card { background: #fff; border: 1px solid var(--line); border-radius: 12px; padding: 18px; }
+    .analytics-card h3 { font-size: 12px; font-weight: 700; color: var(--muted); text-transform: uppercase; letter-spacing: .1em; margin-bottom: 12px; }
+    .bar-row { display: flex; align-items: center; gap: 10px; margin-bottom: 8px; }
+    .bar-label { font-size: 13px; width: 150px; flex-shrink: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .bar-track { flex: 1; height: 8px; background: #eef2ff; border-radius: 999px; overflow: hidden; }
+    .bar-fill { height: 100%; background: var(--accent); border-radius: 999px; }
+    .bar-count { font-size: 12px; color: var(--muted); width: 32px; text-align: right; }
+    .settings-card { background: #fff; border: 1px solid var(--line); border-radius: 12px; padding: 20px; margin-bottom: 16px; }
+    .settings-card h3 { font-size: 14px; font-weight: 700; margin-bottom: 14px; }
+    @media (max-width: 720px) {
+      .analytics-grid { grid-template-columns: 1fr; }
+      .toolbar input, .toolbar select { max-width: 100%; }
     }
   </style>
 </head>
 <body>
   <header>
-    <h1>Admin Orders</h1>
-    <button class="primary" id="refreshButton">Refresh</button>
+    <h1>SU STORE Admin</h1>
+    <div class="hdr-right">
+      <input id="tokenInput" type="password" autocomplete="current-password" placeholder="API Token" style="max-width:200px" />
+      <button class="primary" id="saveTokenBtn">บันทึก</button>
+      <button class="ghost" id="clearTokenBtn">Clear</button>
+    </div>
   </header>
-  <main>
-    <section class="toolbar">
-      <input id="tokenInput" type="password" autocomplete="current-password" placeholder="ORDER_API_TOKEN" />
-      <button class="primary" id="saveTokenButton">Save Token</button>
-      <button class="ghost" id="clearTokenButton">Clear</button>
-    </section>
-    <section class="stats" id="stats"></section>
-    <section class="orders">
-      <table>
-        <thead>
-          <tr>
-            <th style="width: 12%">Order</th>
-            <th style="width: 20%">Customer</th>
-            <th style="width: 22%">Product</th>
-            <th style="width: 12%">Payment</th>
-            <th style="width: 14%">Status</th>
-            <th style="width: 20%">Actions</th>
-          </tr>
-        </thead>
-        <tbody id="ordersBody"></tbody>
-      </table>
-    </section>
-    <p class="notice" id="notice"></p>
-  </main>
-  <script>
-    const statuses = [
-      "pending_payment",
-      "waiting_confirm",
-      "paid",
-      "preparing",
-      "shipped",
-      "cancelled",
-      "rejected"
-    ];
-    const tokenInput = document.querySelector("#tokenInput");
-    const notice = document.querySelector("#notice");
-    const ordersBody = document.querySelector("#ordersBody");
-    const stats = document.querySelector("#stats");
 
+  <nav class="tab-bar">
+    <button class="tab-btn active" data-tab="orders">Orders</button>
+    <button class="tab-btn" data-tab="products">Products</button>
+    <button class="tab-btn" data-tab="analytics">Analytics</button>
+    <button class="tab-btn" data-tab="settings">Settings</button>
+  </nav>
+
+  <!-- ORDERS TAB -->
+  <div class="tab-pane active" id="tab-orders">
+    <main>
+      <div class="stats" id="orderStats"></div>
+      <div class="toolbar">
+        <input id="searchInput" type="search" placeholder="Search order, name, school..." />
+        <select id="statusFilter">
+          <option value="">All status</option>
+          <option value="pending_payment">pending_payment</option>
+          <option value="waiting_confirm">waiting_confirm</option>
+          <option value="paid">paid</option>
+          <option value="preparing">preparing</option>
+          <option value="shipped">shipped</option>
+          <option value="cancelled">cancelled</option>
+          <option value="rejected">rejected</option>
+        </select>
+        <button class="ghost" id="exportCsvBtn">Export CSV</button>
+        <button class="primary" id="refreshOrdersBtn">Refresh</button>
+      </div>
+      <div class="table-card">
+        <table>
+          <thead>
+            <tr>
+              <th style="width:11%">Order</th>
+              <th style="width:17%">Customer</th>
+              <th style="width:19%">Product</th>
+              <th style="width:10%">Payment</th>
+              <th style="width:13%">Status</th>
+              <th style="width:30%">Actions</th>
+            </tr>
+          </thead>
+          <tbody id="ordersBody"></tbody>
+        </table>
+      </div>
+      <p class="notice" id="ordersNotice"></p>
+    </main>
+  </div>
+
+  <!-- PRODUCTS TAB -->
+  <div class="tab-pane" id="tab-products">
+    <main>
+      <div class="toolbar">
+        <button class="primary" id="refreshProductsBtn">Refresh</button>
+        <span id="productsNotice" style="color:var(--muted);font-size:13px"></span>
+      </div>
+      <div class="products-grid" id="productsGrid"></div>
+    </main>
+  </div>
+
+  <!-- ANALYTICS TAB -->
+  <div class="tab-pane" id="tab-analytics">
+    <main>
+      <div class="toolbar">
+        <button class="primary" id="refreshAnalyticsBtn">Refresh</button>
+        <span id="analyticsNotice" style="color:var(--muted);font-size:13px"></span>
+      </div>
+      <div class="analytics-grid" id="analyticsGrid"></div>
+    </main>
+  </div>
+
+  <!-- SETTINGS TAB -->
+  <div class="tab-pane" id="tab-settings">
+    <main>
+      <div class="settings-card">
+        <h3>Announcement Banner</h3>
+        <div class="field">
+          <label>Banner Text</label>
+          <input id="bannerText" type="text" placeholder="ข้อความประกาศ..." />
+        </div>
+        <div class="field" style="display:flex;gap:12px;align-items:center">
+          <label style="margin:0;text-transform:none;font-size:14px;font-weight:600">Enabled</label>
+          <label class="toggle">
+            <input type="checkbox" id="bannerEnabled" />
+            <span class="toggle-track"></span>
+            <span class="toggle-thumb"></span>
+          </label>
+        </div>
+      </div>
+      <div class="settings-card">
+        <h3>Store Status</h3>
+        <div class="field" style="display:flex;gap:12px;align-items:center">
+          <label style="margin:0;text-transform:none;font-size:14px;font-weight:600">Store Open</label>
+          <label class="toggle">
+            <input type="checkbox" id="storeOpen" checked />
+            <span class="toggle-track"></span>
+            <span class="toggle-thumb"></span>
+          </label>
+        </div>
+        <div class="field">
+          <label>Order Deadline (ว่างไว้ = ไม่มีกำหนด)</label>
+          <input id="orderDeadline" type="datetime-local" style="max-width:280px" />
+        </div>
+      </div>
+      <div style="display:flex;gap:10px;align-items:center">
+        <button class="primary" id="saveSettingsBtn">Save Settings</button>
+        <span id="settingsNotice" style="color:var(--muted);font-size:13px"></span>
+      </div>
+    </main>
+  </div>
+
+  <!-- EDIT PRODUCT MODAL -->
+  <div class="modal-backdrop" id="editModal">
+    <div class="modal">
+      <h2>Edit Product</h2>
+      <input type="hidden" id="editSlug" />
+      <div class="field">
+        <label>Name</label>
+        <input id="editName" type="text" />
+      </div>
+      <div class="field-row">
+        <div class="field">
+          <label>Short Name</label>
+          <input id="editShortName" type="text" />
+        </div>
+        <div class="field">
+          <label>Price (฿)</label>
+          <input id="editPrice" type="number" min="0" />
+        </div>
+      </div>
+      <div class="field">
+        <label>Tagline</label>
+        <input id="editTagline" type="text" />
+      </div>
+      <div class="field">
+        <label>Description</label>
+        <textarea id="editDescription" rows="3"></textarea>
+      </div>
+      <p class="notice err" id="editNotice"></p>
+      <div style="display:flex;gap:10px;justify-content:flex-end">
+        <button class="ghost" id="cancelEditBtn">Cancel</button>
+        <button class="primary" id="saveEditBtn">Save</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- UPLOAD IMAGE MODAL -->
+  <div class="modal-backdrop" id="imageModal">
+    <div class="modal">
+      <h2>Upload Product Image</h2>
+      <input type="hidden" id="imageSlug" />
+      <div class="field">
+        <label>Select Image (JPG, PNG, WebP — max 10 MB)</label>
+        <input id="imageFile" type="file" accept="image/jpeg,image/png,image/webp" style="min-height:0;border:0;padding:0" />
+      </div>
+      <div id="imagePreviewWrap" style="display:none;margin-bottom:12px">
+        <img id="imagePreview" style="width:100%;border-radius:8px;object-fit:cover;max-height:220px" alt="" />
+      </div>
+      <p class="notice err" id="imageNotice"></p>
+      <div style="display:flex;gap:10px;justify-content:flex-end">
+        <button class="ghost" id="cancelImageBtn">Cancel</button>
+        <button class="primary" id="uploadImageBtn">Upload</button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // ── Token ──────────────────────────────────────────────────────────────────
+    const tokenInput = document.querySelector("#tokenInput");
     tokenInput.value = localStorage.getItem("suStoreAdminToken") || "";
 
-    function headers() {
-      return {
-        "Authorization": `Bearer ${tokenInput.value.trim()}`,
-        "Content-Type": "application/json"
-      };
+    function authHeaders(extra) {
+      return Object.assign({ "Authorization": "Bearer " + tokenInput.value.trim(), "Content-Type": "application/json" }, extra || {});
     }
 
-    function baht(value) {
-      return new Intl.NumberFormat("th-TH", {
-        style: "currency",
-        currency: "THB",
-        maximumFractionDigits: 0
-      }).format(Number(value || 0));
+    document.querySelector("#saveTokenBtn").addEventListener("click", () => {
+      localStorage.setItem("suStoreAdminToken", tokenInput.value.trim());
+      loadOrders();
+      loadProducts();
+    });
+    document.querySelector("#clearTokenBtn").addEventListener("click", () => {
+      localStorage.removeItem("suStoreAdminToken");
+      tokenInput.value = "";
+    });
+
+    // ── Tabs ───────────────────────────────────────────────────────────────────
+    document.querySelectorAll(".tab-btn").forEach(function(btn) {
+      btn.addEventListener("click", function() {
+        document.querySelectorAll(".tab-btn").forEach(function(b) { b.classList.remove("active"); });
+        document.querySelectorAll(".tab-pane").forEach(function(p) { p.classList.remove("active"); });
+        btn.classList.add("active");
+        document.querySelector("#tab-" + btn.dataset.tab).classList.add("active");
+        if (btn.dataset.tab === "analytics") loadAnalytics();
+        if (btn.dataset.tab === "settings") loadSettings();
+      });
+    });
+
+    // ── Helpers ────────────────────────────────────────────────────────────────
+    function baht(v) {
+      return new Intl.NumberFormat("th-TH", { style: "currency", currency: "THB", maximumFractionDigits: 0 }).format(Number(v || 0));
+    }
+    function esc(v) {
+      return String(v == null ? "" : v).replace(/[&<>"']/g, function(c) {
+        return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#039;" }[c];
+      });
     }
 
-    function setNotice(message, isError = false) {
-      notice.textContent = message;
-      notice.style.color = isError ? "var(--danger)" : "var(--muted)";
+    // ── ORDERS ─────────────────────────────────────────────────────────────────
+    var statuses = ["pending_payment","waiting_confirm","paid","preparing","shipped","cancelled","rejected"];
+    var allOrders = [];
+    var serverSummary = {};
+
+    function setOrdersNotice(msg, err) {
+      var el = document.querySelector("#ordersNotice");
+      el.textContent = msg;
+      el.className = "notice" + (err ? " err" : "");
     }
 
-    function renderStats(summary) {
-      const items = [
+    function renderOrderStats(summary) {
+      var items = [
         ["Total", summary.total || 0],
         ["Waiting Slip", summary.pendingPayment || 0],
         ["Waiting Confirm", summary.waitingConfirm || 0],
         ["Paid", summary.paid || 0],
+        ["Rejected", summary.rejected || 0],
       ];
-      stats.innerHTML = items.map(([label, value]) => `
-        <div class="stat"><span>${label}</span><strong>${value}</strong></div>
-      `).join("");
+      document.querySelector("#orderStats").innerHTML = items.map(function(item) {
+        return '<div class="stat"><span>' + esc(item[0]) + '</span><strong>' + esc(item[1]) + '</strong></div>';
+      }).join("");
     }
 
-    function renderOrders(orders) {
-      ordersBody.innerHTML = orders.map((order) => {
-        const customer = order.customer || {};
-        const product = order.product || {};
-        const slip = order.slip;
-        const options = statuses.map((status) => `
-          <option value="${status}" ${order.status === status ? "selected" : ""}>${status}</option>
-        `).join("");
-        return `
-          <tr>
-            <td data-label="Order">
-              <strong>${order.id}</strong><br />
-              <span class="muted">${order.createdAt || ""}</span><br />
-              <span class="badge ${order.status}">${order.status}</span>
-            </td>
-            <td data-label="Customer">
-              <strong>${customer.fullName || "-"}</strong><br />
-              <span>${customer.studentCode || "-"}</span><br />
-              <span class="muted">${customer.email || ""}</span><br />
-              <span class="muted">${customer.phone || ""}</span>
-            </td>
-            <td data-label="Product">
-              <strong>${product.name || "-"}</strong><br />
-              <span>Size: ${order.size || "-"} / Qty: ${order.quantity || 0}</span><br />
-              <span class="money">${baht(order.totalAmount)}</span><br />
-              <span class="muted">${customer.school || ""}</span>
-            </td>
-            <td data-label="Payment">
-              <strong>${order.paymentStatus || "-"}</strong><br />
-              <span>${slip ? "Slip uploaded" : "No slip"}</span><br />
-              <span class="muted">${slip?.uploadedAt || ""}</span>
-            </td>
-            <td data-label="Status">
-              <select data-order-id="${order.id}" class="statusSelect">${options}</select>
-            </td>
-            <td data-label="Actions">
-              <div class="actions">
-                <button class="primary updateButton" data-order-id="${order.id}">Update Status</button>
-                <button class="ghost slipButton" data-order-id="${order.id}" ${slip ? "" : "disabled"}>View Slip</button>
-              </div>
-            </td>
-          </tr>
-        `;
+    function filteredOrders() {
+      var q = document.querySelector("#searchInput").value.trim().toLowerCase();
+      var s = document.querySelector("#statusFilter").value;
+      return allOrders.filter(function(o) {
+        var c = o.customer || {};
+        var p = o.product || {};
+        var hay = [o.id, o.status, p.name, c.fullName, c.studentCode, c.phone, c.school, o.size].join(" ").toLowerCase();
+        return (!s || o.status === s) && (!q || hay.includes(q));
+      });
+    }
+
+    function renderOrders() {
+      var orders = filteredOrders();
+      document.querySelector("#ordersBody").innerHTML = orders.map(function(order) {
+        var c = order.customer || {};
+        var p = order.product || {};
+        var opts = statuses.map(function(s) {
+          return '<option value="' + s + '"' + (order.status === s ? " selected" : "") + '>' + s + '</option>';
+        }).join("");
+        return '<tr>' +
+          '<td><strong>' + esc(order.id) + '</strong><br/><span class="muted">' + esc(order.createdAt||"") + '</span><br/><span class="badge ' + esc(order.status) + '">' + esc(order.status) + '</span></td>' +
+          '<td><strong>' + esc(c.fullName||"-") + '</strong><br/><span class="muted">' + esc(c.studentCode||"-") + '</span><br/><span class="muted">' + esc(c.phone||"") + '</span></td>' +
+          '<td><strong>' + esc(p.name||"-") + '</strong><br/><span class="muted">Size: ' + esc(order.size||"-") + ' / Qty: ' + esc(order.quantity||0) + '</span><br/><span class="money">' + esc(baht(order.totalAmount)) + '</span><br/><span class="muted">' + esc(c.school||"") + '</span></td>' +
+          '<td><span class="muted">' + esc(order.paymentStatus||"-") + '</span><br/><span class="muted">' + (order.slip ? "Slip uploaded" : "No slip") + '</span></td>' +
+          '<td><select data-oid="' + esc(order.id) + '" class="statusSel" style="min-width:0;font-size:12px;min-height:36px">' + opts + '</select></td>' +
+          '<td><div style="display:grid;gap:5px">' +
+            '<button class="primary updateBtn" data-oid="' + esc(order.id) + '" style="font-size:12px;min-height:32px">Update Status</button>' +
+            '<button class="ok-btn confirmBtn" data-oid="' + esc(order.id) + '" style="font-size:12px;min-height:32px"' + (order.status==="waiting_confirm" ? "" : " disabled") + '>✓ Confirm Paid</button>' +
+            '<button class="danger-btn rejectBtn" data-oid="' + esc(order.id) + '" style="font-size:12px;min-height:32px"' + (["waiting_confirm","pending_payment"].includes(order.status) ? "" : " disabled") + '>✗ Reject</button>' +
+            '<button class="ghost slipBtn" data-oid="' + esc(order.id) + '" style="font-size:12px;min-height:32px"' + (order.slip ? "" : " disabled") + '>View Slip</button>' +
+          '</div></td>' +
+        '</tr>';
       }).join("");
     }
 
     async function loadOrders() {
-      setNotice("Loading orders...");
-      const response = await fetch("/admin/orders", { headers: headers(), cache: "no-store" });
-      if (!response.ok) {
-        throw new Error(await response.text());
-      }
-      const payload = await response.json();
-      renderStats(payload.summary || {});
-      renderOrders(payload.orders || []);
-      setNotice(`Loaded ${payload.orders?.length || 0} orders`);
+      setOrdersNotice("Loading...");
+      try {
+        var res = await fetch("/admin/orders", { headers: authHeaders(), cache: "no-store" });
+        if (!res.ok) throw new Error(await res.text());
+        var data = await res.json();
+        allOrders = data.orders || [];
+        serverSummary = data.summary || {};
+        renderOrderStats(serverSummary);
+        renderOrders();
+        setOrdersNotice("Loaded " + allOrders.length + " orders");
+      } catch(e) { setOrdersNotice(e.message, true); }
     }
 
-    async function updateStatus(orderId) {
-      const select = document.querySelector(`select[data-order-id="${orderId}"]`);
-      const status = select.value;
-      const response = await fetch(`/admin/orders/${encodeURIComponent(orderId)}/status`, {
-        method: "PATCH",
-        headers: headers(),
-        body: JSON.stringify({ status })
+    async function patchStatus(orderId, status) {
+      var res = await fetch("/admin/orders/" + encodeURIComponent(orderId) + "/status", {
+        method: "PATCH", headers: authHeaders(), body: JSON.stringify({ status: status })
       });
-      if (!response.ok) {
-        throw new Error(await response.text());
-      }
-      setNotice(`Updated ${orderId} to ${status}`);
-      await loadOrders();
+      if (!res.ok) throw new Error(await res.text());
     }
 
     async function viewSlip(orderId) {
-      const response = await fetch(`/admin/orders/${encodeURIComponent(orderId)}/slip`, {
-        headers: { "Authorization": `Bearer ${tokenInput.value.trim()}` }
+      var res = await fetch("/admin/orders/" + encodeURIComponent(orderId) + "/slip", {
+        headers: { "Authorization": "Bearer " + tokenInput.value.trim() }
       });
-      if (!response.ok) {
-        throw new Error(await response.text());
-      }
-      const blob = await response.blob();
-      const url = URL.createObjectURL(blob);
+      if (!res.ok) throw new Error(await res.text());
+      var blob = await res.blob();
+      var url = URL.createObjectURL(blob);
       window.open(url, "_blank", "noopener,noreferrer");
-      setTimeout(() => URL.revokeObjectURL(url), 60000);
+      setTimeout(function() { URL.revokeObjectURL(url); }, 60000);
     }
 
-    document.querySelector("#saveTokenButton").addEventListener("click", () => {
-      localStorage.setItem("suStoreAdminToken", tokenInput.value.trim());
-      setNotice("Token saved");
-      loadOrders().catch((error) => setNotice(error.message, true));
-    });
-    document.querySelector("#clearTokenButton").addEventListener("click", () => {
-      localStorage.removeItem("suStoreAdminToken");
-      tokenInput.value = "";
-      ordersBody.innerHTML = "";
-      stats.innerHTML = "";
-      setNotice("Token cleared");
-    });
-    document.querySelector("#refreshButton").addEventListener("click", () => {
-      loadOrders().catch((error) => setNotice(error.message, true));
-    });
-    document.addEventListener("click", (event) => {
-      const updateButton = event.target.closest(".updateButton");
-      if (updateButton) {
-        updateStatus(updateButton.dataset.orderId).catch((error) => setNotice(error.message, true));
+    function exportCsv() {
+      var orders = filteredOrders();
+      var cols = ["id","status","paymentStatus","totalAmount","size","quantity","createdAt","fullName","studentCode","phone","email","school","productName","productCategory"];
+      var rows = orders.map(function(o) {
+        var c = o.customer || {};
+        var p = o.product || {};
+        return [o.id, o.status, o.paymentStatus, o.totalAmount, o.size, o.quantity, o.createdAt,
+          c.fullName, c.studentCode, c.phone, c.email, c.school, p.name, p.category
+        ].map(function(v) { return '"' + String(v == null ? "" : v).replace(/"/g, '""') + '"'; }).join(",");
+      });
+      var csv = [cols.join(",")].concat(rows).join("\n");
+      var blob = new Blob(["﻿" + csv], { type: "text/csv;charset=utf-8" });
+      var url = URL.createObjectURL(blob);
+      var a = document.createElement("a");
+      a.href = url; a.download = "orders-" + new Date().toISOString().slice(0,10) + ".csv"; a.click();
+      setTimeout(function() { URL.revokeObjectURL(url); }, 5000);
+    }
+
+    document.querySelector("#refreshOrdersBtn").addEventListener("click", function() { loadOrders().catch(function(e) { setOrdersNotice(e.message, true); }); });
+    document.querySelector("#exportCsvBtn").addEventListener("click", exportCsv);
+    document.querySelector("#searchInput").addEventListener("input", renderOrders);
+    document.querySelector("#statusFilter").addEventListener("change", renderOrders);
+
+    document.addEventListener("click", async function(e) {
+      var updateBtn = e.target.closest(".updateBtn");
+      if (updateBtn) {
+        var oid = updateBtn.dataset.oid;
+        var sel = document.querySelector('select[data-oid="' + oid + '"]');
+        try { await patchStatus(oid, sel.value); setOrdersNotice("Updated " + oid); await loadOrders(); }
+        catch(err) { setOrdersNotice(err.message, true); }
+        return;
       }
-      const slipButton = event.target.closest(".slipButton");
-      if (slipButton) {
-        viewSlip(slipButton.dataset.orderId).catch((error) => setNotice(error.message, true));
+      var confirmBtn = e.target.closest(".confirmBtn");
+      if (confirmBtn) {
+        try { await patchStatus(confirmBtn.dataset.oid, "paid"); setOrdersNotice("Confirmed " + confirmBtn.dataset.oid); await loadOrders(); }
+        catch(err) { setOrdersNotice(err.message, true); }
+        return;
       }
+      var rejectBtn = e.target.closest(".rejectBtn");
+      if (rejectBtn) {
+        if (!confirm("Reject order " + rejectBtn.dataset.oid + "?")) return;
+        try { await patchStatus(rejectBtn.dataset.oid, "rejected"); setOrdersNotice("Rejected " + rejectBtn.dataset.oid); await loadOrders(); }
+        catch(err) { setOrdersNotice(err.message, true); }
+        return;
+      }
+      var slipBtn = e.target.closest(".slipBtn");
+      if (slipBtn) { viewSlip(slipBtn.dataset.oid).catch(function(err) { setOrdersNotice(err.message, true); }); return; }
     });
 
+    // ── PRODUCTS ───────────────────────────────────────────────────────────────
+    var allProducts = [];
+
+    function setProductsNotice(msg, err) {
+      var el = document.querySelector("#productsNotice");
+      el.textContent = msg;
+      el.style.color = err ? "var(--danger)" : "var(--muted)";
+    }
+
+    function renderProducts() {
+      document.querySelector("#productsGrid").innerHTML = allProducts.map(function(p) {
+        return '<div class="product-card' + (p.available ? "" : " unavailable") + '" data-slug="' + esc(p.slug) + '">' +
+          '<img class="product-img" src="' + esc(p.image) + '" alt="' + esc(p.name) + '" onerror="this.style.background=\'#eee\'" />' +
+          '<div class="product-body">' +
+            '<div class="product-name">' + esc(p.name) + '</div>' +
+            '<div class="product-meta">' + esc(p.shortName) + ' · ' + esc(p.category) + '</div>' +
+            '<div class="product-price">' + baht(p.price) + '</div>' +
+            '<div class="product-actions">' +
+              '<label class="toggle" title="' + (p.available ? "Available" : "Unavailable") + '">' +
+                '<input type="checkbox" class="availToggle" data-slug="' + esc(p.slug) + '"' + (p.available ? " checked" : "") + ' />' +
+                '<span class="toggle-track"></span><span class="toggle-thumb"></span>' +
+              '</label>' +
+              '<small style="color:var(--muted);flex:1">' + (p.available ? "Available" : "Unavailable") + '</small>' +
+              '<button class="ghost editProductBtn" data-slug="' + esc(p.slug) + '" style="font-size:12px;min-height:32px;padding:0 10px">Edit</button>' +
+              '<button class="ghost uploadImageBtn" data-slug="' + esc(p.slug) + '" style="font-size:12px;min-height:32px;padding:0 10px" title="Upload Image">📷</button>' +
+            '</div>' +
+          '</div>' +
+        '</div>';
+      }).join("");
+    }
+
+    async function loadProducts() {
+      setProductsNotice("Loading...");
+      try {
+        var res = await fetch("/products", { cache: "no-store" });
+        if (!res.ok) throw new Error(await res.text());
+        allProducts = await res.json();
+        renderProducts();
+        setProductsNotice(allProducts.length + " products");
+      } catch(e) { setProductsNotice(e.message, true); }
+    }
+
+    document.querySelector("#refreshProductsBtn").addEventListener("click", loadProducts);
+
+    document.addEventListener("change", async function(e) {
+      var toggle = e.target.closest(".availToggle");
+      if (!toggle) return;
+      var slug = toggle.dataset.slug;
+      var available = toggle.checked;
+      try {
+        var res = await fetch("/admin/products/" + encodeURIComponent(slug) + "/available", {
+          method: "PATCH", headers: authHeaders(), body: JSON.stringify({ available: available })
+        });
+        if (!res.ok) throw new Error(await res.text());
+        var updated = await res.json();
+        var idx = allProducts.findIndex(function(p) { return p.slug === slug; });
+        if (idx !== -1) allProducts[idx] = updated;
+        renderProducts();
+        setProductsNotice(slug + " is now " + (available ? "available" : "unavailable"));
+      } catch(e) { toggle.checked = !available; setProductsNotice(e.message, true); }
+    });
+
+    var editModal = document.querySelector("#editModal");
+    document.addEventListener("click", function(e) {
+      var editBtn = e.target.closest(".editProductBtn");
+      if (editBtn) {
+        var p = allProducts.find(function(x) { return x.slug === editBtn.dataset.slug; });
+        if (!p) return;
+        document.querySelector("#editSlug").value = p.slug;
+        document.querySelector("#editName").value = p.name;
+        document.querySelector("#editShortName").value = p.shortName;
+        document.querySelector("#editPrice").value = p.price;
+        document.querySelector("#editTagline").value = p.tagline;
+        document.querySelector("#editDescription").value = p.description;
+        document.querySelector("#editNotice").textContent = "";
+        editModal.classList.add("open");
+        return;
+      }
+      if (e.target === editModal) editModal.classList.remove("open");
+    });
+    document.querySelector("#cancelEditBtn").addEventListener("click", function() { editModal.classList.remove("open"); });
+    document.querySelector("#saveEditBtn").addEventListener("click", async function() {
+      var slug = document.querySelector("#editSlug").value;
+      var payload = {
+        name: document.querySelector("#editName").value,
+        shortName: document.querySelector("#editShortName").value,
+        price: parseInt(document.querySelector("#editPrice").value, 10),
+        tagline: document.querySelector("#editTagline").value,
+        description: document.querySelector("#editDescription").value,
+      };
+      try {
+        var res = await fetch("/admin/products/" + encodeURIComponent(slug), {
+          method: "PUT", headers: authHeaders(), body: JSON.stringify(payload)
+        });
+        if (!res.ok) throw new Error(await res.text());
+        var updated = await res.json();
+        var idx = allProducts.findIndex(function(p) { return p.slug === slug; });
+        if (idx !== -1) allProducts[idx] = updated;
+        renderProducts();
+        editModal.classList.remove("open");
+        setProductsNotice("Saved " + slug);
+      } catch(err) { document.querySelector("#editNotice").textContent = err.message; }
+    });
+
+    var imageModal = document.querySelector("#imageModal");
+    document.addEventListener("click", function(e) {
+      var uploadBtn = e.target.closest(".uploadImageBtn");
+      if (uploadBtn) {
+        document.querySelector("#imageSlug").value = uploadBtn.dataset.slug;
+        document.querySelector("#imageFile").value = "";
+        document.querySelector("#imagePreviewWrap").style.display = "none";
+        document.querySelector("#imageNotice").textContent = "";
+        imageModal.classList.add("open");
+        return;
+      }
+      if (e.target === imageModal) imageModal.classList.remove("open");
+    });
+    document.querySelector("#imageFile").addEventListener("change", function(e) {
+      var file = e.target.files[0];
+      if (!file) return;
+      var url = URL.createObjectURL(file);
+      document.querySelector("#imagePreview").src = url;
+      document.querySelector("#imagePreviewWrap").style.display = "block";
+    });
+    document.querySelector("#cancelImageBtn").addEventListener("click", function() { imageModal.classList.remove("open"); });
+    document.querySelector("#uploadImageBtn").addEventListener("click", async function() {
+      var slug = document.querySelector("#imageSlug").value;
+      var file = document.querySelector("#imageFile").files[0];
+      if (!file) { document.querySelector("#imageNotice").textContent = "Please select an image"; return; }
+      var formData = new FormData();
+      formData.append("image", file, file.name);
+      try {
+        var res = await fetch("/admin/products/" + encodeURIComponent(slug) + "/image", {
+          method: "POST",
+          headers: { "Authorization": "Bearer " + tokenInput.value.trim() },
+          body: formData
+        });
+        if (!res.ok) throw new Error(await res.text());
+        var updated = await res.json();
+        var idx = allProducts.findIndex(function(p) { return p.slug === slug; });
+        if (idx !== -1) allProducts[idx] = updated;
+        renderProducts();
+        imageModal.classList.remove("open");
+        setProductsNotice("Image updated for " + slug);
+      } catch(err) { document.querySelector("#imageNotice").textContent = err.message; }
+    });
+
+    // ── ANALYTICS ─────────────────────────────────────────────────────────────
+    function setAnalyticsNotice(msg, err) {
+      var el = document.querySelector("#analyticsNotice");
+      el.textContent = msg; el.style.color = err ? "var(--danger)" : "var(--muted)";
+    }
+
+    function renderBarChart(container, items, maxVal) {
+      container.innerHTML = items.map(function(item) {
+        var pct = maxVal ? Math.round(item[1] / maxVal * 100) : 0;
+        return '<div class="bar-row">' +
+          '<div class="bar-label" title="' + esc(item[0]) + '">' + esc(item[0]) + '</div>' +
+          '<div class="bar-track"><div class="bar-fill" style="width:' + pct + '%"></div></div>' +
+          '<div class="bar-count">' + item[1] + '</div></div>';
+      }).join("");
+    }
+
+    async function loadAnalytics() {
+      if (!allOrders.length) {
+        try {
+          var res = await fetch("/admin/orders", { headers: authHeaders(), cache: "no-store" });
+          if (!res.ok) throw new Error(await res.text());
+          var data = await res.json();
+          allOrders = data.orders || [];
+          serverSummary = data.summary || {};
+        } catch(e) { setAnalyticsNotice(e.message, true); return; }
+      }
+      var schoolMap = {}, productMap = {}, statusMap = {}, totalRevenue = 0;
+      allOrders.forEach(function(o) {
+        var school = (o.customer||{}).school || "Unknown";
+        var prod = (o.product||{}).name || "Unknown";
+        var status = o.status || "unknown";
+        schoolMap[school] = (schoolMap[school]||0) + 1;
+        productMap[prod] = (productMap[prod]||0) + 1;
+        statusMap[status] = (statusMap[status]||0) + 1;
+        if (["paid","preparing","shipped"].includes(status)) totalRevenue += Number(o.totalAmount||0);
+      });
+      var sortDesc = function(obj) { return Object.entries(obj).sort(function(a,b) { return b[1]-a[1]; }); };
+      var schoolItems = sortDesc(schoolMap), productItems = sortDesc(productMap), statusItems = sortDesc(statusMap);
+
+      document.querySelector("#analyticsGrid").innerHTML =
+        '<div class="analytics-card" style="grid-column:1/-1">' +
+          '<div class="stats" style="margin:0">' +
+            '<div class="stat"><span>Total Orders</span><strong>' + allOrders.length + '</strong></div>' +
+            '<div class="stat"><span>Confirmed Revenue</span><strong>' + baht(totalRevenue) + '</strong></div>' +
+            '<div class="stat"><span>Schools</span><strong>' + schoolItems.length + '</strong></div>' +
+            '<div class="stat"><span>Avg Order</span><strong>' + (allOrders.length ? baht(totalRevenue/allOrders.length) : "฿0") + '</strong></div>' +
+          '</div>' +
+        '</div>' +
+        '<div class="analytics-card"><h3>By School</h3><div id="schoolChart"></div></div>' +
+        '<div class="analytics-card"><h3>By Product</h3><div id="productChart"></div></div>' +
+        '<div class="analytics-card"><h3>By Status</h3><div id="statusChart"></div></div>';
+
+      renderBarChart(document.querySelector("#schoolChart"), schoolItems, schoolItems[0]?.[1]||1);
+      renderBarChart(document.querySelector("#productChart"), productItems, productItems[0]?.[1]||1);
+      renderBarChart(document.querySelector("#statusChart"), statusItems, statusItems[0]?.[1]||1);
+      setAnalyticsNotice("Analytics from " + allOrders.length + " orders");
+    }
+
+    document.querySelector("#refreshAnalyticsBtn").addEventListener("click", function() {
+      allOrders = [];
+      loadAnalytics().catch(function(e) { setAnalyticsNotice(e.message, true); });
+    });
+
+    // ── SETTINGS ──────────────────────────────────────────────────────────────
+    function setSettingsNotice(msg, err) {
+      var el = document.querySelector("#settingsNotice");
+      el.textContent = msg; el.style.color = err ? "var(--danger)" : "var(--muted)";
+    }
+
+    async function loadSettings() {
+      try {
+        var res = await fetch("/site-settings", { cache: "no-store" });
+        if (!res.ok) throw new Error(await res.text());
+        var s = await res.json();
+        document.querySelector("#bannerText").value = s.announcementBanner || "";
+        document.querySelector("#bannerEnabled").checked = s.announcementBannerEnabled === true;
+        document.querySelector("#storeOpen").checked = s.storeOpen !== false;
+        if (s.orderDeadline) document.querySelector("#orderDeadline").value = s.orderDeadline.slice(0,16);
+        setSettingsNotice("Settings loaded");
+      } catch(e) { setSettingsNotice(e.message, true); }
+    }
+
+    document.querySelector("#saveSettingsBtn").addEventListener("click", async function() {
+      var payload = {
+        announcementBanner: document.querySelector("#bannerText").value,
+        announcementBannerEnabled: document.querySelector("#bannerEnabled").checked,
+        storeOpen: document.querySelector("#storeOpen").checked,
+        orderDeadline: document.querySelector("#orderDeadline").value || null,
+      };
+      try {
+        var res = await fetch("/admin/site-settings", {
+          method: "PATCH", headers: authHeaders(), body: JSON.stringify(payload)
+        });
+        if (!res.ok) throw new Error(await res.text());
+        setSettingsNotice("Settings saved");
+      } catch(e) { setSettingsNotice(e.message, true); }
+    });
+
+    // ── Init ───────────────────────────────────────────────────────────────────
+    loadProducts();
     if (tokenInput.value) {
-      loadOrders().catch((error) => setNotice(error.message, true));
+      loadOrders();
     } else {
-      setNotice("Enter ORDER_API_TOKEN to load orders");
+      setOrdersNotice("Enter API Token to load orders");
     }
   </script>
 </body>
@@ -951,6 +1363,53 @@ def ensure_db() -> None:
               """
           )
       connection.execute("CREATE UNIQUE INDEX IF NOT EXISTS idx_orders_order_code ON orders(order_code)")
+      connection.execute(
+          """
+          CREATE TABLE IF NOT EXISTS products (
+              id INTEGER PRIMARY KEY AUTOINCREMENT,
+              slug TEXT UNIQUE NOT NULL,
+              name TEXT NOT NULL,
+              short_name TEXT NOT NULL,
+              tagline TEXT NOT NULL,
+              description TEXT NOT NULL,
+              price INTEGER NOT NULL,
+              category TEXT NOT NULL,
+              requires_size INTEGER NOT NULL DEFAULT 1,
+              requires_school INTEGER NOT NULL DEFAULT 1,
+              available INTEGER NOT NULL DEFAULT 1,
+              image_path TEXT NOT NULL DEFAULT '',
+              sort_order INTEGER NOT NULL DEFAULT 0,
+              created_at TEXT NOT NULL,
+              updated_at TEXT NOT NULL
+          )
+          """
+      )
+      connection.execute(
+          """
+          CREATE TABLE IF NOT EXISTS site_settings (
+              key TEXT PRIMARY KEY,
+              value TEXT NOT NULL,
+              updated_at TEXT NOT NULL
+          )
+          """
+      )
+      product_count_row = connection.execute("SELECT COUNT(*) AS count FROM products").fetchone()
+      if product_count_row["count"] == 0:
+          seed_now = now_iso()
+          for p in DEFAULT_PRODUCTS:
+              connection.execute(
+                  """
+                  INSERT OR IGNORE INTO products
+                  (slug, name, short_name, tagline, description, price, category,
+                   requires_size, requires_school, available, image_path, sort_order, created_at, updated_at)
+                  VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?, ?, ?)
+                  """,
+                  (
+                      p["slug"], p["name"], p["short_name"], p["tagline"], p["description"],
+                      p["price"], p["category"], p["requires_size"], p["requires_school"],
+                      p["image_path"], p["sort_order"], seed_now, seed_now,
+                  ),
+              )
 
 
 def open_db() -> sqlite3.Connection:
@@ -1618,6 +2077,155 @@ def update_order_slip(connection: sqlite3.Connection, order_code: str, slip: dic
     return serialize_order(row)
 
 
+# ── Product management ────────────────────────────────────────────────────────
+
+def serialize_product(row: sqlite3.Row) -> dict[str, Any]:
+    image = row["image_path"] or "/images/polo.png"
+    return {
+        "slug": row["slug"],
+        "name": row["name"],
+        "shortName": row["short_name"],
+        "tagline": row["tagline"],
+        "description": row["description"],
+        "price": row["price"],
+        "category": row["category"],
+        "requiresSize": bool(row["requires_size"]),
+        "requiresSchool": bool(row["requires_school"]),
+        "available": bool(row["available"]),
+        "image": image,
+        "images": [image, image],
+        "sortOrder": row["sort_order"],
+    }
+
+
+def get_all_products(connection: sqlite3.Connection) -> list[dict[str, Any]]:
+    rows = connection.execute(
+        "SELECT * FROM products ORDER BY sort_order ASC, id ASC"
+    ).fetchall()
+    return [serialize_product(row) for row in rows]
+
+
+def get_product(connection: sqlite3.Connection, slug: str) -> dict[str, Any] | None:
+    row = connection.execute("SELECT * FROM products WHERE slug = ?", (slug,)).fetchone()
+    return serialize_product(row) if row else None
+
+
+def update_product(connection: sqlite3.Connection, slug: str, payload: dict[str, Any]) -> dict[str, Any] | None:
+    row = connection.execute("SELECT * FROM products WHERE slug = ?", (slug,)).fetchone()
+    if row is None:
+        return None
+    connection.execute(
+        """
+        UPDATE products
+        SET name = ?, short_name = ?, tagline = ?, description = ?, price = ?, updated_at = ?
+        WHERE slug = ?
+        """,
+        (
+            str(payload.get("name", row["name"])).strip(),
+            str(payload.get("shortName", row["short_name"])).strip(),
+            str(payload.get("tagline", row["tagline"])).strip(),
+            str(payload.get("description", row["description"])).strip(),
+            max(0, int(payload.get("price", row["price"]))),
+            now_iso(),
+            slug,
+        ),
+    )
+    return get_product(connection, slug)
+
+
+def toggle_product_available(connection: sqlite3.Connection, slug: str, available: bool) -> dict[str, Any] | None:
+    row = connection.execute("SELECT id FROM products WHERE slug = ?", (slug,)).fetchone()
+    if row is None:
+        return None
+    connection.execute(
+        "UPDATE products SET available = ?, updated_at = ? WHERE slug = ?",
+        (1 if available else 0, now_iso(), slug),
+    )
+    return get_product(connection, slug)
+
+
+def update_product_image(connection: sqlite3.Connection, slug: str, image_path: str) -> dict[str, Any] | None:
+    row = connection.execute("SELECT id FROM products WHERE slug = ?", (slug,)).fetchone()
+    if row is None:
+        return None
+    connection.execute(
+        "UPDATE products SET image_path = ?, updated_at = ? WHERE slug = ?",
+        (image_path, now_iso(), slug),
+    )
+    return get_product(connection, slug)
+
+
+def save_product_image_file(slug: str, original_name: str, mime_type: str, content: bytes) -> tuple[str | None, str | None]:
+    if mime_type not in ALLOWED_IMAGE_TYPES:
+        return None, "unsupported image type (use JPEG, PNG, or WebP)"
+    if len(content) < 1 or len(content) > MAX_PRODUCT_IMAGE_SIZE_BYTES:
+        return None, "image must be between 1 byte and 10 MB"
+    PRODUCT_IMAGES_DIR.mkdir(parents=True, exist_ok=True)
+    suffix = Path(original_name).suffix.lower()
+    if not suffix:
+        suffix = ".jpg" if "jpeg" in mime_type else ".png"
+    filename = f"{slug}-{int(datetime.now(timezone.utc).timestamp())}{suffix}"
+    (PRODUCT_IMAGES_DIR / filename).write_bytes(content)
+    return filename, None
+
+
+# ── Site settings ─────────────────────────────────────────────────────────────
+
+def get_site_settings(connection: sqlite3.Connection) -> dict[str, Any]:
+    rows = connection.execute("SELECT key, value FROM site_settings").fetchall()
+    settings: dict[str, str] = {row["key"]: row["value"] for row in rows}
+    return {
+        "announcementBanner": settings.get("announcement_banner", ""),
+        "announcementBannerEnabled": settings.get("announcement_banner_enabled", "0") == "1",
+        "storeOpen": settings.get("store_open", "1") == "1",
+        "orderDeadline": settings.get("order_deadline", ""),
+    }
+
+
+def upsert_site_setting(connection: sqlite3.Connection, key: str, value: str) -> None:
+    connection.execute(
+        """
+        INSERT INTO site_settings (key, value, updated_at) VALUES (?, ?, ?)
+        ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_at = excluded.updated_at
+        """,
+        (key, value, now_iso()),
+    )
+
+
+# ── CSV export ────────────────────────────────────────────────────────────────
+
+def export_orders_csv(orders: list[dict[str, Any]]) -> str:
+    output = io.StringIO()
+    writer = csv.writer(output)
+    writer.writerow([
+        "order_id", "status", "payment_status", "total_amount", "size", "quantity",
+        "created_at", "full_name", "student_code", "phone", "email", "school", "parent_phone",
+        "product_name", "product_category", "khantoke_ticket",
+    ])
+    for order in orders:
+        c = order.get("customer") or {}
+        p = order.get("product") or {}
+        writer.writerow([
+            order.get("id", ""),
+            order.get("status", ""),
+            order.get("paymentStatus", ""),
+            order.get("totalAmount", ""),
+            order.get("size", ""),
+            order.get("quantity", ""),
+            order.get("createdAt", ""),
+            c.get("fullName", ""),
+            c.get("studentCode", ""),
+            c.get("phone", ""),
+            c.get("email", ""),
+            c.get("school", ""),
+            c.get("parentPhone", ""),
+            p.get("name", ""),
+            p.get("category", ""),
+            "yes" if order.get("khantokeTicket") else "no",
+        ])
+    return output.getvalue()
+
+
 class OrderRequestHandler(BaseHTTPRequestHandler):
     server_version = "SUOrderAPI/1.0"
 
@@ -1793,6 +2401,54 @@ class OrderRequestHandler(BaseHTTPRequestHandler):
             )
             return
 
+        if path == "/products":
+            with open_db() as connection:
+                self._send_json(HTTPStatus.OK, get_all_products(connection))
+            return
+
+        if path == "/site-settings":
+            with open_db() as connection:
+                self._send_json(HTTPStatus.OK, get_site_settings(connection))
+            return
+
+        if path == "/admin/orders/export.csv":
+            if not self._require_admin_authorization():
+                return
+            with open_db() as connection:
+                orders = list_orders(connection)
+            csv_content = export_orders_csv(orders)
+            response_body = ("﻿" + csv_content).encode("utf-8")
+            self.send_response(HTTPStatus.OK)
+            self.send_header("Content-Type", "text/csv; charset=utf-8")
+            self.send_header("Content-Length", str(len(response_body)))
+            self.send_header("Content-Disposition", 'attachment; filename="orders.csv"')
+            self.end_headers()
+            self.wfile.write(response_body)
+            return
+
+        product_image_match = re.fullmatch(r"/product-images/([^/]+)", path)
+        if product_image_match:
+            raw_filename = product_image_match.group(1)
+            safe_filename = re.sub(r"[^a-zA-Z0-9._-]", "", raw_filename)
+            if not safe_filename or safe_filename != raw_filename:
+                self._send_json(HTTPStatus.BAD_REQUEST, {"message": "invalid filename"})
+                return
+            image_path = PRODUCT_IMAGES_DIR / safe_filename
+            if not image_path.exists():
+                self._send_json(HTTPStatus.NOT_FOUND, {"message": "image not found"})
+                return
+            suffix = Path(safe_filename).suffix.lower()
+            mime_map = {".jpg": "image/jpeg", ".jpeg": "image/jpeg", ".png": "image/png", ".webp": "image/webp"}
+            mime = mime_map.get(suffix, "image/jpeg")
+            content = image_path.read_bytes()
+            self.send_response(HTTPStatus.OK)
+            self.send_header("Content-Type", mime)
+            self.send_header("Content-Length", str(len(content)))
+            self.send_header("Cache-Control", "public, max-age=86400")
+            self.end_headers()
+            self.wfile.write(content)
+            return
+
         order_match = re.fullmatch(r"/orders/([A-Z0-9-]+)", path)
         if not order_match:
             self._send_json(HTTPStatus.NOT_FOUND, {"message": "not found"})
@@ -1815,6 +2471,59 @@ class OrderRequestHandler(BaseHTTPRequestHandler):
 
     def do_POST(self) -> None:
         path = urlparse(self.path).path
+
+        product_image_match = re.fullmatch(r"/admin/products/([a-z0-9-]+)/image", path)
+        if product_image_match:
+            if not self._require_admin_authorization():
+                return
+            slug = product_image_match.group(1)
+            content_type = self.headers.get("Content-Type", "")
+            if not content_type.lower().startswith("multipart/form-data"):
+                self._send_json(HTTPStatus.BAD_REQUEST, {"message": "multipart/form-data required"})
+                return
+            content_length = int(self.headers.get("Content-Length", "0"))
+            if content_length <= 0:
+                self._send_json(HTTPStatus.BAD_REQUEST, {"message": "empty body"})
+                return
+            raw_body = self.rfile.read(content_length)
+            message = BytesParser(policy=default).parsebytes(
+                (f"Content-Type: {content_type}\r\nMIME-Version: 1.0\r\n\r\n").encode("utf-8") + raw_body
+            )
+            if not message.is_multipart():
+                self._send_json(HTTPStatus.BAD_REQUEST, {"message": "invalid multipart data"})
+                return
+            image_content = b""
+            image_filename = ""
+            image_mime = ""
+            for part in message.iter_parts():
+                if part.get_content_disposition() != "form-data":
+                    continue
+                field_name = str(part.get_param("name", header="content-disposition") or "")
+                if field_name != "image":
+                    continue
+                filename = part.get_filename()
+                if not filename:
+                    self._send_json(HTTPStatus.BAD_REQUEST, {"message": "image filename required"})
+                    return
+                image_filename = str(filename)
+                image_mime = str(part.get_content_type() or "image/jpeg")
+                image_content = part.get_payload(decode=True) or b""
+            if not image_content:
+                self._send_json(HTTPStatus.BAD_REQUEST, {"message": "image field is required"})
+                return
+            filename, error = save_product_image_file(slug, image_filename, image_mime, image_content)
+            if error:
+                self._send_json(HTTPStatus.BAD_REQUEST, {"message": error})
+                return
+            with open_db() as connection:
+                product = update_product_image(connection, slug, f"/product-images/{filename}")
+                if product is None:
+                    self._send_json(HTTPStatus.NOT_FOUND, {"message": "product not found"})
+                    return
+                connection.commit()
+            self._send_json(HTTPStatus.OK, product)
+            return
+
         if path != "/orders":
             self._send_json(HTTPStatus.NOT_FOUND, {"message": "not found"})
             return
@@ -1847,6 +2556,28 @@ class OrderRequestHandler(BaseHTTPRequestHandler):
 
     def do_PUT(self) -> None:
         path = urlparse(self.path).path
+
+        admin_product_match = re.fullmatch(r"/admin/products/([a-z0-9-]+)", path)
+        if admin_product_match:
+            if not self._require_admin_authorization():
+                return
+            try:
+                payload = self._read_json()
+            except json.JSONDecodeError:
+                self._send_json(HTTPStatus.BAD_REQUEST, {"message": "invalid json"})
+                return
+            if not isinstance(payload, dict):
+                self._send_json(HTTPStatus.BAD_REQUEST, {"message": "invalid payload"})
+                return
+            with open_db() as connection:
+                product = update_product(connection, admin_product_match.group(1), payload)
+                if product is None:
+                    self._send_json(HTTPStatus.NOT_FOUND, {"message": "product not found"})
+                    return
+                connection.commit()
+            self._send_json(HTTPStatus.OK, product)
+            return
+
         order_match = re.fullmatch(r"/orders/([A-Z0-9-]+)", path)
         if not order_match:
             self._send_json(HTTPStatus.NOT_FOUND, {"message": "not found"})
@@ -1906,6 +2637,53 @@ class OrderRequestHandler(BaseHTTPRequestHandler):
                 connection.commit()
             sync_order_to_google_sheets(order, "admin_status_updated")
             self._send_json(HTTPStatus.OK, order)
+            return
+
+        product_avail_match = re.fullmatch(r"/admin/products/([a-z0-9-]+)/available", path)
+        if product_avail_match:
+            if not self._require_admin_authorization():
+                return
+            try:
+                payload = self._read_json()
+            except json.JSONDecodeError:
+                self._send_json(HTTPStatus.BAD_REQUEST, {"message": "invalid json"})
+                return
+            available = payload.get("available") if isinstance(payload, dict) else None
+            if not isinstance(available, bool):
+                self._send_json(HTTPStatus.BAD_REQUEST, {"message": "available must be a boolean"})
+                return
+            with open_db() as connection:
+                product = toggle_product_available(connection, product_avail_match.group(1), available)
+                if product is None:
+                    self._send_json(HTTPStatus.NOT_FOUND, {"message": "product not found"})
+                    return
+                connection.commit()
+            self._send_json(HTTPStatus.OK, product)
+            return
+
+        if path == "/admin/site-settings":
+            if not self._require_admin_authorization():
+                return
+            try:
+                payload = self._read_json()
+            except json.JSONDecodeError:
+                self._send_json(HTTPStatus.BAD_REQUEST, {"message": "invalid json"})
+                return
+            if not isinstance(payload, dict):
+                self._send_json(HTTPStatus.BAD_REQUEST, {"message": "invalid payload"})
+                return
+            with open_db() as connection:
+                if "announcementBanner" in payload:
+                    upsert_site_setting(connection, "announcement_banner", str(payload["announcementBanner"]))
+                if "announcementBannerEnabled" in payload:
+                    upsert_site_setting(connection, "announcement_banner_enabled", "1" if payload["announcementBannerEnabled"] else "0")
+                if "storeOpen" in payload:
+                    upsert_site_setting(connection, "store_open", "1" if payload["storeOpen"] else "0")
+                if "orderDeadline" in payload:
+                    upsert_site_setting(connection, "order_deadline", str(payload["orderDeadline"] or ""))
+                connection.commit()
+                settings = get_site_settings(connection)
+            self._send_json(HTTPStatus.OK, settings)
             return
 
         order_match = re.fullmatch(r"/orders/([A-Z0-9-]+)/slip", path)

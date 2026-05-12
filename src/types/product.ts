@@ -11,4 +11,5 @@ export type Product = {
   category: ProductCategory;
   requiresSize: boolean;
   requiresSchool: boolean;
+  available?: boolean;
 };
