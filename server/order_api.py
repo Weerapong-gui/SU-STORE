@@ -1423,8 +1423,17 @@ def open_db() -> sqlite3.Connection:
     return connection
 
 
+def get_current_phase() -> int:
+    now = datetime.now(TZ_BANGKOK)
+    m, d = now.month, now.day
+    if m == 5 and 18 <= d <= 23: return 1
+    if m == 5 and 25 <= d <= 30: return 2
+    if m == 6 and  1 <= d <= 7:  return 3
+    return 0
+
+
 def create_order_code(sequence_number: int) -> str:
-    return f"{ORDER_PREFIX}{sequence_number:05d}"
+    return f"{ORDER_PREFIX}{sequence_number:04d}{get_current_phase()}"
 
 
 def create_order_access_token() -> str:
