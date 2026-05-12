@@ -433,11 +433,11 @@ ORDER_VIEW_HTML = r"""<!doctype html>
   <style>
     :root {
       color-scheme: light;
-      --bg: #f5f5f7;
+      --bg: #f6f6f7;
       --panel: #ffffff;
       --ink: #111114;
-      --muted: #6b7280;
-      --line: #dedee4;
+      --muted: #626773;
+      --line: #d9d9df;
       --blue: #0071e3;
       --green: #027a48;
       --orange: #b45309;
@@ -446,62 +446,55 @@ ORDER_VIEW_HTML = r"""<!doctype html>
     * { box-sizing: border-box; }
     body {
       margin: 0;
-      background:
-        radial-gradient(circle at top left, rgba(0, 113, 227, .12), transparent 32rem),
-        linear-gradient(180deg, #fff 0, var(--bg) 22rem);
+      background: var(--bg);
       color: var(--ink);
       font-family: ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
     }
+    header, main {
+      width: min(1320px, calc(100% - 32px));
+      margin: 0 auto;
+    }
     header {
-      padding: 28px clamp(18px, 4vw, 56px) 16px;
+      padding: 30px 0 18px;
+      display: flex;
+      align-items: flex-end;
+      justify-content: space-between;
+      gap: 20px;
+      border-bottom: 1px solid var(--line);
     }
     .eyebrow {
-      margin: 0 0 8px;
+      margin: 0 0 6px;
       color: var(--muted);
       font-size: 12px;
       font-weight: 800;
-      letter-spacing: .18em;
+      letter-spacing: .16em;
       text-transform: uppercase;
     }
     h1 {
       margin: 0;
-      font-size: clamp(36px, 7vw, 78px);
-      letter-spacing: -.06em;
-      line-height: .94;
+      font-size: clamp(32px, 5vw, 56px);
+      letter-spacing: -.05em;
+      line-height: 1;
     }
-    main {
-      width: min(1280px, calc(100% - 32px));
-      margin: 0 auto 56px;
-    }
-    .toolbar, .stat, .order-card {
-      border: 1px solid var(--line);
-      background: rgba(255, 255, 255, .86);
-      box-shadow: 0 24px 70px rgba(15, 23, 42, .08);
-      backdrop-filter: blur(18px);
-    }
+    main { padding: 18px 0 48px; }
     .toolbar {
-      position: sticky;
-      top: 0;
-      z-index: 4;
       display: grid;
-      grid-template-columns: minmax(220px, 1.4fr) minmax(160px, .8fr) minmax(160px, .8fr) auto;
+      grid-template-columns: minmax(220px, 1.2fr) minmax(180px, 1fr) minmax(160px, .8fr) auto;
       gap: 10px;
-      padding: 12px;
-      border-radius: 22px;
       margin-bottom: 16px;
     }
     input, select, button {
-      min-height: 44px;
+      min-height: 42px;
       border: 1px solid var(--line);
-      border-radius: 14px;
+      border-radius: 10px;
       background: #fff;
       color: var(--ink);
       font: inherit;
     }
-    input, select { width: 100%; padding: 0 14px; }
+    input, select { width: 100%; padding: 0 12px; }
     button {
       cursor: pointer;
-      padding: 0 18px;
+      padding: 0 16px;
       font-weight: 800;
     }
     button.primary {
@@ -509,111 +502,119 @@ ORDER_VIEW_HTML = r"""<!doctype html>
       background: var(--blue);
       color: #fff;
     }
+    button.secondary { background: #fff; }
     button:disabled {
       cursor: not-allowed;
       opacity: .5;
     }
-    .stats {
+    .summary {
       display: grid;
-      grid-template-columns: repeat(5, minmax(0, 1fr));
-      gap: 10px;
-      margin-bottom: 18px;
+      grid-template-columns: repeat(6, minmax(0, 1fr));
+      border: 1px solid var(--line);
+      background: var(--panel);
+      margin-bottom: 12px;
     }
-    .stat {
-      border-radius: 20px;
-      padding: 18px;
+    .summary-item {
+      padding: 14px;
+      border-right: 1px solid var(--line);
     }
-    .stat span {
+    .summary-item:last-child { border-right: 0; }
+    .summary-item span {
       display: block;
-      color: var(--muted);
-      font-size: 12px;
-      font-weight: 800;
-      letter-spacing: .12em;
-      text-transform: uppercase;
-    }
-    .stat strong {
-      display: block;
-      margin-top: 8px;
-      font-size: 30px;
-      letter-spacing: -.04em;
-    }
-    .orders {
-      display: grid;
-      gap: 12px;
-    }
-    .order-card {
-      display: grid;
-      grid-template-columns: 1.05fr 1.1fr 1.15fr .9fr auto;
-      gap: 18px;
-      align-items: start;
-      border-radius: 24px;
-      padding: 18px;
-    }
-    .label {
-      display: block;
-      margin-bottom: 6px;
       color: var(--muted);
       font-size: 11px;
       font-weight: 900;
-      letter-spacing: .14em;
+      letter-spacing: .12em;
       text-transform: uppercase;
     }
-    .order-no {
-      font-size: 24px;
-      font-weight: 900;
+    .summary-item strong {
+      display: block;
+      margin-top: 6px;
+      font-size: 22px;
       letter-spacing: -.04em;
     }
-    .line { margin: 4px 0; }
+    .notice {
+      min-height: 24px;
+      margin: 0 0 12px;
+      color: var(--muted);
+    }
+    .table-wrap {
+      overflow-x: auto;
+      border: 1px solid var(--line);
+      background: var(--panel);
+    }
+    table {
+      width: 100%;
+      min-width: 1180px;
+      border-collapse: collapse;
+      table-layout: fixed;
+    }
+    th, td {
+      padding: 12px;
+      border-bottom: 1px solid var(--line);
+      text-align: left;
+      vertical-align: top;
+      word-wrap: break-word;
+    }
+    th {
+      position: sticky;
+      top: 0;
+      z-index: 1;
+      background: #fbfbfc;
+      color: var(--muted);
+      font-size: 11px;
+      font-weight: 900;
+      letter-spacing: .12em;
+      text-transform: uppercase;
+    }
+    tr:last-child td { border-bottom: 0; }
     .muted { color: var(--muted); }
     .money {
       color: var(--blue);
-      font-size: 24px;
       font-weight: 900;
-      letter-spacing: -.04em;
     }
     .badge {
       display: inline-flex;
       align-items: center;
-      min-height: 28px;
-      margin-top: 8px;
-      padding: 0 10px;
+      min-height: 24px;
+      padding: 0 8px;
       border-radius: 999px;
       background: #eef2ff;
       font-size: 12px;
       font-weight: 900;
+      white-space: nowrap;
     }
     .badge.waiting_confirm { background: #fff7ed; color: var(--orange); }
     .badge.paid, .badge.preparing, .badge.shipped { background: #ecfdf3; color: var(--green); }
     .badge.rejected, .badge.cancelled { background: #fef3f2; color: var(--red); }
-    .notice {
-      min-height: 26px;
-      margin: 8px 4px 18px;
-      color: var(--muted);
-    }
     .empty {
-      padding: 48px 20px;
-      text-align: center;
+      padding: 28px;
       color: var(--muted);
-      border: 1px dashed var(--line);
-      border-radius: 24px;
-      background: rgba(255, 255, 255, .6);
+      text-align: center;
     }
-    @media (max-width: 980px) {
+    .tiny { font-size: 12px; }
+    @media (max-width: 900px) {
+      header { display: block; }
       .toolbar { grid-template-columns: 1fr 1fr; }
-      .stats { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-      .order-card { grid-template-columns: 1fr 1fr; }
+      .summary { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+      .summary-item:nth-child(2n) { border-right: 0; }
+      .summary-item { border-bottom: 1px solid var(--line); }
     }
-    @media (max-width: 640px) {
-      main { width: min(100% - 24px, 1280px); }
-      .toolbar, .order-card { grid-template-columns: 1fr; }
-      .stats { grid-template-columns: 1fr; }
+    @media (max-width: 560px) {
+      header, main { width: min(100% - 24px, 1320px); }
+      .toolbar { grid-template-columns: 1fr; }
+      .summary { grid-template-columns: 1fr; }
+      .summary-item { border-right: 0; }
     }
   </style>
 </head>
 <body>
   <header>
-    <p class="eyebrow">SU STORE SERVER</p>
-    <h1>Order Display</h1>
+    <div>
+      <p class="eyebrow">SU STORE SERVER</p>
+      <h1>Order Display</h1>
+    </div>
+    <p class="muted">Read-only view from the Docker order database</p>
   </header>
   <main>
     <section class="toolbar">
@@ -631,9 +632,9 @@ ORDER_VIEW_HTML = r"""<!doctype html>
       </select>
       <button class="primary" id="refreshButton">Refresh</button>
     </section>
-    <section class="stats" id="stats"></section>
+    <section class="summary" id="summary"></section>
     <p class="notice" id="notice"></p>
-    <section class="orders" id="orders"></section>
+    <section class="table-wrap" id="tableWrap"></section>
   </main>
   <script>
     const tokenInput = document.querySelector("#tokenInput");
@@ -641,9 +642,10 @@ ORDER_VIEW_HTML = r"""<!doctype html>
     const statusFilter = document.querySelector("#statusFilter");
     const refreshButton = document.querySelector("#refreshButton");
     const notice = document.querySelector("#notice");
-    const stats = document.querySelector("#stats");
-    const ordersContainer = document.querySelector("#orders");
+    const summary = document.querySelector("#summary");
+    const tableWrap = document.querySelector("#tableWrap");
     let allOrders = [];
+    let serverSummary = {};
 
     tokenInput.value = localStorage.getItem("suStoreOrderViewToken") || localStorage.getItem("suStoreAdminToken") || "";
 
@@ -670,20 +672,6 @@ ORDER_VIEW_HTML = r"""<!doctype html>
       notice.style.color = isError ? "var(--red)" : "var(--muted)";
     }
 
-    function renderStats(orders) {
-      const totalAmount = orders.reduce((sum, order) => sum + Number(order.totalAmount || 0), 0);
-      const items = [
-        ["Orders", orders.length],
-        ["Waiting Slip", orders.filter((order) => order.status === "pending_payment").length],
-        ["Waiting Confirm", orders.filter((order) => order.status === "waiting_confirm").length],
-        ["Paid", orders.filter((order) => ["paid", "preparing", "shipped"].includes(order.status)).length],
-        ["Total", baht(totalAmount)]
-      ];
-      stats.innerHTML = items.map(([label, value]) => `
-        <div class="stat"><span>${text(label)}</span><strong>${text(value)}</strong></div>
-      `).join("");
-    }
-
     function filteredOrders() {
       const query = searchInput.value.trim().toLowerCase();
       const status = statusFilter.value;
@@ -706,55 +694,80 @@ ORDER_VIEW_HTML = r"""<!doctype html>
       });
     }
 
+    function renderSummary(orders) {
+      const totalAmount = orders.reduce((sum, order) => sum + Number(order.totalAmount || 0), 0);
+      const khantokeUsed = Number(serverSummary.khantokeTicketUsed || 0);
+      const khantokeRemaining = Number(serverSummary.khantokeTicketRemaining || 0);
+      const khantokeQuota = Number(serverSummary.khantokeTicketQuota || 0);
+      const items = [
+        ["Showing", orders.length],
+        ["All Orders", serverSummary.total || allOrders.length],
+        ["Waiting Confirm", serverSummary.waitingConfirm || 0],
+        ["Total Amount", baht(totalAmount)],
+        ["Khantoke Used", `${khantokeUsed} ใบ`],
+        ["Khantoke Remaining", `${khantokeRemaining} / ${khantokeQuota} ใบ`]
+      ];
+
+      summary.innerHTML = items.map(([label, value]) => `
+        <div class="summary-item"><span>${text(label)}</span><strong>${text(value)}</strong></div>
+      `).join("");
+    }
+
     function renderOrders() {
       const orders = filteredOrders();
-      renderStats(orders);
+      renderSummary(orders);
       if (!orders.length) {
-        ordersContainer.innerHTML = '<div class="empty">No orders to display</div>';
+        tableWrap.innerHTML = '<div class="empty">No orders to display</div>';
         return;
       }
 
-      ordersContainer.innerHTML = orders.map((order) => {
-        const customer = order.customer || {};
-        const product = order.product || {};
-        const slip = order.slip;
-        return `
-          <article class="order-card">
-            <section>
-              <span class="label">Order</span>
-              <div class="order-no">${text(order.id || "-")}</div>
-              <div class="badge ${text(order.status || "")}">${text(order.status || "-")}</div>
-              <p class="line muted">${text(order.createdAt || "")}</p>
-            </section>
-            <section>
-              <span class="label">Customer</span>
-              <strong>${text(customer.fullName || "-")}</strong>
-              <p class="line">${text(customer.studentCode || "-")}</p>
-              <p class="line muted">${text(customer.email || "")}</p>
-              <p class="line muted">${text(customer.phone || "")}</p>
-              <p class="line muted">${text(customer.school || "")}</p>
-            </section>
-            <section>
-              <span class="label">Product</span>
-              <strong>${text(product.name || "-")}</strong>
-              <p class="line">Size: ${text(order.size || "-")}</p>
-              <p class="line">Quantity: ${text(order.quantity || 0)}</p>
-              <p class="line">Khantoke ticket: ${order.khantokeTicket ? "Yes" : "No"}</p>
-            </section>
-            <section>
-              <span class="label">Payment</span>
-              <div class="money">${text(baht(order.totalAmount))}</div>
-              <p class="line">${text(order.paymentStatus || "-")}</p>
-              <p class="line muted">${slip ? "Slip uploaded" : "No slip"}</p>
-              <p class="line muted">${text(slip?.uploadedAt || "")}</p>
-            </section>
-            <section>
-              <span class="label">Slip</span>
-              <button class="primary slipButton" data-order-id="${text(order.id || "")}" ${slip ? "" : "disabled"}>Open Slip</button>
-            </section>
-          </article>
-        `;
-      }).join("");
+      tableWrap.innerHTML = `
+        <table>
+          <thead>
+            <tr>
+              <th style="width: 11%">Order</th>
+              <th style="width: 11%">Status</th>
+              <th style="width: 18%">Customer</th>
+              <th style="width: 19%">Product</th>
+              <th style="width: 9%">Amount</th>
+              <th style="width: 10%">Khantoke</th>
+              <th style="width: 12%">Slip</th>
+              <th style="width: 10%">Created</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${orders.map((order) => {
+              const customer = order.customer || {};
+              const product = order.product || {};
+              const slip = order.slip;
+              return `
+                <tr>
+                  <td><strong>${text(order.id || "-")}</strong></td>
+                  <td><span class="badge ${text(order.status || "")}">${text(order.status || "-")}</span></td>
+                  <td>
+                    <strong>${text(customer.fullName || "-")}</strong><br />
+                    <span class="tiny">${text(customer.studentCode || "-")}</span><br />
+                    <span class="tiny muted">${text(customer.phone || "")}</span><br />
+                    <span class="tiny muted">${text(customer.email || "")}</span>
+                  </td>
+                  <td>
+                    <strong>${text(product.name || "-")}</strong><br />
+                    <span class="tiny">Size: ${text(order.size || "-")} / Qty: ${text(order.quantity || 0)}</span><br />
+                    <span class="tiny muted">${text(customer.school || "")}</span>
+                  </td>
+                  <td class="money">${text(baht(order.totalAmount))}</td>
+                  <td>${order.khantokeTicket ? "ได้รับ" : "ไม่ได้รับ"}</td>
+                  <td>
+                    <span class="tiny">${text(order.paymentStatus || "-")}</span><br />
+                    <button class="secondary slipButton" data-order-id="${text(order.id || "")}" ${slip ? "" : "disabled"}>Open Slip</button>
+                  </td>
+                  <td class="tiny muted">${text(order.createdAt || "")}</td>
+                </tr>
+              `;
+            }).join("")}
+          </tbody>
+        </table>
+      `;
     }
 
     async function loadOrders() {
@@ -776,6 +789,7 @@ ORDER_VIEW_HTML = r"""<!doctype html>
         }
         const payload = await response.json();
         allOrders = payload.orders || [];
+        serverSummary = payload.summary || {};
         renderOrders();
         setNotice(`Loaded ${allOrders.length} orders`);
       } finally {
@@ -810,7 +824,7 @@ ORDER_VIEW_HTML = r"""<!doctype html>
       loadOrders().catch((error) => setNotice(error.message, true));
     } else {
       setNotice("Enter ORDER_API_TOKEN to load orders");
-      renderStats([]);
+      renderSummary([]);
       renderOrders();
     }
   </script>
@@ -1285,7 +1299,13 @@ def list_orders(connection: sqlite3.Connection) -> list[dict[str, Any]]:
     return [serialize_order(row) for row in rows]
 
 
-def create_orders_summary(orders: list[dict[str, Any]]) -> dict[str, int]:
+def create_orders_summary(connection: sqlite3.Connection, orders: list[dict[str, Any]]) -> dict[str, int]:
+    khantoke_ticket_used_row = connection.execute(
+        "SELECT COUNT(*) AS count FROM khantoke_ticket_claims"
+    ).fetchone()
+    khantoke_ticket_used = int(khantoke_ticket_used_row["count"] if khantoke_ticket_used_row else 0)
+    khantoke_ticket_quota = max(KHANTOKE_TICKET_QUOTA, 0)
+
     return {
         "total": len(orders),
         "pendingPayment": sum(1 for order in orders if order.get("status") == "pending_payment"),
@@ -1293,6 +1313,9 @@ def create_orders_summary(orders: list[dict[str, Any]]) -> dict[str, int]:
         "paid": sum(1 for order in orders if order.get("status") in {"paid", "preparing", "shipped"}),
         "rejected": sum(1 for order in orders if order.get("status") == "rejected"),
         "cancelled": sum(1 for order in orders if order.get("status") == "cancelled"),
+        "khantokeTicketQuota": khantoke_ticket_quota,
+        "khantokeTicketUsed": khantoke_ticket_used,
+        "khantokeTicketRemaining": max(khantoke_ticket_quota - khantoke_ticket_used, 0),
     }
 
 
@@ -1652,11 +1675,12 @@ class OrderRequestHandler(BaseHTTPRequestHandler):
                 return
             with open_db() as connection:
                 orders = list_orders(connection)
+                summary = create_orders_summary(connection, orders)
             self._send_json(
                 HTTPStatus.OK,
                 {
                     "orders": orders,
-                    "summary": create_orders_summary(orders),
+                    "summary": summary,
                 },
             )
             return
