@@ -255,7 +255,7 @@ ADMIN_HTML = r"""<!doctype html>
           <option value="waiting_confirm">waiting_confirm</option>
           <option value="paid">paid</option>
           <option value="preparing">preparing</option>
-          <option value="shipped">shipped</option>
+          <option value="shipped">Ready to Receive</option>
           <option value="cancelled">cancelled</option>
           <option value="rejected">rejected</option>
         </select>
@@ -412,6 +412,20 @@ ADMIN_HTML = r"""<!doctype html>
     </div>
   </div>
 
+  <!-- SLIP MODAL -->
+  <div class="modal-backdrop" id="slipModal">
+    <div class="modal" style="width:min(620px,100%)">
+      <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:16px">
+        <div>
+          <h2 style="margin:0 0 4px" id="slipModalTitle">Slip</h2>
+          <div style="font-size:14px;color:var(--muted)">Total: <strong id="slipModalAmount" style="color:var(--ink)"></strong></div>
+        </div>
+        <button class="ghost" id="closeSlipBtn" style="font-size:20px;line-height:1;padding:4px 10px;min-height:0;border-radius:8px">×</button>
+      </div>
+      <div id="slipModalContent"></div>
+    </div>
+  </div>
+
   <script>
     // ── Token ──────────────────────────────────────────────────────────────────
     const tokenInput = document.querySelector("#tokenInput");
@@ -493,21 +507,22 @@ ADMIN_HTML = r"""<!doctype html>
       document.querySelector("#ordersBody").innerHTML = orders.map(function(order) {
         var c = order.customer || {};
         var p = order.product || {};
-        var opts = statuses.map(function(s) {
-          return '<option value="' + s + '"' + (order.status === s ? " selected" : "") + '>' + s + '</option>';
-        }).join("");
+        var statusBtns = statuses.map(function(s) {
+          var label = s === 'shipped' ? 'Ready to Receive' : s.replace(/_/g, ' ');
+          var isActive = order.status === s;
+          var isDanger = s === 'rejected' || s === 'cancelled';
+          var style = 'font-size:11px;padding:2px 7px;min-height:24px;border-radius:6px' + (isDanger && !isActive ? ';border-color:var(--danger);color:var(--danger)' : '');
+          return '<button class="' + (isActive ? 'primary' : 'ghost') + ' statusBtn" data-oid="' + esc(order.id) + '" data-status="' + esc(s) + '" style="' + style + '">' + esc(label) + '</button>';
+        }).join('');
         return '<tr>' +
-          '<td><strong>' + esc(order.id) + '</strong><br/><span class="muted">' + esc(order.createdAt||"") + '</span><br/><span class="badge ' + esc(order.status) + '">' + esc(order.status) + '</span></td>' +
+          '<td><strong>' + esc(order.id) + '</strong><br/><span class="muted">' + esc(order.createdAt||"") + '</span></td>' +
           '<td><strong>' + esc(c.fullName||"-") + '</strong><br/><span class="muted">' + esc(c.studentCode||"-") + '</span><br/><span class="muted">' + esc(c.phone||"") + '</span></td>' +
           '<td><strong>' + esc(p.name||"-") + '</strong><br/><span class="muted">Size: ' + esc(order.size||"-") + ' / Qty: ' + esc(order.quantity||0) + '</span><br/><span class="money">' + esc(baht(order.totalAmount)) + '</span><br/><span class="muted">' + esc(c.school||"") + '</span></td>' +
           '<td><span class="muted">' + esc(order.paymentStatus||"-") + '</span><br/><span class="muted">' + (order.slip ? "Slip uploaded" : "No slip") + '</span></td>' +
-          '<td><select data-oid="' + esc(order.id) + '" class="statusSel" style="min-width:0;font-size:12px;min-height:36px">' + opts + '</select></td>' +
-          '<td><div style="display:grid;gap:5px">' +
-            '<button class="primary updateBtn" data-oid="' + esc(order.id) + '" style="font-size:12px;min-height:32px">Update Status</button>' +
-            '<button class="ok-btn confirmBtn" data-oid="' + esc(order.id) + '" style="font-size:12px;min-height:32px"' + (order.status==="waiting_confirm" ? "" : " disabled") + '>✓ Confirm Paid</button>' +
-            '<button class="danger-btn rejectBtn" data-oid="' + esc(order.id) + '" style="font-size:12px;min-height:32px"' + (["waiting_confirm","pending_payment"].includes(order.status) ? "" : " disabled") + '>✗ Reject</button>' +
-            '<button class="ghost slipBtn" data-oid="' + esc(order.id) + '" style="font-size:12px;min-height:32px"' + (order.slip ? "" : " disabled") + '>View Slip</button>' +
-          '</div></td>' +
+          '<td><span class="badge ' + esc(order.status) + '">' + (order.status === 'shipped' ? 'Ready to Receive' : esc(order.status)) + '</span></td>' +
+          '<td><div style="display:flex;flex-wrap:wrap;gap:3px;margin-bottom:6px">' + statusBtns + '</div>' +
+            '<button class="ghost slipBtn" data-oid="' + esc(order.id) + '" data-total="' + esc(order.totalAmount||0) + '" style="font-size:12px;min-height:28px;width:100%"' + (order.slip ? "" : " disabled") + '>View Slip</button>' +
+          '</td>' +
         '</tr>';
       }).join("");
     }
@@ -533,15 +548,29 @@ ADMIN_HTML = r"""<!doctype html>
       if (!res.ok) throw new Error(await res.text());
     }
 
-    async function viewSlip(orderId) {
-      var res = await fetch("/admin/orders/" + encodeURIComponent(orderId) + "/slip", {
-        headers: { "Authorization": "Bearer " + tokenInput.value.trim() }
-      });
-      if (!res.ok) throw new Error(await res.text());
-      var blob = await res.blob();
-      var url = URL.createObjectURL(blob);
-      window.open(url, "_blank", "noopener,noreferrer");
-      setTimeout(function() { URL.revokeObjectURL(url); }, 60000);
+    async function viewSlip(orderId, totalAmount) {
+      var modal = document.querySelector("#slipModal");
+      var content = document.querySelector("#slipModalContent");
+      document.querySelector("#slipModalTitle").textContent = "Slip — " + orderId;
+      document.querySelector("#slipModalAmount").textContent = baht(totalAmount);
+      content.innerHTML = '<p style="color:var(--muted);text-align:center;padding:24px">Loading...</p>';
+      modal.classList.add("open");
+      try {
+        var res = await fetch("/admin/orders/" + encodeURIComponent(orderId) + "/slip", {
+          headers: { "Authorization": "Bearer " + tokenInput.value.trim() }
+        });
+        if (!res.ok) throw new Error(await res.text());
+        var blob = await res.blob();
+        var url = URL.createObjectURL(blob);
+        if (blob.type === "application/pdf") {
+          content.innerHTML = '<iframe src="' + url + '" style="width:100%;height:500px;border:0;border-radius:8px"></iframe>';
+        } else {
+          content.innerHTML = '<img src="' + url + '" style="max-width:100%;border-radius:8px" />';
+        }
+        setTimeout(function() { URL.revokeObjectURL(url); }, 120000);
+      } catch(e) {
+        content.innerHTML = '<p style="color:var(--danger);text-align:center">' + esc(e.message) + '</p>';
+      }
     }
 
     function exportCsv() {
@@ -568,29 +597,29 @@ ADMIN_HTML = r"""<!doctype html>
     document.querySelector("#statusFilter").addEventListener("change", renderOrders);
 
     document.addEventListener("click", async function(e) {
-      var updateBtn = e.target.closest(".updateBtn");
-      if (updateBtn) {
-        var oid = updateBtn.dataset.oid;
-        var sel = document.querySelector('select[data-oid="' + oid + '"]');
-        try { await patchStatus(oid, sel.value); setOrdersNotice("Updated " + oid); await loadOrders(); }
-        catch(err) { setOrdersNotice(err.message, true); }
-        return;
-      }
-      var confirmBtn = e.target.closest(".confirmBtn");
-      if (confirmBtn) {
-        try { await patchStatus(confirmBtn.dataset.oid, "paid"); setOrdersNotice("Confirmed " + confirmBtn.dataset.oid); await loadOrders(); }
-        catch(err) { setOrdersNotice(err.message, true); }
-        return;
-      }
-      var rejectBtn = e.target.closest(".rejectBtn");
-      if (rejectBtn) {
-        if (!confirm("Reject order " + rejectBtn.dataset.oid + "?")) return;
-        try { await patchStatus(rejectBtn.dataset.oid, "rejected"); setOrdersNotice("Rejected " + rejectBtn.dataset.oid); await loadOrders(); }
+      var statusBtn = e.target.closest(".statusBtn");
+      if (statusBtn) {
+        var oid = statusBtn.dataset.oid;
+        var newStatus = statusBtn.dataset.status;
+        if (newStatus === "rejected" && !confirm("Reject order " + oid + "?")) return;
+        if (newStatus === "cancelled" && !confirm("Cancel order " + oid + "?")) return;
+        try { await patchStatus(oid, newStatus); setOrdersNotice("Updated " + oid + " → " + newStatus); await loadOrders(); }
         catch(err) { setOrdersNotice(err.message, true); }
         return;
       }
       var slipBtn = e.target.closest(".slipBtn");
-      if (slipBtn) { viewSlip(slipBtn.dataset.oid).catch(function(err) { setOrdersNotice(err.message, true); }); return; }
+      if (slipBtn) { viewSlip(slipBtn.dataset.oid, slipBtn.dataset.total).catch(function(err) { setOrdersNotice(err.message, true); }); return; }
+    });
+
+    document.querySelector("#closeSlipBtn").addEventListener("click", function() {
+      document.querySelector("#slipModal").classList.remove("open");
+      document.querySelector("#slipModalContent").innerHTML = "";
+    });
+    document.querySelector("#slipModal").addEventListener("click", function(e) {
+      if (e.target === this) {
+        this.classList.remove("open");
+        document.querySelector("#slipModalContent").innerHTML = "";
+      }
     });
 
     // ── PRODUCTS ───────────────────────────────────────────────────────────────
@@ -1070,6 +1099,9 @@ ORDER_VIEW_HTML = r"""<!doctype html>
       .summary { grid-template-columns: 1fr; }
       .summary-item { border-right: 0; }
     }
+    .modal-backdrop { display: none; position: fixed; inset: 0; background: rgba(0,0,0,.45); z-index: 100; overflow-y: auto; padding: 32px 16px; }
+    .modal-backdrop.open { display: flex; align-items: flex-start; justify-content: center; }
+    .modal { background: #fff; border-radius: 16px; width: min(620px,100%); padding: 28px; }
   </style>
 </head>
 <body>
@@ -1090,7 +1122,7 @@ ORDER_VIEW_HTML = r"""<!doctype html>
         <option value="waiting_confirm">waiting_confirm</option>
         <option value="paid">paid</option>
         <option value="preparing">preparing</option>
-        <option value="shipped">shipped</option>
+        <option value="shipped">Ready to Receive</option>
         <option value="cancelled">cancelled</option>
         <option value="rejected">rejected</option>
       </select>
@@ -1100,6 +1132,21 @@ ORDER_VIEW_HTML = r"""<!doctype html>
     <p class="notice" id="notice"></p>
     <section class="table-wrap" id="tableWrap"></section>
   </main>
+
+  <!-- SLIP MODAL -->
+  <div class="modal-backdrop" id="slipModal">
+    <div class="modal">
+      <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:16px">
+        <div>
+          <h2 style="margin:0 0 4px;font-size:20px;font-weight:700;letter-spacing:-.03em" id="slipModalTitle">Slip</h2>
+          <div style="font-size:14px;color:var(--muted)">Total: <strong id="slipModalAmount" style="color:var(--ink)"></strong></div>
+        </div>
+        <button id="closeSlipBtn" style="background:#fff;border:1px solid var(--line);border-radius:8px;font-size:20px;line-height:1;padding:4px 10px;cursor:pointer;min-height:0">×</button>
+      </div>
+      <div id="slipModalContent"></div>
+    </div>
+  </div>
+
   <script>
     const tokenInput = document.querySelector("#tokenInput");
     const searchInput = document.querySelector("#searchInput");
@@ -1207,7 +1254,7 @@ ORDER_VIEW_HTML = r"""<!doctype html>
               return `
                 <tr>
                   <td><strong>${text(order.id || "-")}</strong></td>
-                  <td><span class="badge ${text(order.status || "")}">${text(order.status || "-")}</span></td>
+                  <td><span class="badge ${text(order.status || "")}">${order.status === "shipped" ? "Ready to Receive" : text(order.status || "-")}</span></td>
                   <td>
                     <strong>${text(customer.fullName || "-")}</strong><br />
                     <span class="tiny">${text(customer.studentCode || "-")}</span><br />
@@ -1261,17 +1308,29 @@ ORDER_VIEW_HTML = r"""<!doctype html>
       }
     }
 
-    async function openSlip(orderId) {
-      const response = await fetch(`/admin/orders/${encodeURIComponent(orderId)}/slip`, {
-        headers: { "Authorization": `Bearer ${tokenInput.value.trim()}` }
-      });
-      if (!response.ok) {
-        throw new Error(await response.text());
+    async function openSlip(orderId, totalAmount) {
+      const modal = document.querySelector("#slipModal");
+      const content = document.querySelector("#slipModalContent");
+      document.querySelector("#slipModalTitle").textContent = "Slip — " + orderId;
+      document.querySelector("#slipModalAmount").textContent = baht(totalAmount);
+      content.innerHTML = '<p style="color:var(--muted);text-align:center;padding:24px">Loading...</p>';
+      modal.classList.add("open");
+      try {
+        const response = await fetch(`/admin/orders/${encodeURIComponent(orderId)}/slip`, {
+          headers: { "Authorization": `Bearer ${tokenInput.value.trim()}` }
+        });
+        if (!response.ok) throw new Error(await response.text());
+        const blob = await response.blob();
+        const url = URL.createObjectURL(blob);
+        if (blob.type === "application/pdf") {
+          content.innerHTML = `<iframe src="${url}" style="width:100%;height:500px;border:0;border-radius:8px"></iframe>`;
+        } else {
+          content.innerHTML = `<img src="${url}" style="max-width:100%;border-radius:8px" />`;
+        }
+        setTimeout(() => URL.revokeObjectURL(url), 120000);
+      } catch (error) {
+        content.innerHTML = `<p style="color:var(--red);text-align:center">${String(error.message).replace(/[&<>"']/g, (c) => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#039;"})[c])}</p>`;
       }
-      const blob = await response.blob();
-      const url = URL.createObjectURL(blob);
-      window.open(url, "_blank", "noopener,noreferrer");
-      setTimeout(() => URL.revokeObjectURL(url), 60000);
     }
 
     refreshButton.addEventListener("click", () => loadOrders().catch((error) => setNotice(error.message, true)));
@@ -1280,7 +1339,19 @@ ORDER_VIEW_HTML = r"""<!doctype html>
     document.addEventListener("click", (event) => {
       const slipButton = event.target.closest(".slipButton");
       if (slipButton) {
-        openSlip(slipButton.dataset.orderId).catch((error) => setNotice(error.message, true));
+        const order = allOrders.find((o) => o.id === slipButton.dataset.orderId);
+        openSlip(slipButton.dataset.orderId, order ? order.totalAmount : 0).catch((error) => setNotice(error.message, true));
+      }
+    });
+
+    document.querySelector("#closeSlipBtn").addEventListener("click", () => {
+      document.querySelector("#slipModal").classList.remove("open");
+      document.querySelector("#slipModalContent").innerHTML = "";
+    });
+    document.querySelector("#slipModal").addEventListener("click", function(e) {
+      if (e.target === this) {
+        this.classList.remove("open");
+        document.querySelector("#slipModalContent").innerHTML = "";
       }
     });
 
@@ -1914,7 +1985,7 @@ def fetch_order_by_code(connection: sqlite3.Connection, order_code: str) -> sqli
 
 def list_orders(connection: sqlite3.Connection) -> list[dict[str, Any]]:
     rows = connection.execute(
-        "SELECT * FROM orders ORDER BY internal_id DESC LIMIT 500"
+        "SELECT * FROM orders ORDER BY internal_id DESC"
     ).fetchall()
     return [serialize_order(row) for row in rows]
 
@@ -1926,13 +1997,21 @@ def create_orders_summary(connection: sqlite3.Connection, orders: list[dict[str,
     khantok_ticket_used = int(khantok_ticket_used_row["count"] if khantok_ticket_used_row else 0)
     khantok_ticket_quota = max(KHANTOK_TICKET_QUOTA, 0)
 
+    counts = {
+        row["status"]: row["cnt"]
+        for row in connection.execute(
+            "SELECT status, COUNT(*) AS cnt FROM orders GROUP BY status"
+        ).fetchall()
+    }
+    total_row = connection.execute("SELECT COUNT(*) AS cnt FROM orders").fetchone()
+
     return {
-        "total": len(orders),
-        "pendingPayment": sum(1 for order in orders if order.get("status") == "pending_payment"),
-        "waitingConfirm": sum(1 for order in orders if order.get("status") == "waiting_confirm"),
-        "paid": sum(1 for order in orders if order.get("status") in {"paid", "preparing", "shipped"}),
-        "rejected": sum(1 for order in orders if order.get("status") == "rejected"),
-        "cancelled": sum(1 for order in orders if order.get("status") == "cancelled"),
+        "total": int(total_row["cnt"] if total_row else 0),
+        "pendingPayment": counts.get("pending_payment", 0),
+        "waitingConfirm": counts.get("waiting_confirm", 0),
+        "paid": counts.get("paid", 0) + counts.get("preparing", 0) + counts.get("shipped", 0),
+        "rejected": counts.get("rejected", 0),
+        "cancelled": counts.get("cancelled", 0),
         "khantokTicketQuota": khantok_ticket_quota,
         "khantokTicketUsed": khantok_ticket_used,
         "khantokTicketRemaining": max(khantok_ticket_quota - khantok_ticket_used, 0),
@@ -2460,6 +2539,58 @@ class OrderRequestHandler(BaseHTTPRequestHandler):
 
         if path == "/orders":
             self._send_html(HTTPStatus.OK, ORDER_VIEW_HTML)
+            return
+
+        if path == "/check-order":
+            from urllib.parse import parse_qs
+            qs = parse_qs(urlparse(self.path).query)
+            code = (qs.get("code") or [""])[0].strip().upper()
+            student_code = (qs.get("studentCode") or [""])[0].strip()
+            if not code and not student_code:
+                self._send_json(HTTPStatus.BAD_REQUEST, {"message": "code หรือ studentCode is required"})
+                return
+            with open_db() as connection:
+                if code:
+                    row = fetch_order_by_code(connection, code)
+                    rows = [row] if row else []
+                else:
+                    rows = [
+                        serialize_order(r)
+                        for r in connection.execute(
+                            "SELECT * FROM orders WHERE student_code = ? ORDER BY internal_id DESC",
+                            (student_code,),
+                        ).fetchall()
+                    ]
+            if code and not rows:
+                self._send_json(HTTPStatus.NOT_FOUND, {"message": "ไม่พบออเดอร์"})
+                return
+            def public_order(o: dict) -> dict:
+                if isinstance(o, sqlite3.Row):
+                    o = serialize_order(o)
+                return {
+                    "id": o.get("id"),
+                    "status": o.get("status"),
+                    "paymentStatus": o.get("paymentStatus"),
+                    "totalAmount": o.get("totalAmount"),
+                    "size": o.get("size"),
+                    "quantity": o.get("quantity"),
+                    "createdAt": o.get("createdAt"),
+                    "updatedAt": o.get("updatedAt"),
+                    "product": o.get("product"),
+                    "items": o.get("items"),
+                    "khantokTicket": o.get("khantokTicket"),
+                    "khantokTicketAlreadyClaimed": o.get("khantokTicketAlreadyClaimed"),
+                    "customer": {
+                        "fullName": (o.get("customer") or {}).get("fullName"),
+                        "studentCode": (o.get("customer") or {}).get("studentCode"),
+                        "school": (o.get("customer") or {}).get("school"),
+                    },
+                    "slip": {"uploadedAt": (o.get("slip") or {}).get("uploadedAt")} if o.get("slip") else None,
+                }
+            if code:
+                self._send_json(HTTPStatus.OK, {"order": public_order(rows[0])})
+            else:
+                self._send_json(HTTPStatus.OK, {"orders": [public_order(o) for o in rows]})
             return
 
         if path == "/admin/orders":
