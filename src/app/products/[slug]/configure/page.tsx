@@ -15,6 +15,7 @@ type ProductConfigurePageProps = {
     itemId?: string;
     size?: string;
     quantity?: string;
+    school?: string;
   };
 };
 
@@ -37,6 +38,7 @@ export default function ProductConfigurePage({
         editingItemId={searchParams?.itemId}
         defaultSize={searchParams?.size}
         defaultQuantity={searchParams?.quantity}
+        defaultSchool={searchParams?.school}
       />
       </Container>
     </section>

@@ -6,7 +6,7 @@ import { useRouter } from "next/navigation";
 import { useCart } from "@/components/CartProvider";
 import { MobileProductSlider } from "@/components/MobileProductSlider";
 import { SizeGuideModal } from "@/components/SizeGuideModal";
-import { SIZE_OPTIONS } from "@/lib/checkoutOptions";
+import { SCHOOL_OPTIONS, SIZE_OPTIONS } from "@/lib/checkoutOptions";
 import {
   clampCartQuantity,
   ConfigureIntent,
@@ -29,6 +29,7 @@ type ProductConfiguratorProps = {
   editingItemId?: string;
   defaultSize?: string;
   defaultQuantity?: string;
+  defaultSchool?: string;
 };
 
 const SIZE_OPTION_BASE_CLASSES =
@@ -47,7 +48,8 @@ export function ProductConfigurator({
   intent,
   editingItemId,
   defaultSize,
-  defaultQuantity
+  defaultQuantity,
+  defaultSchool
 }: ProductConfiguratorProps) {
   const router = useRouter();
   const { addItem, replaceItem } = useCart();
@@ -69,6 +71,9 @@ export function ProductConfigurator({
   );
   const [selectedBundleSize, setSelectedBundleSize] = useState(() =>
     parseBundleSizeSelection(defaultSize)
+  );
+  const [selectedSchool, setSelectedSchool] = useState(
+    product.category === "headband" ? (defaultSchool ?? "") : ""
   );
   const [sizeGuideOpen, setSizeGuideOpen] = useState(false);
   const bundleProduct = isBundleProduct(product);
@@ -92,13 +97,13 @@ export function ProductConfigurator({
       replaceItem(editingItemId, product, {
         quantity: selectedQuantity,
         size: storedSize,
-        school: ""
+        school: selectedSchool
       });
     } else {
       addItem(product, {
         quantity: selectedQuantity,
         size: storedSize,
-        school: ""
+        school: selectedSchool
       });
     }
 
@@ -110,7 +115,8 @@ export function ProductConfigurator({
       createBuyNowHref({
         productSlug: product.slug,
         size: storedSize,
-        quantity: selectedQuantity
+        quantity: selectedQuantity,
+        school: selectedSchool
       })
     );
   }
@@ -181,6 +187,22 @@ export function ProductConfigurator({
                 );
               })}
             </div>
+          </div>
+        )}
+
+        {product.category === "headband" && (
+          <div className="space-y-3">
+            <p className="text-xs font-semibold tracking-[0.1em] text-zinc-700">SCHOOL</p>
+            <select
+              value={selectedSchool}
+              onChange={(e) => setSelectedSchool(e.target.value)}
+              className="h-11 w-full appearance-none rounded-2xl border border-zinc-300 bg-white px-4 text-sm text-zinc-800 shadow-sm outline-none ring-apple-blue focus:border-apple-blue focus:ring-1"
+            >
+              <option value="" disabled>เลือกสำนักวิชา...</option>
+              {SCHOOL_OPTIONS.map((school) => (
+                <option key={school} value={school}>{school}</option>
+              ))}
+            </select>
           </div>
         )}
 
@@ -311,6 +333,7 @@ export function ProductConfigurator({
               <p>Size: {product.requiresSize ? selectedSize : "ONE SIZE"}</p>
             )}
             {selectedColor && <p>Color: {selectedColor.name}</p>}
+            {selectedSchool && <p>School: {selectedSchool}</p>}
           </div>
           <div className="mt-4 flex items-center justify-between border-t border-zinc-200 pt-4">
             <span className="text-sm text-zinc-600">Total</span>
@@ -321,19 +344,19 @@ export function ProductConfigurator({
         <div className="flex flex-wrap gap-3">
           {primaryMode === "payment" ? (
             <>
-              <button type="button" onClick={handlePayment} className={PRIMARY_BUTTON_CLASSES}>
+              <button type="button" onClick={handlePayment} disabled={product.category === "headband" && !selectedSchool} className={PRIMARY_BUTTON_CLASSES}>
                 Payment
               </button>
-              <button type="button" onClick={handleAddToCart} className={SECONDARY_BUTTON_CLASSES}>
+              <button type="button" onClick={handleAddToCart} disabled={product.category === "headband" && !selectedSchool} className={SECONDARY_BUTTON_CLASSES}>
                 {editingItemId ? "Save Changes" : "Add to Cart"}
               </button>
             </>
           ) : (
             <>
-              <button type="button" onClick={handleAddToCart} className={PRIMARY_BUTTON_CLASSES}>
+              <button type="button" onClick={handleAddToCart} disabled={product.category === "headband" && !selectedSchool} className={PRIMARY_BUTTON_CLASSES}>
                 {editingItemId ? "Save Changes" : "Add to Cart"}
               </button>
-              <button type="button" onClick={handlePayment} className={SECONDARY_BUTTON_CLASSES}>
+              <button type="button" onClick={handlePayment} disabled={product.category === "headband" && !selectedSchool} className={SECONDARY_BUTTON_CLASSES}>
                 Payment
               </button>
             </>
