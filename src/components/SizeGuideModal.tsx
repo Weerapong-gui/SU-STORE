@@ -28,18 +28,18 @@ export function SizeGuideModal({ open, onClose }: SizeGuideModalProps) {
 
       <div className="relative z-10 max-h-[92vh] max-w-[94vw] overflow-hidden rounded-[1.75rem] bg-white shadow-[0_28px_90px_rgba(0,0,0,0.26)]">
         <Image
-          src="/images/size guide/Horizontal.png"
+          src="/images/size guide/Vertical.png"
           alt="Size guide horizontal"
-          width={1080}
-          height={1566}
+          width={1350}
+          height={829}
           priority
           className="hidden max-h-[92vh] w-auto max-w-[94vw] object-contain md:block landscape:block"
         />
         <Image
-          src="/images/size guide/Vertical.png"
+          src="/images/size guide/Horizontal.png"
           alt="Size guide vertical"
-          width={1350}
-          height={829}
+          width={1080}
+          height={1566}
           priority
           className="block max-h-[92vh] w-auto max-w-[94vw] object-contain md:hidden landscape:hidden"
         />
