@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import base64
 import binascii
+import html
 import io
 import json
 import os
@@ -35,6 +36,392 @@ KHANTOKE_TICKET_QUOTA = int(
 ORDER_ID_PATTERN = re.compile(r"^[A-Z0-9-]+$")
 ALLOWED_SLIP_TYPES = {"image/jpeg", "image/png", "image/webp", "application/pdf"}
 MAX_SLIP_SIZE_BYTES = 5 * 1024 * 1024
+ORDER_STATUSES = {
+    "pending_payment",
+    "waiting_confirm",
+    "paid",
+    "preparing",
+    "shipped",
+    "cancelled",
+    "rejected",
+}
+PAYMENT_STATUS_BY_ORDER_STATUS = {
+    "pending_payment": "awaiting_payment",
+    "waiting_confirm": "waiting_confirm",
+    "paid": "paid",
+    "preparing": "paid",
+    "shipped": "paid",
+    "cancelled": "rejected",
+    "rejected": "rejected",
+}
+
+
+ADMIN_HTML = r"""<!doctype html>
+<html lang="th">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>SU STORE Admin</title>
+  <style>
+    :root {
+      color-scheme: light;
+      --bg: #f4f4f5;
+      --panel: #ffffff;
+      --line: #d8d8dd;
+      --text: #111114;
+      --muted: #666a73;
+      --accent: #0071e3;
+      --danger: #b42318;
+      --ok: #027a48;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      background: var(--bg);
+      color: var(--text);
+      font-family: ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }
+    header {
+      position: sticky;
+      top: 0;
+      z-index: 3;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 16px;
+      padding: 18px clamp(16px, 4vw, 44px);
+      border-bottom: 1px solid var(--line);
+      background: rgba(255, 255, 255, 0.9);
+      backdrop-filter: blur(18px);
+    }
+    h1 {
+      margin: 0;
+      font-size: clamp(24px, 4vw, 44px);
+      letter-spacing: 0;
+    }
+    main {
+      width: min(1180px, calc(100% - 32px));
+      margin: 28px auto 56px;
+    }
+    .toolbar, .stats, .orders {
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 8px;
+    }
+    .toolbar {
+      display: grid;
+      grid-template-columns: minmax(220px, 1fr) auto auto;
+      gap: 10px;
+      padding: 14px;
+      align-items: center;
+    }
+    input, select, button {
+      min-height: 42px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: #fff;
+      color: var(--text);
+      font: inherit;
+    }
+    input, select { padding: 0 12px; width: 100%; }
+    button {
+      cursor: pointer;
+      padding: 0 16px;
+      font-weight: 700;
+    }
+    button.primary {
+      border-color: var(--accent);
+      background: var(--accent);
+      color: #fff;
+    }
+    button.ghost { background: #fff; }
+    button:disabled { cursor: not-allowed; opacity: 0.55; }
+    .stats {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 1px;
+      overflow: hidden;
+      margin: 16px 0;
+    }
+    .stat {
+      padding: 16px;
+      background: #fff;
+    }
+    .stat span {
+      display: block;
+      color: var(--muted);
+      font-size: 12px;
+      text-transform: uppercase;
+      letter-spacing: .12em;
+    }
+    .stat strong {
+      display: block;
+      margin-top: 8px;
+      font-size: 26px;
+    }
+    .orders { overflow: hidden; }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      table-layout: fixed;
+    }
+    th, td {
+      padding: 12px;
+      border-bottom: 1px solid var(--line);
+      text-align: left;
+      vertical-align: top;
+      word-wrap: break-word;
+    }
+    th {
+      color: var(--muted);
+      font-size: 12px;
+      text-transform: uppercase;
+      letter-spacing: .1em;
+      background: #fbfbfc;
+    }
+    tr:last-child td { border-bottom: 0; }
+    .muted { color: var(--muted); }
+    .money { color: var(--accent); font-weight: 800; }
+    .badge {
+      display: inline-flex;
+      align-items: center;
+      min-height: 26px;
+      padding: 0 9px;
+      border-radius: 999px;
+      background: #eef2ff;
+      font-size: 12px;
+      font-weight: 800;
+      white-space: nowrap;
+    }
+    .badge.waiting_confirm { background: #fff7ed; color: #9a3412; }
+    .badge.paid, .badge.preparing, .badge.shipped { background: #ecfdf3; color: var(--ok); }
+    .badge.rejected, .badge.cancelled { background: #fef3f2; color: var(--danger); }
+    .actions {
+      display: grid;
+      gap: 8px;
+    }
+    .notice {
+      margin-top: 12px;
+      color: var(--muted);
+      min-height: 24px;
+    }
+    @media (max-width: 860px) {
+      header { align-items: flex-start; flex-direction: column; }
+      .toolbar { grid-template-columns: 1fr; }
+      .stats { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+      table, thead, tbody, tr, th, td { display: block; }
+      thead { display: none; }
+      tr { border-bottom: 1px solid var(--line); padding: 12px; }
+      td { border-bottom: 0; padding: 6px 0; }
+      td::before {
+        content: attr(data-label);
+        display: block;
+        color: var(--muted);
+        font-size: 11px;
+        text-transform: uppercase;
+        letter-spacing: .1em;
+      }
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>Admin Orders</h1>
+    <button class="primary" id="refreshButton">Refresh</button>
+  </header>
+  <main>
+    <section class="toolbar">
+      <input id="tokenInput" type="password" autocomplete="current-password" placeholder="ORDER_API_TOKEN" />
+      <button class="primary" id="saveTokenButton">Save Token</button>
+      <button class="ghost" id="clearTokenButton">Clear</button>
+    </section>
+    <section class="stats" id="stats"></section>
+    <section class="orders">
+      <table>
+        <thead>
+          <tr>
+            <th style="width: 12%">Order</th>
+            <th style="width: 20%">Customer</th>
+            <th style="width: 22%">Product</th>
+            <th style="width: 12%">Payment</th>
+            <th style="width: 14%">Status</th>
+            <th style="width: 20%">Actions</th>
+          </tr>
+        </thead>
+        <tbody id="ordersBody"></tbody>
+      </table>
+    </section>
+    <p class="notice" id="notice"></p>
+  </main>
+  <script>
+    const statuses = [
+      "pending_payment",
+      "waiting_confirm",
+      "paid",
+      "preparing",
+      "shipped",
+      "cancelled",
+      "rejected"
+    ];
+    const tokenInput = document.querySelector("#tokenInput");
+    const notice = document.querySelector("#notice");
+    const ordersBody = document.querySelector("#ordersBody");
+    const stats = document.querySelector("#stats");
+
+    tokenInput.value = localStorage.getItem("suStoreAdminToken") || "";
+
+    function headers() {
+      return {
+        "Authorization": `Bearer ${tokenInput.value.trim()}`,
+        "Content-Type": "application/json"
+      };
+    }
+
+    function baht(value) {
+      return new Intl.NumberFormat("th-TH", {
+        style: "currency",
+        currency: "THB",
+        maximumFractionDigits: 0
+      }).format(Number(value || 0));
+    }
+
+    function setNotice(message, isError = false) {
+      notice.textContent = message;
+      notice.style.color = isError ? "var(--danger)" : "var(--muted)";
+    }
+
+    function renderStats(summary) {
+      const items = [
+        ["Total", summary.total || 0],
+        ["Waiting Slip", summary.pendingPayment || 0],
+        ["Waiting Confirm", summary.waitingConfirm || 0],
+        ["Paid", summary.paid || 0],
+      ];
+      stats.innerHTML = items.map(([label, value]) => `
+        <div class="stat"><span>${label}</span><strong>${value}</strong></div>
+      `).join("");
+    }
+
+    function renderOrders(orders) {
+      ordersBody.innerHTML = orders.map((order) => {
+        const customer = order.customer || {};
+        const product = order.product || {};
+        const slip = order.slip;
+        const options = statuses.map((status) => `
+          <option value="${status}" ${order.status === status ? "selected" : ""}>${status}</option>
+        `).join("");
+        return `
+          <tr>
+            <td data-label="Order">
+              <strong>${order.id}</strong><br />
+              <span class="muted">${order.createdAt || ""}</span><br />
+              <span class="badge ${order.status}">${order.status}</span>
+            </td>
+            <td data-label="Customer">
+              <strong>${customer.fullName || "-"}</strong><br />
+              <span>${customer.studentCode || "-"}</span><br />
+              <span class="muted">${customer.email || ""}</span><br />
+              <span class="muted">${customer.phone || ""}</span>
+            </td>
+            <td data-label="Product">
+              <strong>${product.name || "-"}</strong><br />
+              <span>Size: ${order.size || "-"} / Qty: ${order.quantity || 0}</span><br />
+              <span class="money">${baht(order.totalAmount)}</span><br />
+              <span class="muted">${customer.school || ""}</span>
+            </td>
+            <td data-label="Payment">
+              <strong>${order.paymentStatus || "-"}</strong><br />
+              <span>${slip ? "Slip uploaded" : "No slip"}</span><br />
+              <span class="muted">${slip?.uploadedAt || ""}</span>
+            </td>
+            <td data-label="Status">
+              <select data-order-id="${order.id}" class="statusSelect">${options}</select>
+            </td>
+            <td data-label="Actions">
+              <div class="actions">
+                <button class="primary updateButton" data-order-id="${order.id}">Update Status</button>
+                <button class="ghost slipButton" data-order-id="${order.id}" ${slip ? "" : "disabled"}>View Slip</button>
+              </div>
+            </td>
+          </tr>
+        `;
+      }).join("");
+    }
+
+    async function loadOrders() {
+      setNotice("Loading orders...");
+      const response = await fetch("/admin/orders", { headers: headers(), cache: "no-store" });
+      if (!response.ok) {
+        throw new Error(await response.text());
+      }
+      const payload = await response.json();
+      renderStats(payload.summary || {});
+      renderOrders(payload.orders || []);
+      setNotice(`Loaded ${payload.orders?.length || 0} orders`);
+    }
+
+    async function updateStatus(orderId) {
+      const select = document.querySelector(`select[data-order-id="${orderId}"]`);
+      const status = select.value;
+      const response = await fetch(`/admin/orders/${encodeURIComponent(orderId)}/status`, {
+        method: "PATCH",
+        headers: headers(),
+        body: JSON.stringify({ status })
+      });
+      if (!response.ok) {
+        throw new Error(await response.text());
+      }
+      setNotice(`Updated ${orderId} to ${status}`);
+      await loadOrders();
+    }
+
+    async function viewSlip(orderId) {
+      const response = await fetch(`/admin/orders/${encodeURIComponent(orderId)}/slip`, {
+        headers: { "Authorization": `Bearer ${tokenInput.value.trim()}` }
+      });
+      if (!response.ok) {
+        throw new Error(await response.text());
+      }
+      const blob = await response.blob();
+      const url = URL.createObjectURL(blob);
+      window.open(url, "_blank", "noopener,noreferrer");
+      setTimeout(() => URL.revokeObjectURL(url), 60000);
+    }
+
+    document.querySelector("#saveTokenButton").addEventListener("click", () => {
+      localStorage.setItem("suStoreAdminToken", tokenInput.value.trim());
+      setNotice("Token saved");
+      loadOrders().catch((error) => setNotice(error.message, true));
+    });
+    document.querySelector("#clearTokenButton").addEventListener("click", () => {
+      localStorage.removeItem("suStoreAdminToken");
+      tokenInput.value = "";
+      ordersBody.innerHTML = "";
+      stats.innerHTML = "";
+      setNotice("Token cleared");
+    });
+    document.querySelector("#refreshButton").addEventListener("click", () => {
+      loadOrders().catch((error) => setNotice(error.message, true));
+    });
+    document.addEventListener("click", (event) => {
+      const updateButton = event.target.closest(".updateButton");
+      if (updateButton) {
+        updateStatus(updateButton.dataset.orderId).catch((error) => setNotice(error.message, true));
+      }
+      const slipButton = event.target.closest(".slipButton");
+      if (slipButton) {
+        viewSlip(slipButton.dataset.orderId).catch((error) => setNotice(error.message, true));
+      }
+    });
+
+    if (tokenInput.value) {
+      loadOrders().catch((error) => setNotice(error.message, true));
+    } else {
+      setNotice("Enter ORDER_API_TOKEN to load orders");
+    }
+  </script>
+</body>
+</html>"""
 
 
 def now_iso() -> str:
@@ -497,6 +884,47 @@ def fetch_order_by_code(connection: sqlite3.Connection, order_code: str) -> sqli
     ).fetchone()
 
 
+def list_orders(connection: sqlite3.Connection) -> list[dict[str, Any]]:
+    rows = connection.execute(
+        "SELECT * FROM orders ORDER BY internal_id DESC LIMIT 500"
+    ).fetchall()
+    return [serialize_order(row) for row in rows]
+
+
+def create_orders_summary(orders: list[dict[str, Any]]) -> dict[str, int]:
+    return {
+        "total": len(orders),
+        "pendingPayment": sum(1 for order in orders if order.get("status") == "pending_payment"),
+        "waitingConfirm": sum(1 for order in orders if order.get("status") == "waiting_confirm"),
+        "paid": sum(1 for order in orders if order.get("status") in {"paid", "preparing", "shipped"}),
+        "rejected": sum(1 for order in orders if order.get("status") == "rejected"),
+        "cancelled": sum(1 for order in orders if order.get("status") == "cancelled"),
+    }
+
+
+def update_order_status(
+    connection: sqlite3.Connection,
+    order_code: str,
+    status: str,
+) -> dict[str, Any] | None:
+    existing_order = fetch_order_by_code(connection, order_code)
+    if existing_order is None:
+        return None
+
+    payment_status = PAYMENT_STATUS_BY_ORDER_STATUS[status]
+    connection.execute(
+        """
+        UPDATE orders
+        SET status = ?, payment_status = ?, updated_at = ?
+        WHERE order_code = ?
+        """,
+        (status, payment_status, now_iso(), order_code),
+    )
+    row = fetch_order_by_code(connection, order_code)
+    assert row is not None
+    return serialize_order(row)
+
+
 def reserve_khantoke_ticket(connection: sqlite3.Connection, order_id: int) -> tuple[bool, str | None]:
     existing_claim = connection.execute(
         "SELECT claimed_at FROM khantoke_ticket_claims WHERE order_id = ?",
@@ -696,6 +1124,32 @@ class OrderRequestHandler(BaseHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(response_body)
 
+    def _send_html(self, status: int, body: str) -> None:
+        response_body = body.encode("utf-8")
+        self.send_response(status)
+        self.send_header("Content-Type", "text/html; charset=utf-8")
+        self.send_header("Content-Length", str(len(response_body)))
+        self.end_headers()
+        self.wfile.write(response_body)
+
+    def _send_file(self, path: Path, mime_type: str, file_name: str) -> None:
+        try:
+            content = path.read_bytes()
+        except FileNotFoundError:
+            self._send_json(HTTPStatus.NOT_FOUND, {"message": "slip file not found"})
+            return
+
+        safe_file_name = sanitize_file_name(Path(file_name).name)
+        self.send_response(HTTPStatus.OK)
+        self.send_header("Content-Type", mime_type or "application/octet-stream")
+        self.send_header("Content-Length", str(len(content)))
+        self.send_header(
+            "Content-Disposition",
+            f'inline; filename="{html.escape(safe_file_name, quote=True)}"',
+        )
+        self.end_headers()
+        self.wfile.write(content)
+
     def _read_json(self) -> Any:
         content_length = int(self.headers.get("Content-Length", "0"))
         if content_length <= 0:
@@ -779,10 +1233,54 @@ class OrderRequestHandler(BaseHTTPRequestHandler):
         self._send_json(HTTPStatus.UNAUTHORIZED, {"message": "unauthorized"})
         return False
 
+    def _require_admin_authorization(self) -> bool:
+        if self._has_global_authorization():
+            return True
+        self._deny_unauthorized()
+        return False
+
     def do_GET(self) -> None:
         path = urlparse(self.path).path
         if path == "/health":
             self._send_json(HTTPStatus.OK, {"status": "ok"})
+            return
+
+        if path == "/admin":
+            self._send_html(HTTPStatus.OK, ADMIN_HTML)
+            return
+
+        if path == "/admin/orders":
+            if not self._require_admin_authorization():
+                return
+            with open_db() as connection:
+                orders = list_orders(connection)
+            self._send_json(
+                HTTPStatus.OK,
+                {
+                    "orders": orders,
+                    "summary": create_orders_summary(orders),
+                },
+            )
+            return
+
+        slip_match = re.fullmatch(r"/admin/orders/([A-Z0-9-]+)/slip", path)
+        if slip_match:
+            if not self._require_admin_authorization():
+                return
+            with open_db() as connection:
+                row = fetch_order_by_code(connection, slip_match.group(1))
+            if row is None:
+                self._send_json(HTTPStatus.NOT_FOUND, {"message": "order not found"})
+                return
+            slip_path = resolve_stored_slip_path(row["slip_stored_name"], row["slip_storage_path"])
+            if slip_path is None:
+                self._send_json(HTTPStatus.NOT_FOUND, {"message": "slip not found"})
+                return
+            self._send_file(
+                slip_path,
+                row["slip_mime_type"] or "application/octet-stream",
+                row["slip_original_name"] or row["slip_stored_name"] or "slip",
+            )
             return
 
         order_match = re.fullmatch(r"/orders/([A-Z0-9-]+)", path)
@@ -877,6 +1375,29 @@ class OrderRequestHandler(BaseHTTPRequestHandler):
 
     def do_PATCH(self) -> None:
         path = urlparse(self.path).path
+        status_match = re.fullmatch(r"/admin/orders/([A-Z0-9-]+)/status", path)
+        if status_match:
+            if not self._require_admin_authorization():
+                return
+            try:
+                payload = self._read_json()
+            except json.JSONDecodeError:
+                self._send_json(HTTPStatus.BAD_REQUEST, {"message": "invalid json"})
+                return
+            status = payload.get("status") if isinstance(payload, dict) else None
+            if not isinstance(status, str) or status not in ORDER_STATUSES:
+                self._send_json(HTTPStatus.BAD_REQUEST, {"message": "invalid status"})
+                return
+            with open_db() as connection:
+                order = update_order_status(connection, status_match.group(1), status)
+                if order is None:
+                    self._send_json(HTTPStatus.NOT_FOUND, {"message": "order not found"})
+                    return
+                connection.commit()
+            sync_order_to_google_sheets(order, "admin_status_updated")
+            self._send_json(HTTPStatus.OK, order)
+            return
+
         order_match = re.fullmatch(r"/orders/([A-Z0-9-]+)/slip", path)
         if not order_match:
             self._send_json(HTTPStatus.NOT_FOUND, {"message": "not found"})

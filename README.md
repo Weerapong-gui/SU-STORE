@@ -42,6 +42,14 @@ curl http://localhost:3010/health
 
 Docker Compose stores the SQLite database and uploaded slips in the named volume
 `su-store_order-api-data`.
+
+Admin page:
+
+- URL: `http://localhost:3010/admin`
+- Server URL: `http://172.26.55.36:3010/admin`
+- Auth: paste `ORDER_API_TOKEN` into the token field
+- Features: list orders, open uploaded slips, and update order status
+
 เว็บขายเสื้อพี่เก็ต
 
 ## Order API
