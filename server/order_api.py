@@ -1393,8 +1393,8 @@ def ensure_db() -> None:
           )
           """
       )
-      product_count_row = connection.execute("SELECT COUNT(*) AS count FROM products").fetchone()
-      if product_count_row["count"] == 0:
+      product_count_row = connection.execute("SELECT COUNT(*) FROM products").fetchone()
+      if product_count_row[0] == 0:
           seed_now = now_iso()
           for p in DEFAULT_PRODUCTS:
               connection.execute(
