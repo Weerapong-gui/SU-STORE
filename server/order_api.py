@@ -1971,9 +1971,16 @@ def create_order(connection: sqlite3.Connection, payload: dict[str, Any]) -> dic
         "UPDATE orders SET order_code = ? WHERE internal_id = ?",
         (order_code, sequence_number),
     )
-    khantok_ticket, khantok_ticket_claimed_at, khantok_ticket_already_claimed = reserve_khantok_ticket(
-        connection, sequence_number, payload["customer"]["studentCode"]
+    items_for_check = payload.get("items") or []
+    is_headband_only = bool(items_for_check) and all(
+        (i.get("product") or {}).get("slug") == "fresh-headband" for i in items_for_check
     )
+    if is_headband_only:
+        khantok_ticket, khantok_ticket_claimed_at, khantok_ticket_already_claimed = False, None, False
+    else:
+        khantok_ticket, khantok_ticket_claimed_at, khantok_ticket_already_claimed = reserve_khantok_ticket(
+            connection, sequence_number, payload["customer"]["studentCode"]
+        )
     connection.execute(
         "UPDATE orders SET khantok_ticket = ?, khantok_ticket_claimed_at = ?, khantok_ticket_already_claimed = ? WHERE internal_id = ?",
         (1 if khantok_ticket else 0, khantok_ticket_claimed_at, 1 if khantok_ticket_already_claimed else 0, sequence_number),
@@ -2323,10 +2330,6 @@ class OrderRequestHandler(BaseHTTPRequestHandler):
 
             field_name = str(part.get_param("name", header="content-disposition") or "")
             filename = part.get_filename()
-
-            if field_name == "uploadedAt":
-                uploaded_at = str(part.get_content() or uploaded_at)
-                continue
 
             if field_name != "slip":
                 continue
