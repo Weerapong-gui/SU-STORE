@@ -1,5 +1,6 @@
 import { ValidatedOrderInput } from "@/lib/orderValidation";
 import { productToSnapshot } from "@/lib/orderPayload";
+import { getSizeSurcharge } from "@/lib/productSizing";
 import { Order, OrderCustomer, OrderItem, OrderProductSnapshot } from "@/types/order";
 
 const REMOTE_ORDER_API_BASE_URL = process.env.ORDER_API_BASE_URL?.replace(/\/$/, "") ?? "";
@@ -45,11 +46,12 @@ function createRemoteOrderPayload(input: ValidatedOrderInput): RemoteOrderPayloa
       product,
       size: item.size,
       quantity: item.quantity,
-      unitPrice: item.product.price,
-      totalAmount: item.product.price * item.quantity
+      unitPrice: item.product.price + getSizeSurcharge(item.product, item.size),
+      totalAmount: (item.product.price + getSizeSurcharge(item.product, item.size)) * item.quantity
     };
   });
   const totalAmount = items.reduce((sum, item) => sum + item.totalAmount, 0);
+  // totalAmount already includes size surcharges from each item
 
   return {
     product: items[0].product,

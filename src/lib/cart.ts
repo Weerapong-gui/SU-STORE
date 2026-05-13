@@ -110,6 +110,7 @@ export function createCartItem(
     quantity: number;
     size?: string;
     school: string;
+    unitPriceOverride?: number;
   }
 ): CartItem {
   return {
@@ -119,7 +120,7 @@ export function createCartItem(
     productShortName: product.shortName,
     productImage: product.images[0],
     productCategory: product.category,
-    unitPrice: product.price,
+    unitPrice: selection.unitPriceOverride ?? product.price,
     quantity: clampCartQuantity(selection.quantity),
     size: getStoredProductSize(product, selection.size),
     school: selection.school,

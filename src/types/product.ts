@@ -11,6 +11,7 @@ export type Product = {
   price: number;
   images: string[];
   colors?: ColorVariant[];
+  sizeSurcharge?: { sizes: string[]; amount: number };
   category: ProductCategory;
   requiresSize: boolean;
   requiresSchool: boolean;

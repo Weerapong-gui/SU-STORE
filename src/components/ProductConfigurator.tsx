@@ -15,6 +15,7 @@ import {
 import { formatPrice } from "@/lib/formatPrice";
 import {
   getStoredProductSize,
+  getSizeSurcharge,
   isBundleProduct,
   normalizeStandardProductSize,
   parseBundleSizeSelection,
@@ -78,7 +79,9 @@ export function ProductConfigurator({
   const [sizeGuideOpen, setSizeGuideOpen] = useState(false);
   const bundleProduct = isBundleProduct(product);
 
-  const totalPrice = useMemo(() => product.price * selectedQuantity, [product.price, selectedQuantity]);
+  const surcharge = bundleProduct ? 0 : getSizeSurcharge(product, selectedSize);
+  const adjustedUnitPrice = product.price + surcharge;
+  const totalPrice = useMemo(() => adjustedUnitPrice * selectedQuantity, [adjustedUnitPrice, selectedQuantity]);
   const primaryMode = intent === "cart" ? "cart" : "payment";
   const baseStoredSize = bundleProduct
     ? getStoredProductSize(product, `POLO:${selectedBundleSize.polo}|JACKET:${selectedBundleSize.jacket}`)
@@ -101,13 +104,15 @@ export function ProductConfigurator({
       replaceItem(editingItemId, product, {
         quantity: selectedQuantity,
         size: storedSize,
-        school: selectedSchool
+        school: selectedSchool,
+        unitPriceOverride: surcharge > 0 ? adjustedUnitPrice : undefined
       });
     } else {
       addItem(product, {
         quantity: selectedQuantity,
         size: storedSize,
-        school: selectedSchool
+        school: selectedSchool,
+        unitPriceOverride: surcharge > 0 ? adjustedUnitPrice : undefined
       });
     }
 
@@ -340,6 +345,9 @@ export function ProductConfigurator({
             {!bundleProduct && selectedColor && <p>Color: {selectedColor.name}</p>}
             {selectedSchool && <p>School: {selectedSchool}</p>}
           </div>
+          {surcharge > 0 && (
+            <p className="mt-2 text-xs text-amber-600">+{surcharge} บาท สำหรับไซซ์ {selectedSize}</p>
+          )}
           <div className="mt-4 flex items-center justify-between border-t border-zinc-200 pt-4">
             <span className="text-sm text-zinc-600">Total</span>
             <span className="text-xl font-semibold text-apple-blue">{formatPrice(totalPrice)}</span>

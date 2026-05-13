@@ -9,6 +9,7 @@ export const products: Product[] = [
     description: "เสื้อเดี่ยวทรงเรียบ ใส่ง่าย และเป็นฐานหลักของคอลเลกชัน Fresher 28th.",
     price: 399,
     images: ["/images/polo.png", "/images/polo.png"],
+    sizeSurcharge: { sizes: ["2XL", "3XL", "4XL", "5XL", "6XL", "7XL"], amount: 20 },
     category: "single",
     requiresSize: true,
     requiresSchool: true

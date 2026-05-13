@@ -88,6 +88,12 @@ export function getStoredProductSize(product: Product, size?: string) {
   return normalizeStandardProductSize(product, size);
 }
 
+export function getSizeSurcharge(product: Product, size?: string): number {
+  if (!product.sizeSurcharge || !size) return 0;
+  const baseSize = size.split(" / ")[0].trim();
+  return product.sizeSurcharge.sizes.includes(baseSize) ? product.sizeSurcharge.amount : 0;
+}
+
 export function formatStoredProductSize(category: ProductCategory, size?: string) {
   if (category === "headband") {
     return ONE_SIZE_OPTION;

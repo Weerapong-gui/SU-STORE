@@ -23,11 +23,11 @@ type CartContextValue = {
   itemCount: number;
   subtotal: number;
   hydrated: boolean;
-  addItem: (product: Product, selection: { quantity: number; size?: string; school: string }) => void;
+  addItem: (product: Product, selection: { quantity: number; size?: string; school: string; unitPriceOverride?: number }) => void;
   replaceItem: (
     itemId: string,
     product: Product,
-    selection: { quantity: number; size?: string; school: string }
+    selection: { quantity: number; size?: string; school: string; unitPriceOverride?: number }
   ) => void;
   removeItem: (itemId: string) => void;
   updateItemQuantity: (itemId: string, quantity: number) => void;
