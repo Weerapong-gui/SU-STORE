@@ -1,11 +1,12 @@
 "use client";
 
 import Image from "next/image";
-import { useMemo, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useCart } from "@/components/CartProvider";
 import { MobileProductSlider } from "@/components/MobileProductSlider";
 import { SizeGuideModal } from "@/components/SizeGuideModal";
+import { SurchargeToast } from "@/components/SurchargeToast";
 import { SCHOOL_OPTIONS, SIZE_OPTIONS } from "@/lib/checkoutOptions";
 import {
   clampCartQuantity,
@@ -77,6 +78,8 @@ export function ProductConfigurator({
     product.category === "headband" ? (defaultSchool ?? "") : ""
   );
   const [sizeGuideOpen, setSizeGuideOpen] = useState(false);
+  const [toastVisible, setToastVisible] = useState(false);
+  const [toastKey, setToastKey] = useState(0);
   const bundleProduct = isBundleProduct(product);
 
   const surcharge = bundleProduct
@@ -96,6 +99,11 @@ export function ProductConfigurator({
     : selectedColor
     ? [selectedColor.image]
     : product.images;
+
+  const showSurchargeToast = useCallback(() => {
+    setToastVisible(true);
+    setToastKey((k) => k + 1);
+  }, []);
 
   function updateQuantity(nextQuantity: number) {
     setSelectedQuantity(clampCartQuantity(nextQuantity));
@@ -242,9 +250,10 @@ export function ProductConfigurator({
                     <button
                       key={`polo-${size}`}
                       type="button"
-                      onClick={() =>
-                        setSelectedBundleSize((currentValue) => ({ ...currentValue, polo: size }))
-                      }
+                      onClick={() => {
+                        setSelectedBundleSize((currentValue) => ({ ...currentValue, polo: size }));
+                        if (product.sizeSurcharge?.sizes.includes(size)) showSurchargeToast();
+                      }}
                       className={cn(
                         SIZE_OPTION_BASE_CLASSES,
                         selectedBundleSize.polo === size ? SIZE_OPTION_SELECTED_CLASSES : ""
@@ -286,7 +295,10 @@ export function ProductConfigurator({
                 <button
                   key={size}
                   type="button"
-                  onClick={() => setSelectedSize(size)}
+                  onClick={() => {
+                    setSelectedSize(size);
+                    if (product.sizeSurcharge?.sizes.includes(size)) showSurchargeToast();
+                  }}
                   className={cn(
                     SIZE_OPTION_BASE_CLASSES,
                     selectedSize === size ? SIZE_OPTION_SELECTED_CLASSES : ""
@@ -382,6 +394,14 @@ export function ProductConfigurator({
       </div>
 
       <SizeGuideModal open={sizeGuideOpen} onClose={() => setSizeGuideOpen(false)} />
+      {product.sizeSurcharge && (
+        <SurchargeToast
+          visible={toastVisible}
+          amount={product.sizeSurcharge.amount}
+          toastKey={toastKey}
+          onDismiss={() => setToastVisible(false)}
+        />
+      )}
     </div>
   );
 }
