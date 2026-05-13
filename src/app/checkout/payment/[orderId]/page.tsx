@@ -86,7 +86,7 @@ export default async function CheckoutPaymentPage({ params }: CheckoutPaymentPag
                     height={120}
                     className="h-12 w-auto object-contain md:h-14"
                   />
-                  <p className="text-center text-xs font-medium text-zinc-500">
+                  <p className="text-center text-[clamp(1.28rem,4.9vw,3rem)] font-medium leading-tight text-zinc-500">
                     องค์การบริการ องค์การนักศึกษา มหาวิทยาลัยแม่ฟ้าหลวง
                   </p>
                 </div>
