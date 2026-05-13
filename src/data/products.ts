@@ -22,6 +22,7 @@ export const products: Product[] = [
     description: "ชุดเซตสำหรับคนที่อยากได้ลุคครบในคำสั่งซื้อเดียว พร้อมเลือกไซซ์และสำนักวิชาได้เหมือนกลุ่มเสื้อ.",
     price: 799,
     images: ["/images/FRESHER BUNDLE.png", "/images/polo.png"],
+    sizeSurcharge: { sizes: ["2XL", "3XL", "4XL", "5XL", "6XL", "7XL"], amount: 20 },
     colors: [
       { name: "Blue",  hex: "#0d0f40", image: "/Jacket/B.png" },
       { name: "Red",   hex: "#9d1c1f", image: "/Jacket/R.png" },

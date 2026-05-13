@@ -91,6 +91,10 @@ export function getStoredProductSize(product: Product, size?: string) {
 export function getSizeSurcharge(product: Product, size?: string): number {
   if (!product.sizeSurcharge || !size) return 0;
   const baseSize = size.split(" / ")[0].trim();
+  if (isBundleCategory(product.category)) {
+    const bundleSize = parseBundleSizeSelection(baseSize);
+    return product.sizeSurcharge.sizes.includes(bundleSize.polo) ? product.sizeSurcharge.amount : 0;
+  }
   return product.sizeSurcharge.sizes.includes(baseSize) ? product.sizeSurcharge.amount : 0;
 }
 

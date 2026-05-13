@@ -79,7 +79,9 @@ export function ProductConfigurator({
   const [sizeGuideOpen, setSizeGuideOpen] = useState(false);
   const bundleProduct = isBundleProduct(product);
 
-  const surcharge = bundleProduct ? 0 : getSizeSurcharge(product, selectedSize);
+  const surcharge = bundleProduct
+    ? getSizeSurcharge(product, selectedBundleSize.polo)
+    : getSizeSurcharge(product, selectedSize);
   const adjustedUnitPrice = product.price + surcharge;
   const totalPrice = useMemo(() => adjustedUnitPrice * selectedQuantity, [adjustedUnitPrice, selectedQuantity]);
   const primaryMode = intent === "cart" ? "cart" : "payment";
@@ -346,7 +348,9 @@ export function ProductConfigurator({
             {selectedSchool && <p>School: {selectedSchool}</p>}
           </div>
           {surcharge > 0 && (
-            <p className="mt-2 text-xs text-amber-600">+{surcharge} บาท สำหรับไซซ์ {selectedSize}</p>
+            <p className="mt-2 text-xs text-amber-600">
+              +{surcharge} บาท สำหรับ{bundleProduct ? `Polo ไซซ์ ${selectedBundleSize.polo}` : `ไซซ์ ${selectedSize}`}
+            </p>
           )}
           <div className="mt-4 flex items-center justify-between border-t border-zinc-200 pt-4">
             <span className="text-sm text-zinc-600">Total</span>
