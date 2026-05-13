@@ -49,8 +49,11 @@ function validateOrderItemPayload(payload: Record<string, unknown>): ValidationR
     return { message: "Selected product was not found." };
   }
 
+  const baseSize = size.split(" / ")[0].trim();
+  const colorSuffix = size.includes(" / ") ? ` / ${size.split(" / ").slice(1).join(" / ")}` : "";
+
   if (product.requiresSize && isBundleProduct(product)) {
-    const bundleSize = parseBundleSizeSelection(size);
+    const bundleSize = parseBundleSizeSelection(baseSize);
 
     if (
       !SIZE_OPTIONS.includes(bundleSize.polo as (typeof SIZE_OPTIONS)[number]) ||
@@ -58,7 +61,7 @@ function validateOrderItemPayload(payload: Record<string, unknown>): ValidationR
     ) {
       return { message: "Please select both polo size and jacket size." };
     }
-  } else if (product.requiresSize && !SIZE_OPTIONS.includes(size as (typeof SIZE_OPTIONS)[number])) {
+  } else if (product.requiresSize && !SIZE_OPTIONS.includes(baseSize as (typeof SIZE_OPTIONS)[number])) {
     return { message: "Please select a valid size." };
   }
 
@@ -66,10 +69,14 @@ function validateOrderItemPayload(payload: Record<string, unknown>): ValidationR
     return { message: "Please enter a valid quantity." };
   }
 
+  const storedSize = product.requiresSize
+    ? getStoredProductSize(product, baseSize) + colorSuffix
+    : ONE_SIZE_OPTION;
+
   return {
     data: {
       product,
-      size: product.requiresSize ? getStoredProductSize(product, size) : ONE_SIZE_OPTION,
+      size: storedSize,
       quantity: parsedQuantity,
       studentCode: "",
       email: "",
