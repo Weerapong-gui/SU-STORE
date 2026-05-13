@@ -78,7 +78,7 @@ export default async function CheckoutPaymentPage({ params }: CheckoutPaymentPag
               <h2 className="mt-2 text-xl font-semibold text-zinc-900">{PAYMENT_BANK_NAME}</h2>
 
               <div className="mx-auto mt-4 max-w-[48rem]">
-                <div className="flex min-h-20 items-center justify-center rounded-[1.75rem] border border-zinc-200 bg-white px-5 py-4">
+                <div className="flex min-h-20 flex-col items-center justify-center gap-2 rounded-[1.75rem] border border-zinc-200 bg-white px-5 py-4">
                   <Image
                     src="/images/Logo_Bangkok_Bank_Public_Company_Limited.svg.png"
                     alt="Bangkok Bank"
@@ -86,6 +86,9 @@ export default async function CheckoutPaymentPage({ params }: CheckoutPaymentPag
                     height={120}
                     className="h-12 w-auto object-contain md:h-14"
                   />
+                  <p className="text-center text-xs font-medium text-zinc-500">
+                    องค์การบริการ องค์การนักศึกษา มหาวิทยาลัยแม่ฟ้าหลวง
+                  </p>
                 </div>
 
                 <BankAccountCopyField
