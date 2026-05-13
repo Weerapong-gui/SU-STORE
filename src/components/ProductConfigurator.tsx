@@ -86,7 +86,11 @@ export function ProductConfigurator({
   const storedSize = selectedColor
     ? `${baseStoredSize} / ${selectedColor.name}`
     : baseStoredSize;
-  const displayImages = selectedColor ? [selectedColor.image] : product.images;
+  const displayImages = bundleProduct && selectedColor
+    ? [...product.images, selectedColor.image]
+    : selectedColor
+    ? [selectedColor.image]
+    : product.images;
 
   function updateQuantity(nextQuantity: number) {
     setSelectedQuantity(clampCartQuantity(nextQuantity));
