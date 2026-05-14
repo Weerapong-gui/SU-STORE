@@ -22,8 +22,14 @@ export function SurchargeToast({ visible, amount, toastKey, onDismiss }: Surchar
   return (
     <div
       className={cn(
-        "fixed bottom-6 right-6 z-50 w-80 overflow-hidden rounded-2xl bg-zinc-900 shadow-2xl transition-all duration-300",
-        visible ? "translate-y-0 opacity-100" : "translate-y-3 opacity-0 pointer-events-none"
+        "fixed z-50 overflow-hidden rounded-2xl bg-zinc-900 shadow-2xl transition-all duration-300",
+        // Mobile: full-width at top
+        "left-4 right-4 top-4",
+        // Desktop: fixed width at bottom-right
+        "md:left-auto md:right-6 md:top-auto md:bottom-6 md:w-80",
+        visible
+          ? "translate-y-0 opacity-100"
+          : "-translate-y-3 md:translate-y-3 opacity-0 pointer-events-none"
       )}
     >
       <div className="px-5 py-4">
