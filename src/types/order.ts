@@ -37,6 +37,7 @@ export type OrderItem = {
   quantity: number;
   unitPrice: number;
   totalAmount: number;
+  isComponent?: boolean;
 };
 
 export type OrderSlip = {

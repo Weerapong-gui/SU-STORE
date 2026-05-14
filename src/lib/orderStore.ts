@@ -14,8 +14,10 @@ import {
   uploadRemoteOrderSlip,
   updateRemoteOrder,
 } from "@/lib/remoteOrderApi";
+import { products } from "@/data/products";
 import { ValidatedOrderInput } from "@/lib/orderValidation";
 import { productToSnapshot } from "@/lib/orderPayload";
+import { isBundleCategory, parseBundleSizeSelection } from "@/lib/productSizing";
 import { Order, OrderItem, OrderSlip } from "@/types/order";
 
 const COOKIE_SECRET = process.env.COOKIE_SECRET ?? "";
@@ -109,11 +111,50 @@ function isSafeOrderId(orderId: string) {
   return ORDER_ID_PATTERN.test(orderId);
 }
 
-function createOrderItems(input: ValidatedOrderInput): OrderItem[] {
-  return input.items.map((item, index) => {
-    const product = productToSnapshot(item.product);
+function expandBundleComponents(bundleItemId: string, bundleSize: string, quantity: number): OrderItem[] {
+  const [baseBundleSize, ...colorParts] = bundleSize.split(" / ");
+  const colorSuffix = colorParts.length > 0 ? ` / ${colorParts.join(" / ")}` : "";
+  const { polo: poloSize, jacket: jacketSize } = parseBundleSizeSelection(baseBundleSize);
 
-    return {
+  const poloProduct = products.find(p => p.slug === "single-shirt");
+  const jacketProduct = products.find(p => p.slug === "fresh-jacket");
+
+  const components: OrderItem[] = [];
+
+  if (poloProduct) {
+    components.push({
+      id: `${bundleItemId}-polo`,
+      product: productToSnapshot(poloProduct),
+      size: poloSize,
+      quantity,
+      unitPrice: 0,
+      totalAmount: 0,
+      isComponent: true
+    });
+  }
+
+  if (jacketProduct) {
+    components.push({
+      id: `${bundleItemId}-jacket`,
+      product: productToSnapshot(jacketProduct),
+      size: jacketSize + colorSuffix,
+      quantity,
+      unitPrice: 0,
+      totalAmount: 0,
+      isComponent: true
+    });
+  }
+
+  return components;
+}
+
+function createOrderItems(input: ValidatedOrderInput): OrderItem[] {
+  const items: OrderItem[] = [];
+
+  for (let index = 0; index < input.items.length; index++) {
+    const item = input.items[index];
+    const product = productToSnapshot(item.product);
+    const orderItem: OrderItem = {
       id: `${product.slug}-${index + 1}`,
       product,
       size: item.size,
@@ -121,7 +162,15 @@ function createOrderItems(input: ValidatedOrderInput): OrderItem[] {
       unitPrice: item.product.price,
       totalAmount: item.product.price * item.quantity
     };
-  });
+
+    items.push(orderItem);
+
+    if (isBundleCategory(item.product.category)) {
+      items.push(...expandBundleComponents(orderItem.id!, item.size, item.quantity));
+    }
+  }
+
+  return items;
 }
 
 function buildOrderFromInput(

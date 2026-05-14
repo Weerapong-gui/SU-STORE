@@ -197,7 +197,8 @@ export function normalizeOrder(rawOrder: RawOrder) {
             totalAmount:
               typeof item.totalAmount === "number" && item.totalAmount >= 0
                 ? item.totalAmount
-                : unitPrice * itemQuantity
+                : unitPrice * itemQuantity,
+            isComponent: item.isComponent === true
           } satisfies OrderItem;
         })
         .filter((item) => item.product.slug || item.product.name)
