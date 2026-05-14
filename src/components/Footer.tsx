@@ -17,7 +17,7 @@ export function Footer() {
             © {currentYear} SU STORE. All rights reserved.
           </p>
           <p className="text-zinc-600">
-            Designed by Mr. Suradit Hortham — Winner of the Fresher 28 Shirt Design Contest.
+            Shirt design by Mr. Suradit Hortham — Winner of the Fresher 28 Shirt Design Contest.
           </p>
         </div>
       </Container>
