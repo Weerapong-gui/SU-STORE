@@ -36,6 +36,11 @@ const LOCAL_KHANTOK_TICKET_STATE_FILE_PATH = path.join(DATA_ROOT, "khantok-ticke
 const LEGACY_LOCAL_LUCKY_TICKET_STATE_BLOB_PATH = "orders/_lucky-ticket-claims.json";
 const LEGACY_LOCAL_LUCKY_TICKET_STATE_FILE_PATH = path.join(DATA_ROOT, "lucky-ticket-claims.json");
 const MAX_KHANTOK_TICKET_CLAIMS = 2000;
+const FS_SEQUENCE_LOCK_PATH = path.join(DATA_ROOT, "order-sequence.lock");
+const FS_KHANTOK_LOCK_PATH = path.join(DATA_ROOT, "khantok-ticket.lock");
+const LOCK_STALE_MS = 5000;
+const LOCK_MAX_RETRIES = 30;
+const LOCK_RETRY_MS = 100;
 
 type OrderStorageMode = "filesystem" | "blob" | "cookie";
 type CreateOrderResult = {
@@ -271,6 +276,33 @@ async function ensureStorage() {
   await fs.mkdir(SLIPS_DIR, { recursive: true });
 }
 
+async function withFileLock<T>(lockPath: string, fn: () => Promise<T>): Promise<T> {
+  for (let i = 0; i < LOCK_MAX_RETRIES; i++) {
+    try {
+      await ensureStorage();
+      const fd = await fs.open(lockPath, fs.constants.O_CREAT | fs.constants.O_EXCL | fs.constants.O_WRONLY);
+      await fd.writeFile(String(Date.now()));
+      await fd.close();
+      try {
+        return await fn();
+      } finally {
+        await fs.unlink(lockPath).catch(() => {});
+      }
+    } catch (err) {
+      if ((err as NodeJS.ErrnoException).code !== "EEXIST") throw err;
+      try {
+        const lockContent = await fs.readFile(lockPath, "utf8");
+        if (Date.now() - parseInt(lockContent, 10) > LOCK_STALE_MS) {
+          await fs.unlink(lockPath).catch(() => {});
+          continue;
+        }
+      } catch { /* lock was deleted concurrently — retry immediately */ }
+      await new Promise(r => setTimeout(r, LOCK_RETRY_MS + Math.random() * 50));
+    }
+  }
+  throw new Error(`Could not acquire lock: ${path.basename(lockPath)}`);
+}
+
 async function writeOrder(order: Order) {
   const storageMode = getOrderStorageMode();
 
@@ -441,7 +473,9 @@ async function allocateLocalKhantokTicket(
   studentCode: string,
   items: { product: { slug: string } }[]
 ): Promise<KhantokTicketAllocation> {
-  if (getOrderStorageMode() === "cookie") {
+  const storageMode = getOrderStorageMode();
+
+  if (storageMode === "cookie") {
     return { khantokTicket: false, khantokTicketClaimedAt: null, khantokTicketAlreadyClaimed: false };
   }
 
@@ -450,44 +484,64 @@ async function allocateLocalKhantokTicket(
     return { khantokTicket: false, khantokTicketClaimedAt: null, khantokTicketAlreadyClaimed: false };
   }
 
-  const state = await readLocalKhantokTicketState();
+  const doAllocate = async (): Promise<KhantokTicketAllocation> => {
+    const state = await readLocalKhantokTicketState();
 
-  const existingClaimByOrder = state.claims[orderId];
-  if (existingClaimByOrder) {
-    return { khantokTicket: true, khantokTicketClaimedAt: existingClaimByOrder, khantokTicketAlreadyClaimed: false };
+    const existingClaimByOrder = state.claims[orderId];
+    if (existingClaimByOrder) {
+      return { khantokTicket: true, khantokTicketClaimedAt: existingClaimByOrder, khantokTicketAlreadyClaimed: false };
+    }
+
+    const normalizedCode = studentCode.trim().toLowerCase();
+    if (normalizedCode && state.studentCodes[normalizedCode]) {
+      return { khantokTicket: false, khantokTicketClaimedAt: null, khantokTicketAlreadyClaimed: true };
+    }
+
+    const currentClaims = Object.keys(state.claims).length;
+    if (currentClaims >= MAX_KHANTOK_TICKET_CLAIMS) {
+      return { khantokTicket: false, khantokTicketClaimedAt: null, khantokTicketAlreadyClaimed: false };
+    }
+
+    const claimedAt = nowThaiISO();
+    state.claims[orderId] = claimedAt;
+    if (normalizedCode) {
+      state.studentCodes[normalizedCode] = orderId;
+    }
+    await writeLocalKhantokTicketState(state);
+
+    return { khantokTicket: true, khantokTicketClaimedAt: claimedAt, khantokTicketAlreadyClaimed: false };
+  };
+
+  if (storageMode === "filesystem") {
+    return withFileLock(FS_KHANTOK_LOCK_PATH, doAllocate);
   }
 
-  const normalizedCode = studentCode.trim().toLowerCase();
-  if (normalizedCode && state.studentCodes[normalizedCode]) {
-    return { khantokTicket: false, khantokTicketClaimedAt: null, khantokTicketAlreadyClaimed: true };
-  }
-
-  const currentClaims = Object.keys(state.claims).length;
-  if (currentClaims >= MAX_KHANTOK_TICKET_CLAIMS) {
-    return { khantokTicket: false, khantokTicketClaimedAt: null, khantokTicketAlreadyClaimed: false };
-  }
-
-  const claimedAt = nowThaiISO();
-  state.claims[orderId] = claimedAt;
-  if (normalizedCode) {
-    state.studentCodes[normalizedCode] = orderId;
-  }
-  await writeLocalKhantokTicketState(state);
-
-  return { khantokTicket: true, khantokTicketClaimedAt: claimedAt, khantokTicketAlreadyClaimed: false };
+  // Blob mode: jitter to reduce simultaneous write collisions across serverless instances
+  await new Promise(r => setTimeout(r, Math.random() * 150));
+  return doAllocate();
 }
 
-async function allocateLocalOrderNumber() {
-  const sequenceNumber = (await readStoredLocalSequenceNumber()) + 1;
+async function allocateLocalOrderNumber(): Promise<LocalOrderNumber> {
+  const storageMode = getOrderStorageMode();
+  const roundNumber = getLocalOrderRound();
 
-  if (getOrderStorageMode() !== "cookie") {
-    await writeStoredLocalSequenceNumber(sequenceNumber);
+  if (storageMode === "cookie") {
+    return { sequenceNumber: (await readStoredLocalSequenceNumber()) + 1, roundNumber };
   }
 
-  return {
-    sequenceNumber,
-    roundNumber: getLocalOrderRound()
-  } satisfies LocalOrderNumber;
+  if (storageMode === "filesystem") {
+    return withFileLock(FS_SEQUENCE_LOCK_PATH, async () => {
+      const sequenceNumber = (await readStoredLocalSequenceNumber()) + 1;
+      await writeStoredLocalSequenceNumber(sequenceNumber);
+      return { sequenceNumber, roundNumber };
+    });
+  }
+
+  // Blob mode: jitter to reduce simultaneous write collisions across serverless instances
+  await new Promise(r => setTimeout(r, Math.random() * 100));
+  const sequenceNumber = (await readStoredLocalSequenceNumber()) + 1;
+  await writeStoredLocalSequenceNumber(sequenceNumber);
+  return { sequenceNumber, roundNumber };
 }
 
 async function ensureLocalOrderNumber(order: Order) {
@@ -523,7 +577,7 @@ async function getLocalOrderById(orderId: string) {
     }
 
     const rawOrder = await new Response(blobResult.stream).text();
-    return ensureLocalOrderNumber(normalizeOrder(JSON.parse(rawOrder) as Order));
+    return normalizeOrder(JSON.parse(rawOrder) as Order);
   }
 
   if (storageMode === "cookie") {
@@ -541,7 +595,7 @@ async function getLocalOrderById(orderId: string) {
 
   try {
     const rawOrder = await fs.readFile(getOrderFilePath(orderId), "utf8");
-    return ensureLocalOrderNumber(normalizeOrder(JSON.parse(rawOrder) as Order));
+    return normalizeOrder(JSON.parse(rawOrder) as Order);
   } catch (error) {
     if ((error as NodeJS.ErrnoException).code === "ENOENT") {
       return null;
@@ -632,7 +686,7 @@ export async function createOrder(input: ValidatedOrderInput) {
     orderId,
     input,
     undefined,
-    await allocateLocalOrderNumber(),
+    undefined,
     await allocateLocalKhantokTicket(orderId, input.studentCode, input.items)
   );
   await writeOrder(order);
@@ -775,8 +829,7 @@ export async function attachSlipToOrder(orderId: string, file: File) {
     );
   }
 
-  await removeSlipFile(existingOrder);
-
+  // Upload new slip FIRST so the old slip is never deleted without a replacement
   const extension = resolveSlipExtension(file.name, file.type);
   const storedName = `${orderId}-${Date.now()}-${sanitizeFileName(file.name.replace(/\.[^.]+$/, ""))}${extension}`;
 
@@ -802,7 +855,7 @@ export async function attachSlipToOrder(orderId: string, file: File) {
     uploadedAt: nowThaiISO()
   };
 
-  const updatedOrder: Order = {
+  let updatedOrder: Order = {
     ...existingOrder,
     status: "waiting_confirm",
     paymentStatus: "waiting_confirm",
@@ -810,10 +863,26 @@ export async function attachSlipToOrder(orderId: string, file: File) {
     slip
   };
 
+  if (typeof updatedOrder.sequenceNumber !== "number" && !updatedOrder.id.startsWith(ORDER_PREFIX)) {
+    const localOrderNumber = await allocateLocalOrderNumber();
+    updatedOrder = {
+      ...updatedOrder,
+      sequenceNumber: localOrderNumber.sequenceNumber,
+      roundNumber: localOrderNumber.roundNumber
+    };
+  }
+
   if (hasRemoteOrderApi()) {
     console.warn(`Local slip storage was used for ${orderId} because remote upload was unavailable.`);
   }
 
+  // Persist order record SECOND — new slip is already safely stored
   await writeOrder(updatedOrder);
+
+  // Delete old slip LAST — best effort, orphaned files are harmless
+  removeSlipFile(existingOrder).catch(err => {
+    console.warn(`Could not remove old slip for ${orderId}:`, err);
+  });
+
   return updatedOrder;
 }

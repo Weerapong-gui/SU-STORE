@@ -7,6 +7,9 @@ import {
   SlipUploadError,
   validateSlipUpload
 } from "@/lib/orderStore";
+import { getRateLimitKey, isRateLimited } from "@/lib/rateLimit";
+
+const RATE_LIMIT_MAX = 10;
 
 type PaymentRouteProps = {
   params: {
@@ -15,6 +18,10 @@ type PaymentRouteProps = {
 };
 
 export async function POST(request: Request, { params }: PaymentRouteProps) {
+  if (isRateLimited(getRateLimitKey(request, "slip"), RATE_LIMIT_MAX)) {
+    return NextResponse.json({ message: "อัปโหลดบ่อยเกินไป กรุณารอสักครู่" }, { status: 429 });
+  }
+
   try {
     const formData = await request.formData();
     const slip = formData.get("slip");

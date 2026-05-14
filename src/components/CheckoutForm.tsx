@@ -162,7 +162,8 @@ export function CheckoutForm({
         headers: {
           "Content-Type": "application/json"
         },
-        body: JSON.stringify(payload)
+        body: JSON.stringify(payload),
+        signal: AbortSignal.timeout(15000)
       });
 
       const result = (await response.json().catch(() => null)) as

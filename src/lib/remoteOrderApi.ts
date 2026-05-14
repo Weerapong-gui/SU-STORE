@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import { ValidatedOrderInput } from "@/lib/orderValidation";
 import { productToSnapshot } from "@/lib/orderPayload";
 import { getSizeSurcharge } from "@/lib/productSizing";
@@ -85,7 +86,8 @@ async function remoteOrderRequest<T>(
   const response = await fetch(`${REMOTE_ORDER_API_BASE_URL}${pathname}`, {
     ...init,
     headers,
-    cache: "no-store"
+    cache: "no-store",
+    signal: AbortSignal.timeout(10000)
   });
 
   if (response.status === 401 || response.status === 404) {
@@ -130,8 +132,11 @@ export async function getRemoteOrderById(orderId: string, orderAccessToken?: str
 }
 
 export async function createRemoteOrder(input: ValidatedOrderInput) {
+  const keyData = `${input.studentCode}:${input.items[0]?.product.slug}:${Math.floor(Date.now() / 30000)}`;
+  const idempotencyKey = createHash("sha256").update(keyData).digest("hex").slice(0, 32);
   return remoteOrderRequest<RemoteOrder>("/orders", {
     method: "POST",
+    headers: { "X-Idempotency-Key": idempotencyKey },
     body: JSON.stringify(createRemoteOrderPayload(input))
   });
 }

@@ -2,6 +2,10 @@ import { NextResponse } from "next/server";
 import { formatOrderNumber } from "@/lib/formatOrderNumber";
 import { getOrderById, setOrderResponseCookie, updateOrder } from "@/lib/orderStore";
 import { validateOrderInput } from "@/lib/orderValidation";
+import { getRateLimitKey, isRateLimited } from "@/lib/rateLimit";
+
+const MAX_BODY_BYTES = 100 * 1024;
+const RATE_LIMIT_MAX = 10;
 
 type OrderRouteProps = {
   params: {
@@ -28,6 +32,15 @@ export async function GET(_: Request, { params }: OrderRouteProps) {
 }
 
 export async function PUT(request: Request, { params }: OrderRouteProps) {
+  if (isRateLimited(getRateLimitKey(request, "order-update"), RATE_LIMIT_MAX)) {
+    return NextResponse.json({ message: "ส่งคำสั่งซื้อบ่อยเกินไป กรุณารอสักครู่" }, { status: 429 });
+  }
+
+  const contentLength = parseInt(request.headers.get("content-length") ?? "0", 10);
+  if (contentLength > MAX_BODY_BYTES) {
+    return NextResponse.json({ message: "Request body ใหญ่เกินไป" }, { status: 413 });
+  }
+
   try {
     const body = (await request.json()) as Record<string, unknown>;
     const validation = validateOrderInput(body);

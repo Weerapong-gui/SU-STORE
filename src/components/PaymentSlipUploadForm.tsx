@@ -33,7 +33,8 @@ export function PaymentSlipUploadForm({
     try {
       const response = await fetch(`/api/order/${orderId}/payment`, {
         method: "POST",
-        body: formData
+        body: formData,
+        signal: AbortSignal.timeout(30000)
       });
 
       const result = (await response.json().catch(() => null)) as

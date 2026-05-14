@@ -38,7 +38,7 @@ export const products: Product[] = [
     shortName: "แจ็กเก็ต",
     tagline: "Layer up with a clean campus-ready jacket.",
     description: "แจ็กเก็ตสำหรับวันกิจกรรมหรือวันที่อยากได้เลเยอร์เพิ่ม โดยใช้ flow เลือกไซซ์ จำนวน และสำนักวิชาเหมือนสินค้ากลุ่มเสื้อ.",
-    price: 899,
+    price: 739,
     images: ["/Jacket/B.png"],
     colors: [
       { name: "Blue",  hex: "#0d0f40", image: "/Jacket/B.png" },
