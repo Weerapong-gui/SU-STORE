@@ -544,25 +544,6 @@ async function allocateLocalOrderNumber(): Promise<LocalOrderNumber> {
   return { sequenceNumber, roundNumber };
 }
 
-async function ensureLocalOrderNumber(order: Order) {
-  if (
-    typeof order.sequenceNumber === "number" ||
-    order.id.startsWith(ORDER_PREFIX) ||
-    getOrderStorageMode() === "cookie"
-  ) {
-    return order;
-  }
-
-  const localOrderNumber = await allocateLocalOrderNumber();
-  const normalizedOrder: Order = {
-    ...order,
-    sequenceNumber: localOrderNumber.sequenceNumber,
-    roundNumber: localOrderNumber.roundNumber
-  };
-
-  await writeOrder(normalizedOrder);
-  return normalizedOrder;
-}
 
 async function getLocalOrderById(orderId: string) {
   const storageMode = getOrderStorageMode();
