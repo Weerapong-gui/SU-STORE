@@ -137,7 +137,7 @@ export function CheckoutPaymentForm({
         totalAmount: product.price * defaultSingleQuantity
       }
     ];
-  }, [cartItems, cartMode, defaultSingleQuantity, existingOrder, product, storedSize]);
+  }, [cartItems, cartMode, defaultSchool, defaultSingleQuantity, existingOrder, product, storedSize]);
   const totalAmount = selectedItems.reduce((sum, item) => sum + item.totalAmount, 0);
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {

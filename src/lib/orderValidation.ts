@@ -40,7 +40,6 @@ function readString(value: unknown) {
 function validateOrderItemPayload(payload: Record<string, unknown>): ValidationResult {
   const productSlug = readString(payload.product);
   const size = readString(payload.size);
-  const school = readString(payload.school) || undefined;
   const parsedQuantity =
     typeof payload.quantity === "number"
       ? payload.quantity
