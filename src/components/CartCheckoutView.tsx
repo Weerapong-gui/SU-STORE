@@ -143,6 +143,12 @@ export function CartCheckoutView() {
                 <div className="mt-3 grid grid-cols-[3.2rem_1fr] gap-x-2 gap-y-0.5 text-[10px] text-zinc-700 md:mt-4 md:grid-cols-[auto_1fr] md:gap-x-6 md:gap-y-1 md:text-sm">
                   <p className="text-zinc-500">Size</p>
                   <p>{formatStoredProductSize(item.productCategory, item.size)}</p>
+                  {item.school && (
+                    <>
+                      <p className="text-zinc-500">School</p>
+                      <p>{item.school}</p>
+                    </>
+                  )}
                   <p className="text-zinc-500">Unit Price</p>
                   <p>{formatPrice(item.unitPrice)}</p>
                   <p className="text-zinc-500">Total</p>
