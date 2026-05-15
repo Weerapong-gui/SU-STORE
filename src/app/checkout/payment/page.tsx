@@ -11,6 +11,7 @@ type CheckoutPaymentPageProps = {
     orderId?: string;
     size?: string;
     quantity?: string;
+    school?: string;
     itemId?: string;
     cart?: string;
   };
@@ -37,6 +38,7 @@ export default async function CheckoutPaymentPage({ searchParams }: CheckoutPaym
           defaultProduct={searchParams?.product}
           defaultSize={searchParams?.size}
           defaultQuantity={searchParams?.quantity}
+          defaultSchool={searchParams?.school}
           cartItemId={searchParams?.itemId}
           cartMode={cartMode}
         />

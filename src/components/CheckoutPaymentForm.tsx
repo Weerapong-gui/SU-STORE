@@ -19,6 +19,7 @@ type CheckoutPaymentFormProps = {
   defaultProduct?: string;
   defaultSize?: string;
   defaultQuantity?: string;
+  defaultSchool?: string;
   cartItemId?: string;
   cartMode?: boolean;
 };
@@ -41,6 +42,7 @@ type CheckoutDisplayItem = {
   productShortName: string;
   productCategory: ProductCategory;
   size: string;
+  school?: string;
   quantity: number;
   unitPrice: number;
   totalAmount: number;
@@ -76,6 +78,7 @@ function createDisplayItemFromCartItem(item: CartItem): CheckoutDisplayItem {
     productShortName: item.productShortName,
     productCategory: item.productCategory,
     size: item.size,
+    school: item.school || undefined,
     quantity: item.quantity,
     unitPrice: item.unitPrice,
     totalAmount: item.unitPrice * item.quantity
@@ -87,6 +90,7 @@ export function CheckoutPaymentForm({
   defaultProduct,
   defaultSize,
   defaultQuantity,
+  defaultSchool,
   cartItemId,
   cartMode = false
 }: CheckoutPaymentFormProps) {
@@ -127,6 +131,7 @@ export function CheckoutPaymentForm({
         productShortName: product.shortName,
         productCategory: product.category,
         size: storedSize,
+        school: defaultSchool || undefined,
         quantity: defaultSingleQuantity,
         unitPrice: product.price,
         totalAmount: product.price * defaultSingleQuantity
@@ -284,6 +289,12 @@ export function CheckoutPaymentForm({
                   <div className="mt-3 grid gap-x-6 gap-y-1 text-sm text-zinc-700 sm:grid-cols-[auto_1fr]">
                     <p className="text-zinc-500">Size</p>
                     <p>{formatStoredProductSize(item.productCategory, item.size)}</p>
+                    {item.school && (
+                      <>
+                        <p className="text-zinc-500">School</p>
+                        <p>{item.school}</p>
+                      </>
+                    )}
                     <p className="text-zinc-500">Quantity</p>
                     <p>{item.quantity}</p>
                     <p className="text-zinc-500">Unit Price</p>
