@@ -35,6 +35,8 @@ services:
     image: su-order-api:latest
     container_name: su-order-api
     restart: unless-stopped
+    ports:
+      - "127.0.0.1:3010:10000"
     environment:
       ORDER_API_HOST: 0.0.0.0
       ORDER_API_PORT: 10000
