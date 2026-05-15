@@ -160,6 +160,7 @@ export function CheckoutPaymentForm({
       items: selectedItems.map((item) => ({
         product: item.productSlug,
         size: item.size,
+        school: item.school,
         quantity: item.quantity
       })),
       studentCode: String(formData.get("studentCode") ?? "").trim(),

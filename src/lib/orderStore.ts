@@ -158,6 +158,7 @@ function createOrderItems(input: ValidatedOrderInput): OrderItem[] {
       id: `${product.slug}-${index + 1}`,
       product,
       size: item.size,
+      school: item.school,
       quantity: item.quantity,
       unitPrice: item.product.price,
       totalAmount: item.product.price * item.quantity

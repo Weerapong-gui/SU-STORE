@@ -6,6 +6,7 @@ import { Product } from "@/types/product";
 export type ValidatedOrderItemInput = {
   product: Product;
   size: string;
+  school?: string;
   quantity: number;
 };
 
@@ -39,6 +40,7 @@ function readString(value: unknown) {
 function validateOrderItemPayload(payload: Record<string, unknown>): ValidationResult {
   const productSlug = readString(payload.product);
   const size = readString(payload.size);
+  const school = readString(payload.school) || undefined;
   const parsedQuantity =
     typeof payload.quantity === "number"
       ? payload.quantity
@@ -112,14 +114,17 @@ export function validateOrderInput(payload: Record<string, unknown>): Validation
       return { message: "Please select at least one product." };
     }
 
-    const validation = validateOrderItemPayload(itemPayload as Record<string, unknown>);
+    const rawItem = itemPayload as Record<string, unknown>;
+    const validation = validateOrderItemPayload(rawItem);
     if (!validation.data) {
       return { message: validation.message };
     }
 
+    const itemSchool = readString(rawItem.school) || undefined;
     items.push({
       product: validation.data.product,
       size: validation.data.size,
+      school: itemSchool,
       quantity: validation.data.quantity
     });
   }

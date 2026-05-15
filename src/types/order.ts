@@ -34,6 +34,7 @@ export type OrderItem = {
   id?: string;
   product: OrderProductSnapshot;
   size: string;
+  school?: string;
   quantity: number;
   unitPrice: number;
   totalAmount: number;

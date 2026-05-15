@@ -46,6 +46,7 @@ function createRemoteOrderPayload(input: ValidatedOrderInput): RemoteOrderPayloa
       id: `${product.slug}-${index + 1}`,
       product,
       size: item.size,
+      school: item.school,
       quantity: item.quantity,
       unitPrice: item.product.price + getSizeSurcharge(item.product, item.size),
       totalAmount: (item.product.price + getSizeSurcharge(item.product, item.size)) * item.quantity
