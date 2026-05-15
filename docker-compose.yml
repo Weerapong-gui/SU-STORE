@@ -3,6 +3,8 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
+      args:
+        COOKIE_SECRET: ${COOKIE_SECRET}
     image: su-store:latest
     container_name: su-store
     restart: unless-stopped
