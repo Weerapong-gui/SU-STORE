@@ -24,7 +24,7 @@ export function Hero() {
           sizes="100vw"
           className="h-auto w-full"
         />
-        <div className="absolute inset-0 flex justify-center pt-[9%]">
+        <div className="absolute inset-0 flex justify-center pt-[6%]">
           <motion.div {...buttonMotion}>
             <BuyButton href="/products">Shop Now</BuyButton>
           </motion.div>
