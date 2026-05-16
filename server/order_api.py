@@ -1380,7 +1380,10 @@ def now_iso() -> str:
 def ensure_db() -> None:
     DB_PATH.parent.mkdir(parents=True, exist_ok=True)
     SLIPS_DIR.mkdir(parents=True, exist_ok=True)
-    with sqlite3.connect(DB_PATH) as connection:
+    with sqlite3.connect(DB_PATH, timeout=30) as connection:
+      connection.execute("PRAGMA journal_mode=WAL")
+      connection.execute("PRAGMA synchronous=NORMAL")
+      connection.execute("PRAGMA busy_timeout=30000")
       connection.execute(
           """
           CREATE TABLE IF NOT EXISTS orders (
@@ -1553,8 +1556,11 @@ def ensure_db() -> None:
 
 
 def open_db() -> sqlite3.Connection:
-    connection = sqlite3.connect(DB_PATH)
+    connection = sqlite3.connect(DB_PATH, timeout=30)
     connection.row_factory = sqlite3.Row
+    connection.execute("PRAGMA journal_mode=WAL")
+    connection.execute("PRAGMA synchronous=NORMAL")
+    connection.execute("PRAGMA busy_timeout=30000")
     return connection
 
 
