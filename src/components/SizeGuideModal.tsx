@@ -26,7 +26,7 @@ export function SizeGuideModal({ open, onClose }: SizeGuideModalProps) {
         aria-label="Close size guide"
       />
 
-      <div className="relative z-10 max-h-[92vh] max-w-[94vw] overflow-hidden rounded-[1.75rem] bg-white shadow-[0_28px_90px_rgba(0,0,0,0.26)]">
+      <div className="relative z-10 max-h-[92vh] max-w-[94vw] overflow-hidden">
         <Image
           src="/images/size guide/Vertical.png"
           alt="Size guide horizontal"
@@ -46,7 +46,7 @@ export function SizeGuideModal({ open, onClose }: SizeGuideModalProps) {
 
         <button
           type="button"
-          className="absolute right-[2%] top-[2%] h-12 w-12 opacity-0"
+          className="absolute right-[2%] top-[5%] h-12 w-12 opacity-0"
           onClick={onClose}
           aria-label="Close size guide"
         />
