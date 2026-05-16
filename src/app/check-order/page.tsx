@@ -19,6 +19,7 @@ interface PublicOrder {
   product: { name: string; shortName: string; image: string; category: string };
   items: { product: { name: string }; size: string; quantity: number; totalAmount: number }[];
   khantokTicket: boolean;
+  khantokTicketValue?: number | null;
   khantokTicketAlreadyClaimed: boolean;
   customer: { fullName: string; studentCode: string; school: string };
   slip: { uploadedAt: string } | null;
@@ -98,7 +99,7 @@ function OrderCard({ order }: { order: PublicOrder }) {
         <div className="flex items-center gap-3">
           {order.khantokTicket ? (
             <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-50 px-3 py-1 text-xs font-semibold text-emerald-700">
-              <Ticket className="h-3.5 w-3.5" /> ได้รับ Khantok ticket
+              <Ticket className="h-3.5 w-3.5" /> ได้รับ Khantok ticket{order.khantokTicketValue ? ` ฿${order.khantokTicketValue}` : ""}
             </span>
           ) : order.khantokTicketAlreadyClaimed ? (
             <span className="inline-flex items-center gap-1.5 rounded-full bg-amber-50 px-3 py-1 text-xs font-semibold text-amber-700">
