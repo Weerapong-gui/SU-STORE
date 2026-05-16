@@ -9,9 +9,7 @@ import { ONE_SIZE_OPTION, SCHOOL_OPTIONS, SIZE_OPTIONS } from "@/lib/checkoutOpt
 import { formatPrice } from "@/lib/formatPrice";
 import {
   getStoredProductSize,
-  isBundleProduct,
   normalizeStandardProductSize,
-  parseBundleSizeSelection,
   ProductSizeOption
 } from "@/lib/productSizing";
 import { cn } from "@/lib/utils";
@@ -88,27 +86,17 @@ export function CheckoutForm({
   const [selectedSizeOption, setSelectedSizeOption] = useState<ProductSizeOption>(
     normalizeStandardProductSize(defaultProductData, defaultSize)
   );
-  const [selectedBundleSize, setSelectedBundleSize] = useState(() =>
-    parseBundleSizeSelection(defaultSize)
-  );
   const [selectedQuantity, setSelectedQuantity] = useState(defaultQuantityValue);
   const [customerEmail, setCustomerEmail] = useState(defaultEmailValue);
   const [submitState, setSubmitState] = useState<SubmitStatus>("idle");
   const [submitError, setSubmitError] = useState("");
 
   const activeProduct = useMemo(() => getProductBySlug(activeProductSlug), [activeProductSlug]);
-  const bundleProduct = isBundleProduct(activeProduct);
-  const storedSize = bundleProduct
-    ? getStoredProductSize(
-        activeProduct,
-        `POLO:${selectedBundleSize.polo}|JACKET:${selectedBundleSize.jacket}`
-      )
-    : getStoredProductSize(activeProduct, selectedSizeOption);
+  const storedSize = getStoredProductSize(activeProduct, selectedSizeOption);
 
   useEffect(() => {
     setActiveProductSlug(defaultProductData.slug);
     setSelectedSizeOption(normalizeStandardProductSize(defaultProductData, defaultSize));
-    setSelectedBundleSize(parseBundleSizeSelection(defaultSize));
   }, [defaultProductData, defaultSize]);
 
   useEffect(() => {
@@ -124,7 +112,6 @@ export function CheckoutForm({
       activeProduct.slug === defaultProductData.slug ? defaultSize : undefined;
 
     setSelectedSizeOption(normalizeStandardProductSize(activeProduct, defaultSizeValue));
-    setSelectedBundleSize(parseBundleSizeSelection(defaultSizeValue));
   }, [activeProduct, defaultProductData.slug, defaultSize]);
 
   function handleEmailChange(value: string) {
@@ -276,63 +263,7 @@ export function CheckoutForm({
             {activeProduct.requiresSize ? "SELECT SIZE" : "SIZE"}
           </p>
 
-          {activeProduct.requiresSize && bundleProduct ? (
-            <>
-              <div className="space-y-4">
-                <div className="space-y-2">
-                  <p className="text-xs font-medium tracking-[0.08em] text-zinc-500">POLO SIZE</p>
-                  <div className="grid grid-cols-4 gap-2 md:grid-cols-8">
-                    {SIZE_OPTIONS.map((size) => (
-                      <button
-                        key={`checkout-polo-${size}`}
-                        type="button"
-                        onClick={() =>
-                          setSelectedBundleSize((currentValue) => ({
-                            ...currentValue,
-                            polo: size
-                          }))
-                        }
-                        aria-pressed={selectedBundleSize.polo === size}
-                        className={cn(
-                          SIZE_OPTION_BASE_CLASSES,
-                          selectedBundleSize.polo === size ? SIZE_OPTION_SELECTED_CLASSES : ""
-                        )}
-                      >
-                        {size}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-
-                <div className="space-y-2">
-                  <p className="text-xs font-medium tracking-[0.08em] text-zinc-500">JACKET SIZE</p>
-                  <div className="grid grid-cols-4 gap-2 md:grid-cols-8">
-                    {SIZE_OPTIONS.map((size) => (
-                      <button
-                        key={`checkout-jacket-${size}`}
-                        type="button"
-                        onClick={() =>
-                          setSelectedBundleSize((currentValue) => ({
-                            ...currentValue,
-                            jacket: size
-                          }))
-                        }
-                        aria-pressed={selectedBundleSize.jacket === size}
-                        className={cn(
-                          SIZE_OPTION_BASE_CLASSES,
-                          selectedBundleSize.jacket === size ? SIZE_OPTION_SELECTED_CLASSES : ""
-                        )}
-                      >
-                        {size}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              </div>
-
-              <p className="text-right text-xs font-medium text-apple-blue">SIZE GUIDE</p>
-            </>
-          ) : activeProduct.requiresSize ? (
+          {activeProduct.requiresSize ? (
             <>
               <div className="grid grid-cols-4 gap-2 md:grid-cols-8">
                 {SIZE_OPTIONS.map((size) => (

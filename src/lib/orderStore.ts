@@ -17,7 +17,6 @@ import {
 import { products } from "@/data/products";
 import { ValidatedOrderInput } from "@/lib/orderValidation";
 import { productToSnapshot } from "@/lib/orderPayload";
-import { isBundleCategory, parseBundleSizeSelection } from "@/lib/productSizing";
 import { Order, OrderItem, OrderSlip } from "@/types/order";
 
 const COOKIE_SECRET = process.env.COOKIE_SECRET ?? "";
@@ -115,43 +114,6 @@ function isSafeOrderId(orderId: string) {
   return ORDER_ID_PATTERN.test(orderId);
 }
 
-function expandBundleComponents(bundleItemId: string, bundleSize: string, quantity: number): OrderItem[] {
-  const [baseBundleSize, ...colorParts] = bundleSize.split(" / ");
-  const colorSuffix = colorParts.length > 0 ? ` / ${colorParts.join(" / ")}` : "";
-  const { polo: poloSize, jacket: jacketSize } = parseBundleSizeSelection(baseBundleSize);
-
-  const poloProduct = products.find(p => p.slug === "single-shirt");
-  const jacketProduct = products.find(p => p.slug === "fresh-jacket");
-
-  const components: OrderItem[] = [];
-
-  if (poloProduct) {
-    components.push({
-      id: `${bundleItemId}-polo`,
-      product: productToSnapshot(poloProduct),
-      size: poloSize,
-      quantity,
-      unitPrice: 0,
-      totalAmount: 0,
-      isComponent: true
-    });
-  }
-
-  if (jacketProduct) {
-    components.push({
-      id: `${bundleItemId}-jacket`,
-      product: productToSnapshot(jacketProduct),
-      size: jacketSize + colorSuffix,
-      quantity,
-      unitPrice: 0,
-      totalAmount: 0,
-      isComponent: true
-    });
-  }
-
-  return components;
-}
-
 function createOrderItems(input: ValidatedOrderInput): OrderItem[] {
   const items: OrderItem[] = [];
 
@@ -169,10 +131,6 @@ function createOrderItems(input: ValidatedOrderInput): OrderItem[] {
     };
 
     items.push(orderItem);
-
-    if (isBundleCategory(item.product.category)) {
-      items.push(...expandBundleComponents(orderItem.id!, item.size, item.quantity));
-    }
   }
 
   return items;

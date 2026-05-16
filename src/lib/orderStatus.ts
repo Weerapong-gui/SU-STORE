@@ -156,9 +156,7 @@ function normalizeProductSnapshot(product: Partial<OrderProductSnapshot>): Order
     price: typeof product.price === "number" ? product.price : 0,
     image: readString(product.image),
     category:
-      product.category === "bundle" ||
-      product.category === "jacket" ||
-      product.category === "headband"
+      product.category === "jacket" || product.category === "headband"
         ? product.category
         : "single"
   };

@@ -1,6 +1,6 @@
 import { products } from "@/data/products";
 import { ONE_SIZE_OPTION, SCHOOL_OPTIONS, SIZE_OPTIONS } from "@/lib/checkoutOptions";
-import { getStoredProductSize, isBundleProduct, parseBundleSizeSelection } from "@/lib/productSizing";
+import { getStoredProductSize } from "@/lib/productSizing";
 import { Product } from "@/types/product";
 
 export type ValidatedOrderItemInput = {
@@ -53,16 +53,7 @@ function validateOrderItemPayload(payload: Record<string, unknown>): ValidationR
   const baseSize = size.split(" / ")[0].trim();
   const colorSuffix = size.includes(" / ") ? ` / ${size.split(" / ").slice(1).join(" / ")}` : "";
 
-  if (product.requiresSize && isBundleProduct(product)) {
-    const bundleSize = parseBundleSizeSelection(baseSize);
-
-    if (
-      !SIZE_OPTIONS.includes(bundleSize.polo as (typeof SIZE_OPTIONS)[number]) ||
-      !SIZE_OPTIONS.includes(bundleSize.jacket as (typeof SIZE_OPTIONS)[number])
-    ) {
-      return { message: "Please select both polo size and jacket size." };
-    }
-  } else if (product.requiresSize && !SIZE_OPTIONS.includes(baseSize as (typeof SIZE_OPTIONS)[number])) {
+  if (product.requiresSize && !SIZE_OPTIONS.includes(baseSize as (typeof SIZE_OPTIONS)[number])) {
     return { message: "Please select a valid size." };
   }
 

@@ -1,11 +1,10 @@
 const SPREADSHEET_ID = '1m-kRy-0nR0l2um4uE_sGRmpwSLmGDx42jPzQpFvne0U';
 const WEBHOOK_TOKEN = 'su-store-sheets-2026';
 
-const TARGET_SHEET_NAMES = ['POLO', 'BUNDLE', 'JACKET', 'HEADBAND'];
+const TARGET_SHEET_NAMES = ['POLO', 'JACKET', 'HEADBAND'];
 
 const SHEET_BY_PRODUCT_SLUG = {
   'single-shirt': 'POLO',
-  'set-shirt': 'BUNDLE',
   'fresh-jacket': 'JACKET',
   'fresh-headband': 'HEADBAND',
 };
@@ -13,7 +12,6 @@ const SHEET_BY_PRODUCT_SLUG = {
 const SHEET_BY_PRODUCT_CATEGORY = {
   single: 'POLO',
   polo: 'POLO',
-  bundle: 'BUNDLE',
   jacket: 'JACKET',
   headband: 'HEADBAND',
 };

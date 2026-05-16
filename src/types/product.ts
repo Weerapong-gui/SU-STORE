@@ -1,4 +1,4 @@
-export type ProductCategory = "single" | "bundle" | "jacket" | "headband";
+export type ProductCategory = "single" | "jacket" | "headband";
 
 export type ColorVariant = { name: string; hex: string; image: string };
 

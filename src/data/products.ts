@@ -15,24 +15,6 @@ export const products: Product[] = [
     requiresSchool: true
   },
   {
-    slug: "set-shirt",
-    name: "FRESHER BUNDLE",
-    shortName: "ชุดเซต",
-    tagline: "A fuller set for students who want the complete look.",
-    description: "ชุดเซตสำหรับคนที่อยากได้ลุคครบในคำสั่งซื้อเดียว พร้อมเลือกไซซ์และสำนักวิชาได้เหมือนกลุ่มเสื้อ.",
-    price: 1100,
-    images: ["/images/FRESHER BUNDLE.png", "/images/polo.png"],
-    sizeSurcharge: { sizes: ["2XL", "3XL", "4XL", "5XL", "6XL", "7XL"], amount: 49 },
-    colors: [
-      { name: "Blue",  hex: "#0d0f40", image: "/Jacket/B.png" },
-      { name: "Red",   hex: "#9d1c1f", image: "/Jacket/R.png" },
-      { name: "White", hex: "#f7f9fc", image: "/Jacket/w.png" },
-    ],
-    category: "bundle",
-    requiresSize: true,
-    requiresSchool: true
-  },
-  {
     slug: "fresh-jacket",
     name: "FRESHER JACKET",
     shortName: "แจ็กเก็ต",

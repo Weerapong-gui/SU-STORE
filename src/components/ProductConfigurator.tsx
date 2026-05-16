@@ -17,9 +17,7 @@ import { formatPrice } from "@/lib/formatPrice";
 import {
   getStoredProductSize,
   getSizeSurcharge,
-  isBundleProduct,
   normalizeStandardProductSize,
-  parseBundleSizeSelection,
   ProductSizeOption
 } from "@/lib/productSizing";
 import { cn } from "@/lib/utils";
@@ -71,34 +69,21 @@ export function ProductConfigurator({
   const [selectedSize, setSelectedSize] = useState<ProductSizeOption>(
     normalizeStandardProductSize(product, sizeOnly)
   );
-  const [selectedBundleSize, setSelectedBundleSize] = useState(() =>
-    parseBundleSizeSelection(sizeOnly)
-  );
   const [selectedSchool, setSelectedSchool] = useState(
     product.category === "headband" ? (defaultSchool ?? "") : ""
   );
   const [sizeGuideOpen, setSizeGuideOpen] = useState(false);
   const [toastVisible, setToastVisible] = useState(false);
   const [toastKey, setToastKey] = useState(0);
-  const bundleProduct = isBundleProduct(product);
-
-  const surcharge = bundleProduct
-    ? getSizeSurcharge(product, selectedBundleSize.polo)
-    : getSizeSurcharge(product, selectedSize);
+  const surcharge = getSizeSurcharge(product, selectedSize);
   const adjustedUnitPrice = product.price + surcharge;
   const totalPrice = useMemo(() => adjustedUnitPrice * selectedQuantity, [adjustedUnitPrice, selectedQuantity]);
   const primaryMode = intent === "cart" ? "cart" : "payment";
-  const baseStoredSize = bundleProduct
-    ? getStoredProductSize(product, `POLO:${selectedBundleSize.polo}|JACKET:${selectedBundleSize.jacket}`)
-    : getStoredProductSize(product, selectedSize);
+  const baseStoredSize = getStoredProductSize(product, selectedSize);
   const storedSize = selectedColor
     ? `${baseStoredSize} / ${selectedColor.name}`
     : baseStoredSize;
-  const displayImages = bundleProduct && selectedColor
-    ? [...product.images, selectedColor.image]
-    : selectedColor
-    ? [selectedColor.image]
-    : product.images;
+  const displayImages = selectedColor ? [selectedColor.image] : product.images;
 
   const showSurchargeToast = useCallback(() => {
     setToastVisible(true);
@@ -241,55 +226,7 @@ export function ProductConfigurator({
             ) : null}
           </div>
 
-          {product.requiresSize && bundleProduct ? (
-            <div className="space-y-4">
-              <div className="space-y-2">
-                <p className="text-xs font-medium tracking-[0.08em] text-zinc-500">POLO SIZE</p>
-                <div className="grid grid-cols-4 gap-2 sm:grid-cols-6 xl:grid-cols-12">
-                  {SIZE_OPTIONS.map((size) => (
-                    <button
-                      key={`polo-${size}`}
-                      type="button"
-                      onClick={() => {
-                        setSelectedBundleSize((currentValue) => ({ ...currentValue, polo: size }));
-                        if (product.sizeSurcharge?.sizes.includes(size)) showSurchargeToast();
-                      }}
-                      className={cn(
-                        SIZE_OPTION_BASE_CLASSES,
-                        selectedBundleSize.polo === size ? SIZE_OPTION_SELECTED_CLASSES : ""
-                      )}
-                    >
-                      {size}
-                    </button>
-                  ))}
-                </div>
-              </div>
-
-              <div className="space-y-2">
-                <p className="text-xs font-medium tracking-[0.08em] text-zinc-500">JACKET SIZE</p>
-                <div className="grid grid-cols-4 gap-2 sm:grid-cols-6 xl:grid-cols-12">
-                  {SIZE_OPTIONS.map((size) => (
-                    <button
-                      key={`jacket-${size}`}
-                      type="button"
-                      onClick={() =>
-                        setSelectedBundleSize((currentValue) => ({
-                          ...currentValue,
-                          jacket: size
-                        }))
-                      }
-                      className={cn(
-                        SIZE_OPTION_BASE_CLASSES,
-                        selectedBundleSize.jacket === size ? SIZE_OPTION_SELECTED_CLASSES : ""
-                      )}
-                    >
-                      {size}
-                    </button>
-                  ))}
-                </div>
-              </div>
-            </div>
-          ) : product.requiresSize ? (
+          {product.requiresSize ? (
             <div className="grid grid-cols-4 gap-2 sm:grid-cols-6 xl:grid-cols-12">
               {SIZE_OPTIONS.map((size) => (
                 <button
@@ -347,21 +284,13 @@ export function ProductConfigurator({
           <div className="mt-3 space-y-2 text-sm text-zinc-700">
             <p>Product: {product.name}</p>
             <p>Quantity: {selectedQuantity}</p>
-            {bundleProduct ? (
-              <>
-                <p>Polo Size: {selectedBundleSize.polo}</p>
-                <p>Jacket Size: {selectedBundleSize.jacket}</p>
-                {selectedColor && <p>Jacket Color: {selectedColor.name}</p>}
-              </>
-            ) : (
-              <p>Size: {product.requiresSize ? selectedSize : "ONE SIZE"}</p>
-            )}
-            {!bundleProduct && selectedColor && <p>Color: {selectedColor.name}</p>}
+            <p>Size: {product.requiresSize ? selectedSize : "ONE SIZE"}</p>
+            {selectedColor && <p>Color: {selectedColor.name}</p>}
             {selectedSchool && <p>School: {selectedSchool}</p>}
           </div>
           {surcharge > 0 && (
             <p className="mt-2 text-xs text-amber-600">
-              +{surcharge} บาท สำหรับ{bundleProduct ? `Polo ไซซ์ ${selectedBundleSize.polo}` : `ไซซ์ ${selectedSize}`}
+              +{surcharge} บาท สำหรับไซซ์ {selectedSize}
             </p>
           )}
           <div className="mt-4 flex items-center justify-between border-t border-zinc-200 pt-4">
