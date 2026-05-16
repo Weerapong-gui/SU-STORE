@@ -171,7 +171,8 @@ ADMIN_HTML = r"""<!doctype html>
     }
     .stat { background: #fff; padding: 14px 16px; }
     .stat span { display: block; color: var(--muted); font-size: 11px; font-weight: 700; letter-spacing: .1em; text-transform: uppercase; }
-    .stat strong { display: block; margin-top: 6px; font-size: 24px; letter-spacing: -.04em; }
+    .stat strong { display: block; margin-top: 6px; font-size: 24px; letter-spacing: -.04em; word-break: break-all; }
+    .stat.compact strong { font-size: 14px; letter-spacing: 0; }
     .toolbar { display: flex; flex-wrap: wrap; gap: 10px; margin-bottom: 14px; align-items: center; }
     .toolbar input, .toolbar select { max-width: 220px; }
     .table-card { border: 1px solid var(--line); border-radius: 8px; background: #fff; overflow: hidden; }
@@ -491,11 +492,15 @@ ADMIN_HTML = r"""<!doctype html>
         ["Waiting Confirm", summary.waitingConfirm || 0],
         ["Paid", summary.paid || 0],
         ["Rejected", summary.rejected || 0],
-        ["บัตรขันโตก ฿100", k100Used + " / " + k100Quota + " ใบ (เหลือ " + k100Rem + ")"],
-        ["บัตรขันโตก ฿50", k50Used + " / " + k50Quota + " ใบ (เหลือ " + k50Rem + ")"],
+        {label: "บัตรขันโตก ฿100", value: k100Used + "/" + k100Quota + " (เหลือ " + k100Rem + ")", compact: true},
+        {label: "บัตรขันโตก ฿50", value: k50Used + "/" + k50Quota + " (เหลือ " + k50Rem + ")", compact: true},
       ];
       document.querySelector("#orderStats").innerHTML = items.map(function(item) {
-        return '<div class="stat"><span>' + esc(item[0]) + '</span><strong>' + esc(item[1]) + '</strong></div>';
+        var isArr = Array.isArray(item);
+        var label = isArr ? item[0] : item.label;
+        var value = isArr ? item[1] : item.value;
+        var cls = (!isArr && item.compact) ? "stat compact" : "stat";
+        return '<div class="' + cls + '"><span>' + esc(label) + '</span><strong>' + esc(value) + '</strong></div>';
       }).join("");
     }
 
@@ -1814,6 +1819,7 @@ def create_sheet_row_payload(order: dict[str, Any], event: str) -> dict[str, Any
         "status": order.get("status", ""),
         "paymentStatus": order.get("paymentStatus", ""),
         "khantokTicket": order.get("khantokTicket", order.get("luckyTicket", False)),
+        "khantokTicketValue": order.get("khantokTicketValue"),
         "khantokTicketClaimedAt": order.get(
             "khantokTicketClaimedAt", order.get("luckyTicketClaimedAt", "")
         ),

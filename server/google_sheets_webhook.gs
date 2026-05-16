@@ -1,5 +1,5 @@
 const SPREADSHEET_ID = '1m-kRy-0nR0l2um4uE_sGRmpwSLmGDx42jPzQpFvne0U';
-const WEBHOOK_TOKEN = '';
+const WEBHOOK_TOKEN = 'su-store-sheets-2026';
 
 const TARGET_SHEET_NAMES = ['POLO', 'BUNDLE', 'JACKET', 'HEADBAND'];
 
@@ -25,8 +25,9 @@ const HEADERS = [
   'sequenceNumber',
   'status',
   'paymentStatus',
-  'khantokeTicket',
-  'khantokeTicketClaimedAt',
+  'khantokTicket',
+  'khantokTicketValue',
+  'khantokTicketClaimedAt',
   'createdAt',
   'updatedAt',
   'lastEvent',
