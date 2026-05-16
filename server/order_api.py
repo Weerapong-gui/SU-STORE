@@ -479,12 +479,20 @@ ADMIN_HTML = r"""<!doctype html>
     }
 
     function renderOrderStats(summary) {
+      var k100Used = Number(summary.khantokTicket100Used || 0);
+      var k100Quota = Number(summary.khantokTicket100Quota || 0);
+      var k100Rem = Number(summary.khantokTicket100Remaining || 0);
+      var k50Used = Number(summary.khantokTicket50Used || 0);
+      var k50Quota = Number(summary.khantokTicket50Quota || 0);
+      var k50Rem = Number(summary.khantokTicket50Remaining || 0);
       var items = [
         ["Total", summary.total || 0],
         ["Waiting Slip", summary.pendingPayment || 0],
         ["Waiting Confirm", summary.waitingConfirm || 0],
         ["Paid", summary.paid || 0],
         ["Rejected", summary.rejected || 0],
+        ["บัตรขันโตก ฿100", k100Used + " / " + k100Quota + " ใบ (เหลือ " + k100Rem + ")"],
+        ["บัตรขันโตก ฿50", k50Used + " / " + k50Quota + " ใบ (เหลือ " + k50Rem + ")"],
       ];
       document.querySelector("#orderStats").innerHTML = items.map(function(item) {
         return '<div class="stat"><span>' + esc(item[0]) + '</span><strong>' + esc(item[1]) + '</strong></div>';
@@ -2608,6 +2616,7 @@ class OrderRequestHandler(BaseHTTPRequestHandler):
                     "product": o.get("product"),
                     "items": o.get("items"),
                     "khantokTicket": o.get("khantokTicket"),
+                    "khantokTicketValue": o.get("khantokTicketValue"),
                     "khantokTicketAlreadyClaimed": o.get("khantokTicketAlreadyClaimed"),
                     "customer": {
                         "fullName": (o.get("customer") or {}).get("fullName"),
