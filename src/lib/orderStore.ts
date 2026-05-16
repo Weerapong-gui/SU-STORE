@@ -14,7 +14,6 @@ import {
   uploadRemoteOrderSlip,
   updateRemoteOrder,
 } from "@/lib/remoteOrderApi";
-import { products } from "@/data/products";
 import { ValidatedOrderInput } from "@/lib/orderValidation";
 import { productToSnapshot } from "@/lib/orderPayload";
 import { Order, OrderItem, OrderSlip } from "@/types/order";
