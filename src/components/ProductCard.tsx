@@ -21,7 +21,7 @@ export function ProductCard({ product }: ProductCardProps) {
             alt={product.name}
             fill
             sizes="(min-width: 768px) 50vw, 100vw"
-            className="object-cover"
+            className="object-cover object-top"
           />
         </div>
         <div className="space-y-1.5 p-6 pb-7">
@@ -46,7 +46,7 @@ export function ProductCard({ product }: ProductCardProps) {
             alt={product.name}
             fill
             sizes="(min-width: 768px) 50vw, 100vw"
-            className="object-cover transition duration-500 group-hover:scale-[1.03]"
+            className="object-cover object-top transition duration-500 group-hover:scale-[1.03]"
           />
         </div>
         <div className="space-y-1.5 p-6 pb-7">
