@@ -10,6 +10,7 @@ export type Product = {
   description: string;
   price: number;
   images: string[];
+  imageSize?: { width: number; height: number };
   colors?: ColorVariant[];
   sizeSurcharge?: { sizes: string[]; amount: number };
   category: ProductCategory;

@@ -70,7 +70,7 @@ DEFAULT_PRODUCTS = [
         "category": "single",
         "requires_size": 1,
         "requires_school": 1,
-        "image_path": "/images/polo.png",
+        "image_path": "/images/POLP_post/Artboard 4.png",
         "sort_order": 1,
     },
     {
@@ -2291,7 +2291,7 @@ def update_order_slip(connection: sqlite3.Connection, order_code: str, slip: dic
 # ── Product management ────────────────────────────────────────────────────────
 
 def serialize_product(row: sqlite3.Row) -> dict[str, Any]:
-    image = row["image_path"] or "/images/polo.png"
+    image = row["image_path"] or "/images/POLP_post/Artboard 4.png"
     return {
         "slug": row["slug"],
         "name": row["name"],

@@ -137,24 +137,21 @@ export function ProductConfigurator({
 
         <div className="hidden space-y-4 lg:block">
           {displayImages.map((image, index) => (
-            <div
+            <Image
               key={`${image}-${index}`}
-              className="relative min-h-[320px] overflow-hidden rounded-[2rem] border border-zinc-300 bg-white shadow-soft md:min-h-[520px]"
-            >
-              <Image
-                src={image}
-                alt={`${product.name} image ${index + 1}`}
-                fill
-                priority={index === 0}
-                sizes="(min-width: 1024px) 55vw, 100vw"
-                className="object-cover"
-              />
-            </div>
+              src={image}
+              alt={`${product.name} image ${index + 1}`}
+              width={product.imageSize?.width ?? 1000}
+              height={product.imageSize?.height ?? 1000}
+              priority={index === 0}
+              sizes="(min-width: 1024px) 55vw, 100vw"
+              className="h-auto w-full"
+            />
           ))}
         </div>
       </div>
 
-      <div className="font-sf-pro space-y-6 rounded-[2rem] border border-zinc-300 bg-[#f5f5f7] p-6 md:p-8">
+      <div className="font-sf-pro sticky top-6 self-start space-y-6 rounded-[2rem] border border-zinc-300 bg-[#f5f5f7] p-6 md:p-8">
         <div>
           <p className="text-xs font-semibold tracking-[0.14em] text-zinc-500">{product.shortName}</p>
           <h1 className="mt-2 text-3xl font-semibold tracking-tight text-zinc-900 md:text-4xl">
