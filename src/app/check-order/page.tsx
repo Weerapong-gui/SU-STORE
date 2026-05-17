@@ -224,7 +224,10 @@ function CheckOrderContent() {
         </form>
 
         {error && (
-          <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{error}</div>
+          <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+            <p>{error}</p>
+            <p className="mt-1 text-xs text-red-600">หากพบปัญหาขัดข้องเกี่ยวกับระบบให้ติดต่อผู้ดูแลระบบ โทร : 0838627000 ปาร์ค</p>
+          </div>
         )}
 
         {!loading && searched && !error && orders.length === 0 && (

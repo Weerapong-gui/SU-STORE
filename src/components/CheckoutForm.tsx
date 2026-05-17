@@ -404,7 +404,8 @@ export function CheckoutForm({
 
         {submitError ? (
           <div className="rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">
-            {submitError}
+            <p>{submitError}</p>
+            <p className="mt-1 text-xs text-rose-600">หากพบปัญหาขัดข้องเกี่ยวกับระบบให้ติดต่อผู้ดูแลระบบ โทร : 0838627000 ปาร์ค</p>
           </div>
         ) : null}
 
