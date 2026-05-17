@@ -61,7 +61,7 @@ export const translations = {
       waiting_confirm: { label: "รอยืนยันการชำระ", description: "ทีมงานกำลังตรวจสอบสลิปการโอน" },
       paid:            { label: "ชำระเงินแล้ว",    description: "ยืนยันการชำระเงินเรียบร้อย" },
       preparing:       { label: "กำลังเตรียมของ",  description: "กำลังเตรียมสินค้าของคุณ" },
-      shipped:         { label: "พร้อมรับสินค้า",  description: "สินค้าพร้อมแล้ว นัดรับได้เลย" },
+      shipped:         { label: "พร้อมรับสินค้า",  description: "สินค้าพร้อมแล้ว" },
       cancelled:       { label: "ยกเลิก",          description: "ออเดอร์ถูกยกเลิก" },
       rejected:        { label: "ปฏิเสธ",          description: "ไม่ผ่านการยืนยัน กรุณาติดต่อทีมงาน" },
     },
