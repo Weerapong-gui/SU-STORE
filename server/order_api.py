@@ -243,7 +243,7 @@ ADMIN_HTML = r"""<!doctype html>
 </head>
 <body>
   <header>
-    <h1>SU STORE Admin</h1>
+    <h1>SU STORE Admin <span id="adminClock" style="font-size:14px;font-weight:600;color:var(--muted);margin-left:10px;font-variant-numeric:tabular-nums;letter-spacing:0.03em"></span></h1>
     <div class="hdr-right">
       <input id="tokenInput" type="password" autocomplete="current-password" placeholder="API Token" style="max-width:200px" />
       <button class="primary" id="saveTokenBtn">บันทึก</button>
@@ -257,6 +257,7 @@ ADMIN_HTML = r"""<!doctype html>
     <button class="tab-btn" data-tab="analytics">Analytics</button>
     <button class="tab-btn" data-tab="settings">Settings</button>
     <button class="tab-btn" data-tab="audit">Audit Log</button>
+    <button class="tab-btn" data-tab="backup">Backup</button>
   </nav>
 
   <!-- ORDERS TAB -->
@@ -487,6 +488,41 @@ ADMIN_HTML = r"""<!doctype html>
     </main>
   </div>
 
+  <!-- BACKUP TAB -->
+  <div class="tab-pane" id="tab-backup">
+    <main>
+      <div class="settings-card">
+        <h3>Order Backups</h3>
+        <p style="color:var(--muted);font-size:13px;margin:0 0 14px">บันทึกสถานะออเดอร์ทั้งหมด ณ เวลานั้น — กดที่รายการเพื่อดูออเดอร์ที่บันทึกไว้</p>
+        <div style="display:flex;gap:10px;align-items:center;margin-bottom:14px;flex-wrap:wrap">
+          <button id="createBackupBtn" class="primary">บันทึก Backup ตอนนี้</button>
+          <button id="refreshBackupListBtn" class="secondary">Refresh</button>
+          <span id="backupNotice" style="color:var(--muted);font-size:13px"></span>
+        </div>
+        <div id="backupList"><p style="color:var(--muted);font-size:13px">Loading...</p></div>
+      </div>
+      <div id="backupDetailCard" style="display:none" class="settings-card">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;flex-wrap:wrap;gap:8px">
+          <h3 style="margin:0" id="backupDetailTitle">Backup Detail</h3>
+          <button class="secondary" id="closeBackupDetailBtn" style="font-size:12px;padding:6px 14px">ปิด</button>
+        </div>
+        <div class="table-card" style="overflow-x:auto">
+          <table>
+            <thead><tr>
+              <th>Order</th>
+              <th>Status</th>
+              <th>ชื่อ</th>
+              <th>รหัสนักศึกษา</th>
+              <th>สินค้า</th>
+              <th>ยอด</th>
+            </tr></thead>
+            <tbody id="backupDetailBody"></tbody>
+          </table>
+        </div>
+      </div>
+    </main>
+  </div>
+
   <!-- EDIT PRODUCT MODAL -->
   <div class="modal-backdrop" id="editModal">
     <div class="modal">
@@ -595,8 +631,29 @@ ADMIN_HTML = r"""<!doctype html>
         if (btn.dataset.tab === "analytics") loadAnalytics();
         if (btn.dataset.tab === "settings") loadSettings();
         if (btn.dataset.tab === "audit") loadAuditLog();
+        if (btn.dataset.tab === "backup") loadBackupList();
       });
     });
+
+    // ── Clock ──────────────────────────────────────────────────────────────────
+    (function() {
+      var clockEl = document.querySelector("#adminClock");
+      function tick() {
+        var now = new Date();
+        var bkk = new Date(now.toLocaleString("en-US", { timeZone: "Asia/Bangkok" }));
+        var h = String(bkk.getHours()).padStart(2, "0");
+        var m = String(bkk.getMinutes()).padStart(2, "0");
+        var s = String(bkk.getSeconds()).padStart(2, "0");
+        var days = ["อา", "จ", "อ", "พ", "พฤ", "ศ", "ส"];
+        var day = days[bkk.getDay()];
+        var date = bkk.getDate();
+        var months = ["ม.ค.", "ก.พ.", "มี.ค.", "เม.ย.", "พ.ค.", "มิ.ย.", "ก.ค.", "ส.ค.", "ก.ย.", "ต.ค.", "พ.ย.", "ธ.ค."];
+        var mon = months[bkk.getMonth()];
+        clockEl.textContent = day + " " + date + " " + mon + " " + h + ":" + m + ":" + s;
+      }
+      tick();
+      setInterval(tick, 1000);
+    })();
 
     // ── Helpers ────────────────────────────────────────────────────────────────
     function baht(v) {
@@ -1389,6 +1446,98 @@ ADMIN_HTML = r"""<!doctype html>
       loadAuditLog().catch(function(e) { setAuditNotice(e.message, true); });
     });
 
+    // ── BACKUP ────────────────────────────────────────────────────────────────
+    function setBackupNotice(msg, err) {
+      var el = document.querySelector("#backupNotice");
+      el.textContent = msg; el.style.color = err ? "var(--danger)" : "var(--muted)";
+    }
+    var STATUS_LABELS = {
+      pending_payment: "รอชำระ", waiting_confirm: "รอยืนยัน", paid: "ชำระแล้ว",
+      preparing: "เตรียมของ", shipped: "พร้อมรับ", cancelled: "ยกเลิก", rejected: "ปฏิเสธ"
+    };
+    async function loadBackupList() {
+      setBackupNotice("Loading...");
+      try {
+        var res = await fetch("/admin/backups", { headers: authHeaders(), cache: "no-store" });
+        if (!res.ok) throw new Error(await res.text());
+        var data = await res.json();
+        var backups = data.backups || [];
+        var html = backups.length === 0
+          ? '<p style="color:var(--muted);font-size:13px">ยังไม่มี backup — กด "บันทึก Backup ตอนนี้" เพื่อสร้าง</p>'
+          : '<div class="table-card"><table><thead><tr><th style="width:40%">วันที่/เวลา (บันทึก)</th><th style="width:15%">จำนวนออเดอร์</th><th></th></tr></thead><tbody>' +
+            backups.map(function(b) {
+              return '<tr>' +
+                '<td><strong>' + esc(b.createdAt) + '</strong></td>' +
+                '<td>' + esc(b.orderCount) + ' ออเดอร์</td>' +
+                '<td style="display:flex;gap:6px;flex-wrap:wrap">' +
+                  '<button class="secondary backupViewBtn" data-id="' + b.id + '" data-label="' + esc(b.createdAt) + '" style="font-size:12px;padding:4px 12px;min-height:0">ดูรายการ</button>' +
+                  '<button class="ghost backupDeleteBtn" data-id="' + b.id + '" style="font-size:12px;padding:4px 10px;min-height:0;color:var(--danger)">ลบ</button>' +
+                '</td>' +
+              '</tr>';
+            }).join("") +
+            '</tbody></table></div>';
+        document.querySelector("#backupList").innerHTML = html;
+        setBackupNotice(backups.length + " backup(s)");
+      } catch(e) { setBackupNotice(e.message, true); }
+    }
+    async function viewBackup(id, label) {
+      var card = document.querySelector("#backupDetailCard");
+      var body = document.querySelector("#backupDetailBody");
+      document.querySelector("#backupDetailTitle").textContent = "Backup: " + label;
+      body.innerHTML = '<tr><td colspan="6" style="text-align:center;color:var(--muted);padding:16px">Loading...</td></tr>';
+      card.style.display = "";
+      card.scrollIntoView({ behavior: "smooth" });
+      try {
+        var res = await fetch("/admin/backups/" + encodeURIComponent(id), { headers: authHeaders(), cache: "no-store" });
+        if (!res.ok) throw new Error(await res.text());
+        var data = await res.json();
+        var orders = data.orders || [];
+        body.innerHTML = orders.length === 0
+          ? '<tr><td colspan="6" style="text-align:center;color:var(--muted);padding:16px">ไม่มีออเดอร์ใน backup นี้</td></tr>'
+          : orders.map(function(o) {
+              var c = o.customer || {};
+              var items = (o.items || []).map(function(i) { return (i.product||{}).name || ""; }).filter(Boolean).join(", ");
+              return '<tr>' +
+                '<td><strong>' + esc(o.id) + '</strong></td>' +
+                '<td>' + esc(STATUS_LABELS[o.status] || o.status) + '</td>' +
+                '<td>' + esc(c.fullName || "") + '</td>' +
+                '<td>' + esc(c.studentCode || "") + '</td>' +
+                '<td>' + esc(items || (o.product||{}).name || "") + '</td>' +
+                '<td>' + baht(o.totalAmount) + '</td>' +
+              '</tr>';
+            }).join("");
+      } catch(e) {
+        body.innerHTML = '<tr><td colspan="6" style="text-align:center;color:var(--danger);padding:16px">' + esc(e.message) + '</td></tr>';
+      }
+    }
+    document.querySelector("#createBackupBtn").addEventListener("click", async function() {
+      setBackupNotice("กำลังบันทึก...");
+      try {
+        var res = await fetch("/admin/backups", { method: "POST", headers: authHeaders() });
+        if (!res.ok) throw new Error(await res.text());
+        var b = await res.json();
+        setBackupNotice("บันทึกแล้ว — " + b.orderCount + " ออเดอร์");
+        loadBackupList();
+      } catch(e) { setBackupNotice(e.message, true); }
+    });
+    document.querySelector("#refreshBackupListBtn").addEventListener("click", function() { loadBackupList(); });
+    document.querySelector("#closeBackupDetailBtn").addEventListener("click", function() {
+      document.querySelector("#backupDetailCard").style.display = "none";
+    });
+    document.querySelector("#backupList").addEventListener("click", async function(e) {
+      var viewBtn = e.target.closest(".backupViewBtn");
+      if (viewBtn) { viewBackup(viewBtn.dataset.id, viewBtn.dataset.label); return; }
+      var delBtn = e.target.closest(".backupDeleteBtn");
+      if (delBtn) {
+        if (!confirm("ลบ backup นี้?")) return;
+        try {
+          var res = await fetch("/admin/backups/" + encodeURIComponent(delBtn.dataset.id), { method: "DELETE", headers: authHeaders() });
+          if (!res.ok) throw new Error(await res.text());
+          loadBackupList();
+        } catch(e) { setBackupNotice(e.message, true); }
+      }
+    });
+
     // ── Init ───────────────────────────────────────────────────────────────────
     loadProducts();
     if (tokenInput.value) {
@@ -2040,6 +2189,17 @@ def ensure_db() -> None:
       )
       connection.execute("CREATE INDEX IF NOT EXISTS idx_audit_order_code ON order_audit_log(order_code)")
       connection.execute("CREATE INDEX IF NOT EXISTS idx_audit_created_at ON order_audit_log(created_at)")
+      connection.execute(
+          """
+          CREATE TABLE IF NOT EXISTS order_backups (
+              id INTEGER PRIMARY KEY AUTOINCREMENT,
+              created_at TEXT NOT NULL,
+              label TEXT NOT NULL DEFAULT '',
+              order_count INTEGER NOT NULL DEFAULT 0,
+              orders_json TEXT NOT NULL DEFAULT '[]'
+          )
+          """
+      )
       product_count_row = connection.execute("SELECT COUNT(*) FROM products").fetchone()
       if product_count_row[0] == 0:
           seed_now = now_iso()
@@ -3003,6 +3163,52 @@ def export_orders_csv(orders: list[dict[str, Any]]) -> str:
     return output.getvalue()
 
 
+# ── Backup ────────────────────────────────────────────────────────────────────
+
+def create_backup(connection: sqlite3.Connection) -> dict[str, Any]:
+    orders, _ = list_orders(connection, page=1, per_page=999999)
+    now = now_iso()
+    orders_json = json.dumps(orders, ensure_ascii=False)
+    cursor = connection.execute(
+        "INSERT INTO order_backups (created_at, order_count, orders_json) VALUES (?, ?, ?)",
+        (now, len(orders), orders_json),
+    )
+    connection.commit()
+    return {"id": cursor.lastrowid, "createdAt": now, "label": "", "orderCount": len(orders)}
+
+
+def list_backups(connection: sqlite3.Connection) -> list[dict[str, Any]]:
+    rows = connection.execute(
+        "SELECT id, created_at, label, order_count FROM order_backups ORDER BY id DESC"
+    ).fetchall()
+    return [
+        {"id": r["id"], "createdAt": r["created_at"], "label": r["label"], "orderCount": r["order_count"]}
+        for r in rows
+    ]
+
+
+def get_backup(connection: sqlite3.Connection, backup_id: int) -> dict[str, Any] | None:
+    row = connection.execute(
+        "SELECT id, created_at, label, order_count, orders_json FROM order_backups WHERE id = ?",
+        (backup_id,),
+    ).fetchone()
+    if row is None:
+        return None
+    return {
+        "id": row["id"],
+        "createdAt": row["created_at"],
+        "label": row["label"],
+        "orderCount": row["order_count"],
+        "orders": json.loads(row["orders_json"]),
+    }
+
+
+def delete_backup(connection: sqlite3.Connection, backup_id: int) -> bool:
+    result = connection.execute("DELETE FROM order_backups WHERE id = ?", (backup_id,))
+    connection.commit()
+    return result.rowcount > 0
+
+
 def get_product_breakdown(connection: sqlite3.Connection, category: str) -> dict[str, Any]:
     SIZE_ORDER = ["XS", "S", "M", "L", "XL", "2XL", "3XL", "4XL", "5XL", "6XL", "7XL"]
     COLOR_ORDER = ["Blue", "Red", "White"]
@@ -3465,6 +3671,27 @@ class OrderRequestHandler(BaseHTTPRequestHandler):
             })
             return
 
+        if path == "/admin/backups":
+            if not self._require_admin_authorization():
+                return
+            with open_db() as connection:
+                backups = list_backups(connection)
+            self._send_json(HTTPStatus.OK, {"backups": backups})
+            return
+
+        backup_detail_match = re.fullmatch(r"/admin/backups/(\d+)", path)
+        if backup_detail_match:
+            if not self._require_admin_authorization():
+                return
+            backup_id = int(backup_detail_match.group(1))
+            with open_db() as connection:
+                backup = get_backup(connection, backup_id)
+            if backup is None:
+                self._send_json(HTTPStatus.NOT_FOUND, {"message": "backup not found"})
+                return
+            self._send_json(HTTPStatus.OK, backup)
+            return
+
         product_image_match = re.fullmatch(r"/product-images/([^/]+)", path)
         if product_image_match:
             raw_filename = product_image_match.group(1)
@@ -3521,6 +3748,14 @@ class OrderRequestHandler(BaseHTTPRequestHandler):
                 return
             _test_warning_until = 0
             self._send_json(HTTPStatus.OK, {"ok": True})
+            return
+
+        if path == "/admin/backups":
+            if not self._require_admin_authorization():
+                return
+            with open_db() as connection:
+                backup = create_backup(connection)
+            self._send_json(HTTPStatus.CREATED, backup)
             return
 
         product_image_match = re.fullmatch(r"/admin/products/([a-z0-9-]+)/image", path)
@@ -3840,6 +4075,22 @@ class OrderRequestHandler(BaseHTTPRequestHandler):
                 delete_local_slip_file(previous_slip_stored_name, previous_slip_storage_path)
             sync_order_to_google_sheets(order, "payment_slip_uploaded")
             self._send_json(HTTPStatus.OK, order)
+
+    def do_DELETE(self) -> None:
+        path = urlparse(self.path).path
+        backup_del_match = re.fullmatch(r"/admin/backups/(\d+)", path)
+        if backup_del_match:
+            if not self._require_admin_authorization():
+                return
+            backup_id = int(backup_del_match.group(1))
+            with open_db() as connection:
+                found = delete_backup(connection, backup_id)
+            if not found:
+                self._send_json(HTTPStatus.NOT_FOUND, {"message": "backup not found"})
+                return
+            self._send_json(HTTPStatus.OK, {"ok": True})
+            return
+        self._send_json(HTTPStatus.NOT_FOUND, {"message": "not found"})
 
     def log_message(self, format: str, *args: Any) -> None:
         timestamp = datetime.now(TZ_BANGKOK).strftime("%Y-%m-%d %H:%M:%S")
