@@ -815,8 +815,20 @@ export async function attachSlipToOrder(orderId: string, file: File) {
       remoteUploadUnavailableMessage =
         "ไม่พบคำสั่งซื้อบนเซิร์ฟเวอร์รับสลิป หรือสิทธิ์เข้าถึงคำสั่งซื้อนี้หมดอายุแล้ว";
     } catch (error) {
-      console.error(`Remote order API slip upload failed for ${orderId}. Falling back to local storage.`, error);
-      remoteUploadUnavailableMessage = REMOTE_SLIP_UPLOAD_UNAVAILABLE_MESSAGE;
+      // Remote API is configured — the order lives in its database.
+      // Falling back to local storage would succeed silently but the admin panel
+      // would never see the slip. Surface the error to the user instead.
+      let message = REMOTE_SLIP_UPLOAD_UNAVAILABLE_MESSAGE;
+      if (error instanceof Error) {
+        const jsonMatch = error.message.match(/:\s*(\{.*\})\s*$/);
+        if (jsonMatch) {
+          try {
+            const body = JSON.parse(jsonMatch[1]) as { message?: string };
+            if (typeof body.message === "string") message = body.message;
+          } catch { /* keep default */ }
+        }
+      }
+      throw new SlipUploadError(message);
     }
   }
 
