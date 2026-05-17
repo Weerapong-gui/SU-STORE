@@ -278,7 +278,7 @@ export function ProductConfigurator({
 
         <div className="space-y-3">
           <p className="text-xs font-semibold tracking-[0.1em] text-zinc-700">QUANTITY</p>
-          <div className="flex items-center gap-2">
+          <div className="flex items-center justify-end gap-2">
             <button
               type="button"
               onClick={() => updateQuantity(selectedQuantity - 1)}
@@ -323,7 +323,7 @@ export function ProductConfigurator({
           </div>
         </div>
 
-        <div className="flex flex-wrap gap-3">
+        <div className="flex flex-wrap justify-end gap-3">
           {primaryMode === "payment" ? (
             <>
               <button type="button" onClick={handlePayment} disabled={product.category === "headband" && !selectedSchool} className={PRIMARY_BUTTON_CLASSES}>

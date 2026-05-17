@@ -48,7 +48,7 @@ export default async function CheckoutCompletePage({ params }: CheckoutCompleteP
             </div>
           </div>
 
-          <div className="mt-6 flex flex-wrap gap-3">
+          <div className="mt-6 flex flex-wrap justify-end gap-3">
             <Link href="/" className={ACTION_LINK_CLASSES}>
               Back to Home
             </Link>

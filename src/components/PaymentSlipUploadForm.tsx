@@ -77,6 +77,7 @@ export function PaymentSlipUploadForm({
         </div>
       ) : null}
 
+      <div className="flex justify-end">
       <button
         type="submit"
         disabled={uploadState === "loading"}
@@ -88,6 +89,7 @@ export function PaymentSlipUploadForm({
             ? "REPLACE SLIP"
             : "SUBMIT SLIP FOR REVIEW"}
       </button>
+      </div>
     </form>
   );
 }
