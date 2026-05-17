@@ -145,7 +145,12 @@ export function ProductConfigurator({
           images={displayImages}
           productName={product.name}
           className="pb-2"
-          slideClassName="h-[56vh] min-h-[320px] border border-zinc-300 bg-white shadow-soft"
+          slideClassName={
+            product.category === "headband"
+              ? "aspect-[5/1] border border-zinc-300 bg-white shadow-soft"
+              : "h-[56vh] min-h-[320px] border border-zinc-300 bg-white shadow-soft"
+          }
+          imageClassName={product.category === "headband" ? "object-contain" : "object-cover"}
         />
 
         <div className="hidden space-y-4 lg:block">

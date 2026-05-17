@@ -10,6 +10,7 @@ type MobileProductSliderProps = {
   productName: string;
   className?: string;
   slideClassName?: string;
+  imageClassName?: string;
 };
 
 const NAVIGATION_BUTTON_CLASSES =
@@ -22,7 +23,8 @@ export function MobileProductSlider({
   images,
   productName,
   className,
-  slideClassName
+  slideClassName,
+  imageClassName
 }: MobileProductSliderProps) {
   const [activeIndex, setActiveIndex] = useState(0);
   const [touchStartX, setTouchStartX] = useState<number | null>(null);
@@ -114,7 +116,7 @@ export function MobileProductSlider({
                 fill
                 priority={index === 0}
                 sizes="100vw"
-                className="object-cover"
+                className={imageClassName ?? "object-cover"}
               />
             </div>
           ))}
