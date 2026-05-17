@@ -9,12 +9,12 @@ const RATE_LIMIT_MAX = 5;
 
 export async function POST(request: Request) {
   if (isRateLimited(getRateLimitKey(request, "order"), RATE_LIMIT_MAX)) {
-    return NextResponse.json({ success: false, message: "ส่งคำสั่งซื้อบ่อยเกินไป กรุณารอสักครู่" }, { status: 429 });
+    return NextResponse.json({ success: false, message: "Too many requests — please wait a moment" }, { status: 429 });
   }
 
   const contentLength = parseInt(request.headers.get("content-length") ?? "0", 10);
   if (contentLength > MAX_BODY_BYTES) {
-    return NextResponse.json({ success: false, message: "Request body ใหญ่เกินไป" }, { status: 413 });
+    return NextResponse.json({ success: false, message: "Request body too large" }, { status: 413 });
   }
 
   try {
@@ -30,7 +30,7 @@ export async function POST(request: Request) {
     const response = NextResponse.json({
       success: true,
       khantokTicket: order.khantokTicket,
-      message: order.khantokTicket ? "ได้รับ Khantok ticket" : "สิทธิ์ Khantok ticket เต็มแล้ว",
+      message: order.khantokTicket ? "Khantok ticket received" : "Khantok ticket quota full",
       orderId: order.id,
       orderNumber: formatOrderNumber(order)
     });
@@ -40,7 +40,7 @@ export async function POST(request: Request) {
   } catch (error) {
     console.error("Failed to create order", error);
     return NextResponse.json(
-      { success: false, message: "ไม่สามารถสร้างคำสั่งซื้อได้ในขณะนี้" },
+      { success: false, message: "Unable to create order at this time" },
       { status: 500 }
     );
   }

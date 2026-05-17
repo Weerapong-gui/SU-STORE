@@ -22,6 +22,7 @@ import {
 } from "@/lib/productSizing";
 import { cn } from "@/lib/utils";
 import { ColorVariant, Product } from "@/types/product";
+import { useLang } from "@/lib/i18n";
 
 type ProductConfiguratorProps = {
   product: Product;
@@ -53,6 +54,7 @@ export function ProductConfigurator({
 }: ProductConfiguratorProps) {
   const router = useRouter();
   const { addItem, replaceItem } = useCart();
+  const { t } = useLang();
   const [selectedQuantity, setSelectedQuantity] = useState(() => {
     const parsedQuantity = Number.parseInt(defaultQuantity ?? "1", 10);
     return Number.isNaN(parsedQuantity) ? 1 : clampCartQuantity(parsedQuantity);
@@ -226,7 +228,7 @@ export function ProductConfigurator({
               onChange={(e) => setSelectedSchool(e.target.value)}
               className="h-11 w-full appearance-none rounded-2xl border border-zinc-300 bg-white px-4 text-sm text-zinc-800 shadow-sm outline-none ring-apple-blue focus:border-apple-blue focus:ring-1"
             >
-              <option value="" disabled>เลือกสำนักวิชา...</option>
+              <option value="" disabled>{t.product.selectSchool}</option>
               {SCHOOL_OPTIONS.map((school) => (
                 <option key={school} value={school}>{school}</option>
               ))}
@@ -314,7 +316,7 @@ export function ProductConfigurator({
           </div>
           {surcharge > 0 && (
             <p className="mt-2 text-xs text-amber-600">
-              +{surcharge} บาท สำหรับไซซ์ {selectedSize}
+              {t.product.surchargeNote(surcharge, selectedSize)}
             </p>
           )}
           <div className="mt-4 flex items-center justify-between border-t border-zinc-200 pt-4">

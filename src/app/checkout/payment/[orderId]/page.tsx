@@ -111,20 +111,13 @@ export default async function CheckoutPaymentPage({ params }: CheckoutPaymentPag
             <div className={INFO_CARD_CLASSES}>
               <p className="text-xs font-semibold tracking-[0.1em] text-zinc-500">UPLOAD SLIP</p>
               <div className="mt-3 text-sm text-zinc-700">
-                {order.status !== "pending_payment" ? (
-                  <div className="rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800">
-                    สลิปของคุณถูกส่งแล้ว กำลังรอ admin ยืนยัน
-                  </div>
-                ) : slipUploadAvailability.enabled ? (
-                  <PaymentSlipUploadForm
-                    orderId={order.id}
-                    hasUploadedSlip={Boolean(order.slip)}
-                  />
-                ) : (
-                  <div className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
-                    {slipUploadAvailability.message ?? "Slip upload is not available right now."}
-                  </div>
-                )}
+                <PaymentSlipUploadForm
+                  orderId={order.id}
+                  hasUploadedSlip={Boolean(order.slip)}
+                  orderStatus={order.status}
+                  slipUploadEnabled={slipUploadAvailability.enabled}
+                  slipUploadMessage={slipUploadAvailability.message}
+                />
               </div>
             </div>
           </div>

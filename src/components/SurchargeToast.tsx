@@ -2,6 +2,7 @@
 
 import { useEffect } from "react";
 import { cn } from "@/lib/utils";
+import { useLang } from "@/lib/i18n";
 
 type SurchargeToastProps = {
   visible: boolean;
@@ -13,6 +14,7 @@ type SurchargeToastProps = {
 const DURATION = 4000;
 
 export function SurchargeToast({ visible, amount, toastKey, onDismiss }: SurchargeToastProps) {
+  const { t } = useLang();
   useEffect(() => {
     if (!visible) return;
     const timer = setTimeout(onDismiss, DURATION);
@@ -35,10 +37,7 @@ export function SurchargeToast({ visible, amount, toastKey, onDismiss }: Surchar
       <div className="px-5 py-4">
         <p className="text-[10px] font-semibold tracking-[0.12em] text-zinc-400 uppercase">Note</p>
         <p className="mt-1.5 text-sm font-medium leading-snug text-white">
-          สำหรับเสื้อไซส์ 2XL ขึ้นไป มีค่าใช้จ่ายเพิ่ม {amount} บาท
-        </p>
-        <p className="mt-1 text-xs leading-snug text-zinc-400">
-          An extra {amount} baht will be charged for size 2XL and above
+          {t.surcharge.message(amount)}
         </p>
       </div>
       <div className="h-[3px] w-full bg-zinc-800">

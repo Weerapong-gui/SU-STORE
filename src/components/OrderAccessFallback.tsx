@@ -1,5 +1,8 @@
+"use client";
+
 import Link from "next/link";
 import { Container } from "@/components/ui/Container";
+import { useLang } from "@/lib/i18n";
 
 const ACTION_LINK_CLASSES =
   "inline-flex items-center justify-center rounded-full bg-apple-blue px-6 py-3 text-sm font-medium text-white shadow-[0_10px_24px_rgba(0,113,227,0.24)] transition hover:bg-apple-blue-dark focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-apple-blue/20";
@@ -12,6 +15,7 @@ type OrderAccessFallbackProps = {
 };
 
 export function OrderAccessFallback({ orderId, title }: OrderAccessFallbackProps) {
+  const { t } = useLang();
   return (
     <section className="bg-[#ececec] py-6 md:py-10">
       <Container className="max-w-4xl">
@@ -21,11 +25,8 @@ export function OrderAccessFallback({ orderId, title }: OrderAccessFallbackProps
             {title}
           </h1>
           <div className="mt-6 rounded-3xl border border-zinc-300 bg-white p-5 text-sm leading-7 text-zinc-700">
-            <p>ไม่พบข้อมูลคำสั่งซื้อ {orderId} ใน browser นี้</p>
-            <p className="mt-2">
-              ลิงก์ออเดอร์จะเปิดได้จากอุปกรณ์และ browser ที่สร้างออเดอร์ไว้เท่านั้น
-              หรืออาจเป็นออเดอร์เก่าก่อนอัปเดตระบบล่าสุด
-            </p>
+            <p>{t.orderAccess.notFound(orderId)}</p>
+            <p className="mt-2">{t.orderAccess.hint}</p>
           </div>
 
           <div className="mt-6 flex flex-wrap gap-3">

@@ -2,10 +2,14 @@
 
 import { FormEvent, useState } from "react";
 import { useRouter } from "next/navigation";
+import { useLang } from "@/lib/i18n";
 
 type PaymentSlipUploadFormProps = {
   orderId: string;
   hasUploadedSlip: boolean;
+  orderStatus: string;
+  slipUploadEnabled: boolean;
+  slipUploadMessage?: string | null;
 };
 
 type UploadState = "idle" | "loading";
@@ -17,11 +21,31 @@ const SUBMIT_BUTTON_CLASSES =
 
 export function PaymentSlipUploadForm({
   orderId,
-  hasUploadedSlip
+  hasUploadedSlip,
+  orderStatus,
+  slipUploadEnabled,
+  slipUploadMessage,
 }: PaymentSlipUploadFormProps) {
   const router = useRouter();
+  const { t } = useLang();
   const [uploadState, setUploadState] = useState<UploadState>("idle");
   const [errorMessage, setErrorMessage] = useState("");
+
+  if (orderStatus !== "pending_payment") {
+    return (
+      <div className="rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800">
+        {t.slip.sent}
+      </div>
+    );
+  }
+
+  if (!slipUploadEnabled) {
+    return (
+      <div className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+        {slipUploadMessage ?? "Slip upload is not available right now."}
+      </div>
+    );
+  }
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -38,21 +62,18 @@ export function PaymentSlipUploadForm({
       });
 
       const result = (await response.json().catch(() => null)) as
-        | {
-            message?: string;
-            orderId?: string;
-          }
+        | { message?: string; orderId?: string }
         | null;
 
       if (!response.ok || !result?.orderId) {
-        setErrorMessage(result?.message ?? "ไม่สามารถอัปโหลดสลิปได้ในขณะนี้");
+        setErrorMessage(result?.message ?? t.slip.errorUpload);
         setUploadState("idle");
         return;
       }
 
       router.push(`/checkout/complete/${result.orderId}`);
     } catch {
-      setErrorMessage("ไม่สามารถเชื่อมต่อกับระบบอัปโหลดสลิปได้ในขณะนี้");
+      setErrorMessage(t.slip.errorConnection);
       setUploadState("idle");
     }
   }
@@ -69,7 +90,7 @@ export function PaymentSlipUploadForm({
         />
       </label>
 
-      <p className="text-xs text-zinc-500">รองรับไฟล์ JPG, PNG, WEBP หรือ PDF ขนาดไม่เกิน 5 MB</p>
+      <p className="text-xs text-zinc-500">{t.slip.fileHint}</p>
 
       {errorMessage ? (
         <div className="rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">
@@ -78,17 +99,17 @@ export function PaymentSlipUploadForm({
       ) : null}
 
       <div className="flex justify-end">
-      <button
-        type="submit"
-        disabled={uploadState === "loading"}
-        className={SUBMIT_BUTTON_CLASSES}
-      >
-        {uploadState === "loading"
-          ? "UPLOADING..."
-          : hasUploadedSlip
-            ? "REPLACE SLIP"
-            : "SUBMIT SLIP FOR REVIEW"}
-      </button>
+        <button
+          type="submit"
+          disabled={uploadState === "loading"}
+          className={SUBMIT_BUTTON_CLASSES}
+        >
+          {uploadState === "loading"
+            ? t.slip.uploading
+            : hasUploadedSlip
+              ? t.slip.replace
+              : t.slip.submit}
+        </button>
       </div>
     </form>
   );

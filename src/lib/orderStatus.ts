@@ -141,10 +141,10 @@ export function getKhantokTicketLabel(
   alreadyClaimed?: boolean,
   studentCode?: string
 ) {
-  if (hasKhantokTicket) return "ได้รับ Khantok ticket";
-  if (alreadyClaimed && studentCode) return `รับไปแล้ว ${studentCode}`;
-  if (alreadyClaimed) return "รับไปแล้ว";
-  return "สิทธิ์ Khantok ticket เต็มแล้ว";
+  if (hasKhantokTicket) return "Khantok ticket received";
+  if (alreadyClaimed && studentCode) return `Already claimed — ${studentCode}`;
+  if (alreadyClaimed) return "Already claimed";
+  return "Khantok ticket quota full";
 }
 
 function normalizeProductSnapshot(product: Partial<OrderProductSnapshot>): OrderProductSnapshot {

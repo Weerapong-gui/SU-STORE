@@ -8,6 +8,7 @@ import { Menu, ShoppingBag, X } from "lucide-react";
 import { useCart } from "@/components/CartProvider";
 import { Container } from "@/components/ui/Container";
 import { cn } from "@/lib/utils";
+import { useLang } from "@/lib/i18n";
 
 const navigationLinks = [
   { href: "/", label: "Home" },
@@ -20,6 +21,7 @@ export function Navbar() {
   const { itemCount } = useCart();
   const pathname = usePathname();
   const [isMenuOpen, setIsMenuOpen] = useState(false);
+  const { lang, setLang } = useLang();
 
   useEffect(() => {
     setIsMenuOpen(false);
@@ -75,10 +77,22 @@ export function Navbar() {
               ) : null}
             </Link>
           ))}
+          <button
+            onClick={() => setLang(lang === "en" ? "th" : "en")}
+            className="rounded-full border border-zinc-300 px-3 py-1 text-xs font-semibold text-zinc-600 transition hover:border-zinc-400 hover:text-zinc-900"
+          >
+            {lang === "en" ? "EN" : "TH"}
+          </button>
         </nav>
 
-        {/* Mobile: cart icon + hamburger */}
+        {/* Mobile: lang toggle + cart icon + hamburger */}
         <div className="flex items-center gap-2 md:hidden">
+          <button
+            onClick={() => setLang(lang === "en" ? "th" : "en")}
+            className="rounded-full border border-zinc-300 px-2.5 py-1 text-xs font-semibold text-zinc-600 transition hover:border-zinc-400 hover:text-zinc-900"
+          >
+            {lang === "en" ? "EN" : "TH"}
+          </button>
           <Link
             href="/checkout"
             className="relative flex h-9 w-9 items-center justify-center rounded-full text-zinc-600 transition hover:bg-zinc-100 hover:text-zinc-900"

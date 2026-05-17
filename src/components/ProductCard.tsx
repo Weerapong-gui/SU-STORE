@@ -6,12 +6,14 @@ import { Product } from "@/types/product";
 import { createConfiguratorHref } from "@/lib/cart";
 import { formatPrice } from "@/lib/formatPrice";
 import { cn } from "@/lib/utils";
+import { useLang } from "@/lib/i18n";
 
 type ProductCardProps = {
   product: Product;
 };
 
 export function ProductCard({ product }: ProductCardProps) {
+  const { t } = useLang();
   const isUnavailable = product.available === false;
 
   if (isUnavailable) {
@@ -30,7 +32,7 @@ export function ProductCard({ product }: ProductCardProps) {
           <p className="text-xs font-medium tracking-[0.1em] text-zinc-400">{product.shortName}</p>
           <h3 className="text-2xl font-semibold tracking-tight text-zinc-500">{product.name}</h3>
           <p className="text-sm leading-relaxed text-zinc-400">{product.tagline}</p>
-          <p className="pt-2 text-base font-semibold text-zinc-400">หมดแล้ว / ไม่พร้อมจำหน่าย</p>
+          <p className="pt-2 text-base font-semibold text-zinc-400">{t.product.outOfStock}</p>
         </div>
       </article>
     );

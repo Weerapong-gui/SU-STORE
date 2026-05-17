@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
+import { useLang } from "@/lib/i18n";
 
 type SiteStatus = {
   siteClosed?: boolean;
@@ -30,8 +31,9 @@ const CLOSE_MIN = 23 * 60;           // 23:00
 
 export function ScheduleWarningBanner() {
   const router = useRouter();
+  const { t } = useLang();
   const [warning, setWarning] = useState(false);
-  const [message, setMessage] = useState("เว็บกำลังจะปิด กรุณาทำรายการให้เสร็จก่อนเวลา 22:59");
+  const [customMessage, setCustomMessage] = useState<string | null>(null);
   const [secondsLeft, setSecondsLeft] = useState(0);
 
   const checkStatus = useCallback(async () => {
@@ -50,7 +52,7 @@ export function ScheduleWarningBanner() {
       const clientWarning = data.scheduleEnabled === true && min >= WARN_START_MIN && min < CLOSE_MIN;
 
       if (apiWarning || clientWarning) {
-        if (data.scheduleWarningMessage) setMessage(data.scheduleWarningMessage);
+        if (data.scheduleWarningMessage) setCustomMessage(data.scheduleWarningMessage);
         setSecondsLeft(secondsUntilBangkok23());
         setWarning(true);
       } else {
@@ -86,14 +88,14 @@ export function ScheduleWarningBanner() {
   if (!warning) return null;
 
   const mins = Math.floor(secondsLeft / 60);
-  const secs = secondsLeft % 60;
+  const secs = String(secondsLeft % 60).padStart(2, "0");
 
   return (
     <div className="sticky top-0 z-40 bg-amber-500 px-4 py-3 text-center text-sm font-semibold text-white shadow-md">
-      ⚠ {message}
+      ⚠ {customMessage ?? t.schedule.defaultWarning}
       {" — "}
       <span className="tabular-nums">
-        ปิดใน {mins} นาที {String(secs).padStart(2, "0")} วินาที
+        {t.schedule.closingIn(mins, secs)}
       </span>
     </div>
   );

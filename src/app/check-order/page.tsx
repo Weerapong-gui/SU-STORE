@@ -5,6 +5,7 @@ import { useState, useEffect, useCallback, Suspense } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import { Container } from "@/components/ui/Container";
 import { Search, Package, CheckCircle2, Clock, XCircle, Truck, AlertCircle, Ticket, Upload } from "lucide-react";
+import { useLang } from "@/lib/i18n";
 
 type OrderStatus = "pending_payment" | "waiting_confirm" | "paid" | "preparing" | "shipped" | "cancelled" | "rejected";
 
@@ -26,14 +27,24 @@ interface PublicOrder {
   slip: { uploadedAt: string } | null;
 }
 
-const STATUS_CONFIG: Record<OrderStatus, { label: string; color: string; icon: React.ReactNode; description: string }> = {
-  pending_payment:  { label: "รอชำระเงิน",      color: "text-zinc-500 bg-zinc-100",         icon: <Clock className="h-5 w-5" />,         description: "กรุณาชำระเงินและแนบสลิป" },
-  waiting_confirm:  { label: "รอยืนยันการชำระ", color: "text-amber-700 bg-amber-50",        icon: <Clock className="h-5 w-5" />,         description: "ทีมงานกำลังตรวจสอบสลิปการโอน" },
-  paid:             { label: "ชำระเงินแล้ว",     color: "text-emerald-700 bg-emerald-50",    icon: <CheckCircle2 className="h-5 w-5" />,  description: "ยืนยันการชำระเงินเรียบร้อย" },
-  preparing:        { label: "กำลังเตรียมของ",   color: "text-blue-700 bg-blue-50",          icon: <Package className="h-5 w-5" />,       description: "กำลังเตรียมสินค้าของคุณ" },
-  shipped:          { label: "พร้อมรับสินค้า",   color: "text-emerald-700 bg-emerald-50",    icon: <Truck className="h-5 w-5" />,         description: "สินค้าพร้อมแล้ว นัดรับได้เลย" },
-  cancelled:        { label: "ยกเลิก",           color: "text-zinc-500 bg-zinc-100",         icon: <XCircle className="h-5 w-5" />,       description: "ออเดอร์ถูกยกเลิก" },
-  rejected:         { label: "ปฏิเสธ",           color: "text-red-700 bg-red-50",            icon: <XCircle className="h-5 w-5" />,       description: "ไม่ผ่านการยืนยัน กรุณาติดต่อทีมงาน" },
+const STATUS_COLORS: Record<OrderStatus, string> = {
+  pending_payment: "text-zinc-500 bg-zinc-100",
+  waiting_confirm: "text-amber-700 bg-amber-50",
+  paid:            "text-emerald-700 bg-emerald-50",
+  preparing:       "text-blue-700 bg-blue-50",
+  shipped:         "text-emerald-700 bg-emerald-50",
+  cancelled:       "text-zinc-500 bg-zinc-100",
+  rejected:        "text-red-700 bg-red-50",
+};
+
+const STATUS_ICONS: Record<OrderStatus, React.ReactNode> = {
+  pending_payment: <Clock className="h-5 w-5" />,
+  waiting_confirm: <Clock className="h-5 w-5" />,
+  paid:            <CheckCircle2 className="h-5 w-5" />,
+  preparing:       <Package className="h-5 w-5" />,
+  shipped:         <Truck className="h-5 w-5" />,
+  cancelled:       <XCircle className="h-5 w-5" />,
+  rejected:        <XCircle className="h-5 w-5" />,
 };
 
 function baht(n: number) {
@@ -50,24 +61,29 @@ function formatDate(iso: string) {
 }
 
 function OrderCard({ order }: { order: PublicOrder }) {
-  const cfg = STATUS_CONFIG[order.status] ?? STATUS_CONFIG.pending_payment;
+  const { t } = useLang();
+  const statusKey = order.status in t.status ? order.status : "pending_payment";
+  const cfg = t.status[statusKey as OrderStatus];
+  const color = STATUS_COLORS[order.status] ?? STATUS_COLORS.pending_payment;
+  const icon = STATUS_ICONS[order.status] ?? STATUS_ICONS.pending_payment;
+
   return (
     <div className="overflow-hidden rounded-2xl border border-black/[0.08] bg-white shadow-sm">
       {/* Header */}
       <div className="flex items-start justify-between gap-4 border-b border-black/[0.06] px-6 py-4">
         <div>
-          <p className="text-xs font-semibold uppercase tracking-widest text-zinc-400">เลขออเดอร์</p>
+          <p className="text-xs font-semibold uppercase tracking-widest text-zinc-400">{t.checkOrder.orderNumber}</p>
           <p className="mt-0.5 font-mono text-xl font-bold text-zinc-900">{order.id}</p>
           <p className="mt-1 text-xs text-zinc-400">{formatDate(order.createdAt)}</p>
         </div>
-        <span className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-sm font-semibold ${cfg.color}`}>
-          {cfg.icon}
+        <span className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-sm font-semibold ${color}`}>
+          {icon}
           {cfg.label}
         </span>
       </div>
 
       {/* Status description */}
-      <div className={`flex items-center gap-2 px-6 py-3 text-sm font-medium ${cfg.color}`}>
+      <div className={`flex items-center gap-2 px-6 py-3 text-sm font-medium ${color}`}>
         <AlertCircle className="h-4 w-4 shrink-0" />
         {cfg.description}
       </div>
@@ -105,14 +121,14 @@ function OrderCard({ order }: { order: PublicOrder }) {
         <div className="flex items-center gap-3">
           {order.khantokTicket ? (
             <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-50 px-3 py-1 text-xs font-semibold text-emerald-700">
-              <Ticket className="h-3.5 w-3.5" /> ได้รับ Khantok ticket{order.khantokTicketValue ? ` ฿${order.khantokTicketValue}` : ""}
+              <Ticket className="h-3.5 w-3.5" /> {t.checkOrder.khantokReceived}{order.khantokTicketValue ? ` ฿${order.khantokTicketValue}` : ""}
             </span>
           ) : order.khantokTicketAlreadyClaimed ? (
             <span className="inline-flex items-center gap-1.5 rounded-full bg-amber-50 px-3 py-1 text-xs font-semibold text-amber-700">
-              <Ticket className="h-3.5 w-3.5" /> รับไปแล้ว
+              <Ticket className="h-3.5 w-3.5" /> {t.checkOrder.khantokClaimed}
             </span>
           ) : null}
-          <p className="text-base font-bold text-zinc-900">รวม {baht(order.totalAmount)}</p>
+          <p className="text-base font-bold text-zinc-900">{t.checkOrder.total} {baht(order.totalAmount)}</p>
         </div>
       </div>
 
@@ -124,7 +140,7 @@ function OrderCard({ order }: { order: PublicOrder }) {
             className="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-apple-blue px-4 py-3 text-sm font-semibold text-white transition hover:bg-apple-blue-dark"
           >
             <Upload className="h-4 w-4" />
-            อัปโหลดสลิปการโอนเงิน
+            {t.checkOrder.uploadSlip}
           </Link>
         </div>
       )}
@@ -135,6 +151,7 @@ function OrderCard({ order }: { order: PublicOrder }) {
 function CheckOrderContent() {
   const searchParams = useSearchParams();
   const router = useRouter();
+  const { t } = useLang();
 
   const [input, setInput] = useState(searchParams.get("studentCode") ?? "");
   const [orders, setOrders] = useState<PublicOrder[]>([]);
@@ -159,13 +176,12 @@ function CheckOrderContent() {
       const data = await res.json();
       setOrders(data.order ? [data.order] : (data.orders ?? []));
     } catch (e) {
-      setError(e instanceof Error ? e.message : "เกิดข้อผิดพลาด");
+      setError(e instanceof Error ? e.message : t.checkOrder.errorGeneric);
     } finally {
       setLoading(false);
     }
-  }, [router]);
+  }, [router, t.checkOrder.errorGeneric]);
 
-  // Auto-search from URL params on mount
   useEffect(() => {
     const code = searchParams.get("studentCode");
     if (code) search(code);
@@ -180,13 +196,11 @@ function CheckOrderContent() {
   return (
     <div className="min-h-[calc(100vh-4rem)] bg-zinc-50/50 py-12">
       <Container className="max-w-2xl">
-        {/* Title */}
         <div className="mb-8 text-center">
-          <h1 className="text-3xl font-bold tracking-tight text-zinc-900">เช็คสถานะออเดอร์</h1>
-          <p className="mt-2 text-zinc-500">กรอกรหัสนักศึกษาเพื่อดูสถานะออเดอร์</p>
+          <h1 className="text-3xl font-bold tracking-tight text-zinc-900">{t.checkOrder.title}</h1>
+          <p className="mt-2 text-zinc-500">{t.checkOrder.subtitle}</p>
         </div>
 
-        {/* Search form */}
         <form onSubmit={handleSubmit} className="mb-8">
           <div className="flex gap-2">
             <div className="relative flex-1">
@@ -204,12 +218,11 @@ function CheckOrderContent() {
               disabled={loading || !input.trim()}
               className="h-12 rounded-xl bg-apple-blue px-5 text-sm font-semibold text-white transition hover:bg-apple-blue-dark disabled:opacity-50"
             >
-              {loading ? "กำลังค้นหา..." : "ค้นหา"}
+              {loading ? t.checkOrder.searching : t.checkOrder.search}
             </button>
           </div>
         </form>
 
-        {/* Results */}
         {error && (
           <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{error}</div>
         )}
@@ -217,8 +230,8 @@ function CheckOrderContent() {
         {!loading && searched && !error && orders.length === 0 && (
           <div className="rounded-2xl border border-black/[0.06] bg-white px-6 py-12 text-center shadow-sm">
             <Package className="mx-auto mb-3 h-10 w-10 text-zinc-300" />
-            <p className="font-semibold text-zinc-600">ไม่พบออเดอร์</p>
-            <p className="mt-1 text-sm text-zinc-400">ลองตรวจสอบเลขออเดอร์หรือรหัสนักศึกษาอีกครั้ง</p>
+            <p className="font-semibold text-zinc-600">{t.checkOrder.noOrders}</p>
+            <p className="mt-1 text-sm text-zinc-400">{t.checkOrder.noOrdersHint}</p>
           </div>
         )}
 

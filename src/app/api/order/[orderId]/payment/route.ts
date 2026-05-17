@@ -19,7 +19,7 @@ type PaymentRouteProps = {
 
 export async function POST(request: Request, { params }: PaymentRouteProps) {
   if (isRateLimited(getRateLimitKey(request, "slip"), RATE_LIMIT_MAX)) {
-    return NextResponse.json({ message: "อัปโหลดบ่อยเกินไป กรุณารอสักครู่" }, { status: 429 });
+    return NextResponse.json({ message: "Too many uploads — please wait a moment" }, { status: 429 });
   }
 
   try {
@@ -27,13 +27,13 @@ export async function POST(request: Request, { params }: PaymentRouteProps) {
     const slip = formData.get("slip");
 
     if (!(slip instanceof File)) {
-      return NextResponse.json({ message: "กรุณาแนบไฟล์สลิปก่อนส่ง" }, { status: 400 });
+      return NextResponse.json({ message: "Please attach a slip file before submitting" }, { status: 400 });
     }
 
     const availability = await getPaymentSlipUploadAvailability();
     if (!availability.enabled) {
       return NextResponse.json(
-        { message: availability.message ?? "ไม่สามารถอัปโหลดสลิปได้ในขณะนี้" },
+        { message: availability.message ?? "Slip upload is not available right now" },
         { status: 503 }
       );
     }
@@ -45,11 +45,11 @@ export async function POST(request: Request, { params }: PaymentRouteProps) {
 
     const order = await attachSlipToOrder(params.orderId, slip);
     if (!order) {
-      return NextResponse.json({ message: "ไม่พบคำสั่งซื้อ" }, { status: 404 });
+      return NextResponse.json({ message: "Order not found" }, { status: 404 });
     }
 
     const response = NextResponse.json({
-      message: `บันทึกสลิปของคำสั่งซื้อ ${formatOrderNumber(order)} เรียบร้อย`,
+      message: `Slip saved for order ${formatOrderNumber(order)}`,
       orderId: order.id
     });
 
@@ -62,7 +62,7 @@ export async function POST(request: Request, { params }: PaymentRouteProps) {
     }
 
     return NextResponse.json(
-      { message: "ไม่สามารถอัปโหลดสลิปได้ในขณะนี้" },
+      { message: "Unable to upload slip at this time" },
       { status: 500 }
     );
   }
