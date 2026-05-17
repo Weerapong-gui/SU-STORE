@@ -21,6 +21,7 @@ from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from typing import Any
+import time
 from urllib.parse import urlparse
 
 HOST = os.environ.get("ORDER_API_HOST", "0.0.0.0")
@@ -59,6 +60,10 @@ PAYMENT_STATUS_BY_ORDER_STATUS = {
     "cancelled": "rejected",
     "rejected": "rejected",
 }
+
+# In-memory visitor tracking (IP → last-seen timestamp)
+_visitor_registry: dict[str, float] = {}
+_VISITOR_ACTIVE_SECONDS = 120  # 2 minutes
 
 DEFAULT_PRODUCTS = [
     {
@@ -314,7 +319,7 @@ ADMIN_HTML = r"""<!doctype html>
   <div class="tab-pane" id="tab-settings">
     <main>
       <div class="settings-card">
-        <h3>Announcement Banner</h3>
+        <h3>Announcement</h3>
         <div class="field">
           <label>Banner Text</label>
           <input id="bannerText" type="text" placeholder="ข้อความประกาศ..." />
@@ -326,6 +331,29 @@ ADMIN_HTML = r"""<!doctype html>
             <span class="toggle-track"></span>
             <span class="toggle-thumb"></span>
           </label>
+        </div>
+      </div>
+
+      <div class="settings-card" id="closeWebsiteCard">
+        <h3>Close Website</h3>
+        <p style="color:var(--muted);font-size:13px;margin:0 0 14px">เมื่อปิดเว็บ ผู้เข้าชมทั้งหมดจะเห็นแค่หน้า "We'll be back" และไม่สามารถเข้าหน้าอื่นได้</p>
+        <div style="display:flex;align-items:center;gap:16px;flex-wrap:wrap">
+          <button id="closeSiteBtn" class="primary" style="background:var(--danger);min-width:160px">Close Website</button>
+          <button id="openSiteBtn" class="secondary" style="min-width:160px;display:none">Open Website</button>
+          <span id="siteClosedStatus" style="font-size:13px;font-weight:600;color:var(--danger);display:none">⚠ Website is currently closed</span>
+          <span id="activeVisitors" style="color:var(--muted);font-size:13px;margin-left:auto"></span>
+        </div>
+      </div>
+
+      <!-- Confirm close dialog -->
+      <div id="confirmCloseDialog" style="display:none;position:fixed;inset:0;z-index:9999;background:rgba(0,0,0,0.55);display:none;align-items:center;justify-content:center">
+        <div style="background:#fff;border-radius:20px;padding:28px 32px;max-width:400px;width:90%;box-shadow:0 24px 60px rgba(0,0,0,0.22)">
+          <h3 style="margin:0 0 10px;font-size:18px">ยืนยันการปิดเว็บไซต์?</h3>
+          <p style="color:var(--muted);font-size:14px;margin:0 0 22px">ผู้เข้าชมทั้งหมดจะถูก redirect ไปหน้า "We'll be back" ทันที คุณแน่ใจใช่ไหม?</p>
+          <div style="display:flex;gap:10px;justify-content:flex-end">
+            <button id="confirmCancelBtn" class="secondary">ยกเลิก</button>
+            <button id="confirmCloseBtn" class="primary" style="background:var(--danger)">ปิดเว็บ</button>
+          </div>
         </div>
       </div>
       <div class="settings-card">
@@ -1055,6 +1083,30 @@ ADMIN_HTML = r"""<!doctype html>
       patchPhase(null);
     });
 
+    function renderSiteClosed(siteClosed) {
+      var closeBtn = document.querySelector("#closeSiteBtn");
+      var openBtn = document.querySelector("#openSiteBtn");
+      var status = document.querySelector("#siteClosedStatus");
+      if (siteClosed) {
+        closeBtn.style.display = "none";
+        openBtn.style.display = "";
+        status.style.display = "";
+      } else {
+        closeBtn.style.display = "";
+        openBtn.style.display = "none";
+        status.style.display = "none";
+      }
+    }
+
+    async function refreshActiveVisitors() {
+      try {
+        var res = await fetch("/site-status", { cache: "no-store" });
+        if (!res.ok) return;
+        var d = await res.json();
+        document.querySelector("#activeVisitors").textContent = d.activeVisitors + " active visitor" + (d.activeVisitors !== 1 ? "s" : "");
+      } catch(e) {}
+    }
+
     async function loadSettings() {
       try {
         var res = await fetch("/site-settings", { cache: "no-store" });
@@ -1067,9 +1119,46 @@ ADMIN_HTML = r"""<!doctype html>
         renderPhase(s);
         if (s.khantokQuota100 != null) document.querySelector("#khantokQuota100").value = s.khantokQuota100;
         if (s.khantokQuota50 != null) document.querySelector("#khantokQuota50").value = s.khantokQuota50;
+        renderSiteClosed(s.siteClosed === true);
         setSettingsNotice("Settings loaded");
+        refreshActiveVisitors();
       } catch(e) { setSettingsNotice(e.message, true); }
     }
+
+    // Close website button flow
+    var confirmDialog = document.querySelector("#confirmCloseDialog");
+    document.querySelector("#closeSiteBtn").addEventListener("click", function() {
+      confirmDialog.style.display = "flex";
+    });
+    document.querySelector("#confirmCancelBtn").addEventListener("click", function() {
+      confirmDialog.style.display = "none";
+    });
+    confirmDialog.addEventListener("click", function(e) {
+      if (e.target === confirmDialog) confirmDialog.style.display = "none";
+    });
+    document.querySelector("#confirmCloseBtn").addEventListener("click", async function() {
+      confirmDialog.style.display = "none";
+      try {
+        var res = await fetch("/admin/site-settings", {
+          method: "PATCH", headers: authHeaders(),
+          body: JSON.stringify({ siteClosed: true })
+        });
+        if (!res.ok) throw new Error(await res.text());
+        renderSiteClosed(true);
+        setSettingsNotice("Website closed");
+      } catch(e) { setSettingsNotice(e.message, true); }
+    });
+    document.querySelector("#openSiteBtn").addEventListener("click", async function() {
+      try {
+        var res = await fetch("/admin/site-settings", {
+          method: "PATCH", headers: authHeaders(),
+          body: JSON.stringify({ siteClosed: false })
+        });
+        if (!res.ok) throw new Error(await res.text());
+        renderSiteClosed(false);
+        setSettingsNotice("Website opened");
+      } catch(e) { setSettingsNotice(e.message, true); }
+    });
 
     document.querySelector("#saveSettingsBtn").addEventListener("click", async function() {
       var payload = {
@@ -1079,6 +1168,7 @@ ADMIN_HTML = r"""<!doctype html>
         orderDeadline: document.querySelector("#orderDeadline").value || null,
         khantokQuota100: parseInt(document.querySelector("#khantokQuota100").value, 10) || 0,
         khantokQuota50: parseInt(document.querySelector("#khantokQuota50").value, 10) || 0,
+        // siteClosed is managed via dedicated buttons, not the Save button
       };
       try {
         var res = await fetch("/admin/site-settings", {
@@ -2678,6 +2768,7 @@ def get_site_settings(connection: sqlite3.Connection) -> dict[str, Any]:
         "announcementBanner": settings.get("announcement_banner", ""),
         "announcementBannerEnabled": settings.get("announcement_banner_enabled", "0") == "1",
         "storeOpen": settings.get("store_open", "1") == "1",
+        "siteClosed": settings.get("site_closed", "0") == "1",
         "orderDeadline": settings.get("order_deadline", ""),
         "phaseOverride": phase_override,
         "currentPhase": get_current_phase(connection),
@@ -3093,6 +3184,22 @@ class OrderRequestHandler(BaseHTTPRequestHandler):
                 self._send_json(HTTPStatus.OK, get_site_settings(connection))
             return
 
+        if path == "/site-status":
+            from urllib.parse import parse_qs as _parse_qs_ss
+            qs_ss = _parse_qs_ss(urlparse(self.path).query)
+            visitor_ip = (qs_ss.get("ip") or [""])[0].strip()
+            if visitor_ip:
+                _visitor_registry[visitor_ip] = time.time()
+            cutoff = time.time() - _VISITOR_ACTIVE_SECONDS
+            active_count = sum(1 for t in list(_visitor_registry.values()) if t >= cutoff)
+            with open_db() as connection:
+                row = connection.execute(
+                    "SELECT value FROM site_settings WHERE key = 'site_closed'"
+                ).fetchone()
+                site_closed = row is not None and row["value"] == "1"
+            self._send_json(HTTPStatus.OK, {"siteClosed": site_closed, "activeVisitors": active_count})
+            return
+
         if path == "/admin/orders/export.csv":
             if not self._require_admin_authorization():
                 return
@@ -3450,6 +3557,8 @@ class OrderRequestHandler(BaseHTTPRequestHandler):
                 if "phaseOverride" in payload:
                     v = payload["phaseOverride"]
                     upsert_site_setting(connection, "phase_override", str(int(v)) if v is not None else "")
+                if "siteClosed" in payload:
+                    upsert_site_setting(connection, "site_closed", "1" if payload["siteClosed"] else "0")
                 if "khantokQuota100" in payload:
                     upsert_site_setting(connection, "khantok_quota_100", str(int(payload["khantokQuota100"])))
                 if "khantokQuota50" in payload:
