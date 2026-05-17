@@ -3428,9 +3428,6 @@ class OrderRequestHandler(BaseHTTPRequestHandler):
             if row is None:
                 self._send_json(HTTPStatus.NOT_FOUND, {"message": "order not found"})
                 return
-            if not self._is_authorized_for_order(row):
-                self._deny_unauthorized()
-                return
             self._send_json(HTTPStatus.OK, serialize_order(row))
 
     def do_POST(self) -> None:
