@@ -26,6 +26,12 @@ export function getStoredProductSize(product: Product, size?: string) {
     return ONE_SIZE_OPTION;
   }
 
+  if (size?.includes(" / ")) {
+    const [sizeOnly, color] = size.split(" / ");
+    const normalizedSize = normalizeStandardProductSize(product, sizeOnly?.trim());
+    return color?.trim() ? `${normalizedSize} / ${color.trim()}` : normalizedSize;
+  }
+
   return normalizeStandardProductSize(product, size);
 }
 
