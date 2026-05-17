@@ -147,7 +147,7 @@ export function ProductConfigurator({
           className="pb-2"
           slideClassName={
             product.category === "headband"
-              ? "aspect-[5/1] border border-zinc-300 bg-white shadow-soft"
+              ? "aspect-[5/1] bg-white"
               : "h-[56vh] min-h-[320px] border border-zinc-300 bg-white shadow-soft"
           }
           imageClassName={product.category === "headband" ? "object-contain" : "object-cover"}
