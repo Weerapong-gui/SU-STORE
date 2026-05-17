@@ -3422,12 +3422,12 @@ class OrderRequestHandler(BaseHTTPRequestHandler):
             self._send_json(HTTPStatus.OK, serialize_order(row))
 
     def do_POST(self) -> None:
+        global _test_warning_until
         path = urlparse(self.path).path
 
         if path == "/admin/test-warning":
             if not self._require_admin_authorization():
                 return
-            global _test_warning_until
             _test_warning_until = time.time() + 60
             self._send_json(HTTPStatus.OK, {"ok": True})
             return
@@ -3435,7 +3435,6 @@ class OrderRequestHandler(BaseHTTPRequestHandler):
         if path == "/admin/stop-test-warning":
             if not self._require_admin_authorization():
                 return
-            global _test_warning_until
             _test_warning_until = 0
             self._send_json(HTTPStatus.OK, {"ok": True})
             return
