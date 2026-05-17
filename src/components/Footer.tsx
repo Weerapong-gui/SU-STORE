@@ -1,8 +1,16 @@
+"use client";
+
 import { Container } from "@/components/ui/Container";
 import { Instagram, Facebook } from "lucide-react";
+import { useLang } from "@/lib/i18n";
 
 export function Footer() {
   const currentYear = new Date().getFullYear();
+  const { lang } = useLang();
+
+  const contactNote = lang === "th"
+    ? "หากพบปัญหาขัดข้องเกี่ยวกับระบบให้ติดต่อผู้ดูแลระบบ โทร : 0838627000 ปาร์ค"
+    : "For system issues, please contact admin. Tel : 0838627000 Park";
 
   return (
     <footer className="bg-surface-dark py-12 md:py-16">
@@ -14,7 +22,7 @@ export function Footer() {
           </p>
           <div className="mt-4">
             <p className="text-xs font-semibold tracking-[0.1em] text-zinc-500">CONTACT US</p>
-            <div className="mt-2 flex flex-col gap-2">
+            <div className="mt-2 flex flex-wrap items-center gap-x-5 gap-y-2">
               <a
                 href="https://www.instagram.com/su.mfu/"
                 target="_blank"
@@ -45,6 +53,7 @@ export function Footer() {
                 @su.mfu
               </a>
             </div>
+            <p className="mt-3 text-xs text-zinc-500">{contactNote}</p>
           </div>
         </div>
         <div className="mt-8 flex flex-col gap-2 text-xs text-zinc-500 md:flex-row md:items-center md:justify-between">
