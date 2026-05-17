@@ -333,7 +333,7 @@ export function CheckoutPaymentForm({
                   required
                   defaultValue={existingOrder?.customer.studentCode ?? ""}
                   className={TEXT_FIELD_CLASSES}
-                  placeholder="6831501178"
+                  placeholder="Student ID"
                 />
               </label>
 
@@ -346,7 +346,7 @@ export function CheckoutPaymentForm({
                   value={customerEmail}
                   onChange={(event) => setCustomerEmail(event.target.value.replace(/\s/g, ""))}
                   className={TEXT_FIELD_CLASSES}
-                  placeholder="name@example.com"
+                  placeholder="student ID @lamduan.mfu.ac.th"
                 />
               </label>
 
