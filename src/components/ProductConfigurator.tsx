@@ -153,7 +153,7 @@ export function ProductConfigurator({
               ? "aspect-[5/1] bg-white"
               : "h-[56vh] min-h-[320px] border border-zinc-300 bg-white shadow-soft"
           }
-          imageClassName={product.category === "headband" ? "object-contain" : "object-cover"}
+          imageClassName="object-contain"
         />
 
         <div className="hidden space-y-4 lg:block">
