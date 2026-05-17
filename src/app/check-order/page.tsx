@@ -1,9 +1,10 @@
 "use client";
 
+import Link from "next/link";
 import { useState, useEffect, useCallback, Suspense } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import { Container } from "@/components/ui/Container";
-import { Search, Package, CheckCircle2, Clock, XCircle, Truck, AlertCircle, Ticket } from "lucide-react";
+import { Search, Package, CheckCircle2, Clock, XCircle, Truck, AlertCircle, Ticket, Upload } from "lucide-react";
 
 type OrderStatus = "pending_payment" | "waiting_confirm" | "paid" | "preparing" | "shipped" | "cancelled" | "rejected";
 
@@ -114,6 +115,19 @@ function OrderCard({ order }: { order: PublicOrder }) {
           <p className="text-base font-bold text-zinc-900">รวม {baht(order.totalAmount)}</p>
         </div>
       </div>
+
+      {/* Upload slip CTA — only for pending_payment */}
+      {order.status === "pending_payment" && (
+        <div className="border-t border-black/[0.06] px-6 py-4">
+          <Link
+            href={`/checkout/payment/${order.id}`}
+            className="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-apple-blue px-4 py-3 text-sm font-semibold text-white transition hover:bg-apple-blue-dark"
+          >
+            <Upload className="h-4 w-4" />
+            อัปโหลดสลิปการโอนเงิน
+          </Link>
+        </div>
+      )}
     </div>
   );
 }

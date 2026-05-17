@@ -669,7 +669,10 @@ ADMIN_HTML = r"""<!doctype html>
           '<td><span class="muted">' + esc(order.paymentStatus||"-") + '</span><br/><span class="muted">' + (order.slip ? "Slip uploaded" : "No slip") + '</span><br/>' + (order.khantokTicket ? '<span style="font-size:11px;font-weight:700;color:var(--ok)">🎟 บัตรขันโตก ฿' + (order.khantokTicketValue || 100) + '</span>' : '<span style="font-size:11px;color:var(--muted)">ไม่ได้บัตร</span>') + '</td>' +
           '<td><span class="badge ' + esc(order.status) + '">' + (order.status === 'shipped' ? 'Ready to Receive' : esc(order.status)) + '</span></td>' +
           '<td><div style="display:flex;flex-wrap:wrap;gap:3px;margin-bottom:6px">' + statusBtns + '</div>' +
-            '<button class="ghost slipBtn" data-oid="' + esc(order.id) + '" data-total="' + esc(order.totalAmount||0) + '" style="font-size:12px;min-height:28px;width:100%"' + (order.slip ? "" : " disabled") + '>View Slip</button>' +
+            '<div style="display:flex;gap:4px">' +
+              '<button class="ghost slipBtn" data-oid="' + esc(order.id) + '" data-total="' + esc(order.totalAmount||0) + '" style="font-size:12px;min-height:28px;flex:1"' + (order.slip ? "" : " disabled") + '>View Slip</button>' +
+              (order.status === 'waiting_confirm' ? '<button class="ok-btn confirmPayBtn" data-oid="' + esc(order.id) + '" style="font-size:12px;min-height:28px;flex:1">Confirm</button>' : '') +
+            '</div>' +
           '</td>' +
         '</tr>';
       }).join("");
@@ -788,6 +791,15 @@ ADMIN_HTML = r"""<!doctype html>
       }
       var slipBtn = e.target.closest(".slipBtn");
       if (slipBtn) { viewSlip(slipBtn.dataset.oid, slipBtn.dataset.total).catch(function(err) { setOrdersNotice(err.message, true); }); return; }
+
+      var confirmPayBtn = e.target.closest(".confirmPayBtn");
+      if (confirmPayBtn) {
+        var oid = confirmPayBtn.dataset.oid;
+        if (!confirm("ยืนยันการชำระเงินสำหรับออเดอร์ " + oid + "?")) return;
+        try { await patchStatus(oid, "paid"); setOrdersNotice("✓ ยืนยันแล้ว — " + oid); await loadOrders(); }
+        catch(err) { setOrdersNotice(err.message, true); }
+        return;
+      }
     });
 
     document.querySelector("#bulkApplyBtn").addEventListener("click", async function() {
