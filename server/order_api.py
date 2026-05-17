@@ -65,6 +65,27 @@ PAYMENT_STATUS_BY_ORDER_STATUS = {
 _visitor_registry: dict[str, float] = {}
 _VISITOR_ACTIVE_SECONDS = 120  # 2 minutes
 
+# In-memory test-warning expiry (timestamp)
+_test_warning_until: float = 0
+
+
+def get_schedule_status(schedule_enabled: bool, warning_message: str) -> dict[str, Any]:
+    """Compute schedule open/closed/warning state from current Bangkok time."""
+    if not schedule_enabled:
+        return {"scheduleClosed": False, "scheduleWarning": False, "scheduleWarningMessage": warning_message}
+    now = datetime.now(TZ_BANGKOK)
+    total_min = now.hour * 60 + now.minute
+    open_min = 6 * 60       # 06:00
+    close_min = 23 * 60     # 23:00 (end of 22:59)
+    warn_min = close_min - 10  # 22:50
+    schedule_closed = total_min < open_min or total_min >= close_min
+    schedule_warning = not schedule_closed and total_min >= warn_min
+    return {
+        "scheduleClosed": schedule_closed,
+        "scheduleWarning": schedule_warning,
+        "scheduleWarningMessage": warning_message,
+    }
+
 DEFAULT_PRODUCTS = [
     {
         "slug": "single-shirt",
@@ -331,6 +352,29 @@ ADMIN_HTML = r"""<!doctype html>
             <span class="toggle-track"></span>
             <span class="toggle-thumb"></span>
           </label>
+        </div>
+      </div>
+
+      <div class="settings-card">
+        <h3>Daily Schedule</h3>
+        <p style="color:var(--muted);font-size:13px;margin:0 0 14px">เปิดเว็บอัตโนมัติ <strong>06:00 – 22:59</strong> (เวลาไทย) ทุกวัน — นอกช่วงเวลาจะแสดงหน้า "Stay Tuned" จนกว่าจะถึงรอบเปิดถัดไป</p>
+        <div class="field" style="display:flex;gap:12px;align-items:center;margin-bottom:4px">
+          <label style="margin:0;font-size:14px;font-weight:600">Enable Schedule</label>
+          <label class="toggle">
+            <input type="checkbox" id="scheduleEnabled" />
+            <span class="toggle-track"></span>
+            <span class="toggle-thumb"></span>
+          </label>
+          <span id="scheduleStatusLabel" style="font-size:13px;color:var(--muted)"></span>
+        </div>
+        <div class="field" style="margin-top:14px">
+          <label>Warning Message (แสดง 10 นาทีก่อนปิด 22:59)</label>
+          <input id="scheduleWarningMsg" type="text" placeholder="เว็บกำลังจะปิด กรุณาทำรายการให้เสร็จก่อนเวลา 22:59" style="max-width:520px" />
+        </div>
+        <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-top:8px">
+          <button id="saveScheduleBtn" class="primary">Save Schedule</button>
+          <button id="testWarningBtn" class="secondary">🔔 Test Warning (60s)</button>
+          <span id="scheduleNotice" style="color:var(--muted);font-size:13px"></span>
         </div>
       </div>
 
@@ -1107,6 +1151,42 @@ ADMIN_HTML = r"""<!doctype html>
       } catch(e) {}
     }
 
+    // ── Daily Schedule ────────────────────────────────────────────────────────
+    function setScheduleNotice(msg, err) {
+      var el = document.querySelector("#scheduleNotice");
+      el.textContent = msg; el.style.color = err ? "var(--danger)" : "var(--muted)";
+    }
+    function renderScheduleStatus(enabled) {
+      var el = document.querySelector("#scheduleStatusLabel");
+      el.textContent = enabled ? "เปิด 06:00–22:59 ทุกวัน" : "ปิดการใช้งาน";
+      el.style.color = enabled ? "var(--ok)" : "var(--muted)";
+    }
+    document.querySelector("#scheduleEnabled").addEventListener("change", function() {
+      renderScheduleStatus(this.checked);
+    });
+    document.querySelector("#saveScheduleBtn").addEventListener("click", async function() {
+      try {
+        var res = await fetch("/admin/site-settings", {
+          method: "PATCH", headers: authHeaders(),
+          body: JSON.stringify({
+            scheduleEnabled: document.querySelector("#scheduleEnabled").checked,
+            scheduleWarningMessage: document.querySelector("#scheduleWarningMsg").value,
+          })
+        });
+        if (!res.ok) throw new Error(await res.text());
+        var s = await res.json();
+        renderScheduleStatus(s.scheduleEnabled === true);
+        setScheduleNotice("Saved");
+      } catch(e) { setScheduleNotice(e.message, true); }
+    });
+    document.querySelector("#testWarningBtn").addEventListener("click", async function() {
+      try {
+        var res = await fetch("/admin/test-warning", { method: "POST", headers: authHeaders() });
+        if (!res.ok) throw new Error(await res.text());
+        setScheduleNotice("Test warning active for 60 seconds — เปิดหน้าเว็บเพื่อดูผล");
+      } catch(e) { setScheduleNotice(e.message, true); }
+    });
+
     async function loadSettings() {
       try {
         var res = await fetch("/site-settings", { cache: "no-store" });
@@ -1120,6 +1200,9 @@ ADMIN_HTML = r"""<!doctype html>
         if (s.khantokQuota100 != null) document.querySelector("#khantokQuota100").value = s.khantokQuota100;
         if (s.khantokQuota50 != null) document.querySelector("#khantokQuota50").value = s.khantokQuota50;
         renderSiteClosed(s.siteClosed === true);
+        document.querySelector("#scheduleEnabled").checked = s.scheduleEnabled === true;
+        document.querySelector("#scheduleWarningMsg").value = s.scheduleWarningMessage || "";
+        renderScheduleStatus(s.scheduleEnabled === true);
         setSettingsNotice("Settings loaded");
         refreshActiveVisitors();
       } catch(e) { setSettingsNotice(e.message, true); }
@@ -2769,6 +2852,8 @@ def get_site_settings(connection: sqlite3.Connection) -> dict[str, Any]:
         "announcementBannerEnabled": settings.get("announcement_banner_enabled", "0") == "1",
         "storeOpen": settings.get("store_open", "1") == "1",
         "siteClosed": settings.get("site_closed", "0") == "1",
+        "scheduleEnabled": settings.get("schedule_enabled", "0") == "1",
+        "scheduleWarningMessage": settings.get("schedule_warning_message", "เว็บกำลังจะปิด กรุณาทำรายการให้เสร็จก่อนเวลา 22:59"),
         "orderDeadline": settings.get("order_deadline", ""),
         "phaseOverride": phase_override,
         "currentPhase": get_current_phase(connection),
@@ -3193,11 +3278,23 @@ class OrderRequestHandler(BaseHTTPRequestHandler):
             cutoff = time.time() - _VISITOR_ACTIVE_SECONDS
             active_count = sum(1 for t in list(_visitor_registry.values()) if t >= cutoff)
             with open_db() as connection:
-                row = connection.execute(
-                    "SELECT value FROM site_settings WHERE key = 'site_closed'"
-                ).fetchone()
-                site_closed = row is not None and row["value"] == "1"
-            self._send_json(HTTPStatus.OK, {"siteClosed": site_closed, "activeVisitors": active_count})
+                rows = connection.execute(
+                    "SELECT key, value FROM site_settings WHERE key IN ('site_closed','schedule_enabled','schedule_warning_message')"
+                ).fetchall()
+                s = {r["key"]: r["value"] for r in rows}
+                site_closed = s.get("site_closed", "0") == "1"
+                schedule_enabled = s.get("schedule_enabled", "0") == "1"
+                warning_message = s.get("schedule_warning_message", "เว็บกำลังจะปิด กรุณาทำรายการให้เสร็จก่อนเวลา 22:59")
+            sched = get_schedule_status(schedule_enabled, warning_message)
+            test_warn = time.time() < _test_warning_until
+            self._send_json(HTTPStatus.OK, {
+                "siteClosed": site_closed,
+                "scheduleEnabled": schedule_enabled,
+                "scheduleClosed": sched["scheduleClosed"],
+                "scheduleWarning": sched["scheduleWarning"] or test_warn,
+                "scheduleWarningMessage": sched["scheduleWarningMessage"],
+                "activeVisitors": active_count,
+            })
             return
 
         if path == "/admin/orders/export.csv":
@@ -3309,6 +3406,14 @@ class OrderRequestHandler(BaseHTTPRequestHandler):
 
     def do_POST(self) -> None:
         path = urlparse(self.path).path
+
+        if path == "/admin/test-warning":
+            if not self._require_admin_authorization():
+                return
+            global _test_warning_until
+            _test_warning_until = time.time() + 60
+            self._send_json(HTTPStatus.OK, {"ok": True})
+            return
 
         product_image_match = re.fullmatch(r"/admin/products/([a-z0-9-]+)/image", path)
         if product_image_match:
@@ -3559,6 +3664,10 @@ class OrderRequestHandler(BaseHTTPRequestHandler):
                     upsert_site_setting(connection, "phase_override", str(int(v)) if v is not None else "")
                 if "siteClosed" in payload:
                     upsert_site_setting(connection, "site_closed", "1" if payload["siteClosed"] else "0")
+                if "scheduleEnabled" in payload:
+                    upsert_site_setting(connection, "schedule_enabled", "1" if payload["scheduleEnabled"] else "0")
+                if "scheduleWarningMessage" in payload:
+                    upsert_site_setting(connection, "schedule_warning_message", str(payload["scheduleWarningMessage"]))
                 if "khantokQuota100" in payload:
                     upsert_site_setting(connection, "khantok_quota_100", str(int(payload["khantokQuota100"])))
                 if "khantokQuota50" in payload:

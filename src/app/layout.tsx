@@ -3,6 +3,7 @@ import "@/app/globals.css";
 import { CartProvider } from "@/components/CartProvider";
 import { Navbar } from "@/components/Navbar";
 import { Footer } from "@/components/Footer";
+import { ScheduleWarningBanner } from "@/components/ScheduleWarningBanner";
 
 export const metadata: Metadata = {
   title: "Fresher Package 28th",
@@ -25,6 +26,7 @@ export default function RootLayout({
       <body className="flex min-h-screen flex-col">
         <CartProvider>
           <Navbar />
+          <ScheduleWarningBanner />
           <main className="flex-1">{children}</main>
           <Footer />
         </CartProvider>
