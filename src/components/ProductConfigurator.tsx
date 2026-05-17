@@ -80,8 +80,9 @@ export function ProductConfigurator({
   const totalPrice = useMemo(() => adjustedUnitPrice * selectedQuantity, [adjustedUnitPrice, selectedQuantity]);
   const primaryMode = intent === "cart" ? "cart" : "payment";
   const baseStoredSize = getStoredProductSize(product, selectedSize);
-  const storedSize = selectedColor
-    ? `${baseStoredSize} / ${selectedColor.name}`
+  const effectiveColor = selectedColor ?? product.colors?.[0] ?? null;
+  const storedSize = effectiveColor
+    ? `${baseStoredSize} / ${effectiveColor.name}`
     : baseStoredSize;
   const headbandSchoolImage =
     product.category === "headband" && selectedSchool

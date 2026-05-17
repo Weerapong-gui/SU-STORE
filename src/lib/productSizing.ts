@@ -40,5 +40,11 @@ export function formatStoredProductSize(category: ProductCategory, size?: string
     return ONE_SIZE_OPTION;
   }
 
+  if (size?.includes(" / ")) {
+    const [sizeOnly, color] = size.split(" / ");
+    const normalizedSize = isStandardSizeOption(sizeOnly?.trim()) ? sizeOnly!.trim() : DEFAULT_SIZE_OPTION;
+    return color?.trim() ? `${normalizedSize} / ${color.trim()}` : normalizedSize;
+  }
+
   return isStandardSizeOption(size) ? size : DEFAULT_SIZE_OPTION;
 }
