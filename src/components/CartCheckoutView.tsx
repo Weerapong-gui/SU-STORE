@@ -29,7 +29,7 @@ export function CartCheckoutView() {
           Your cart is empty
         </h1>
         <p className="mt-3 max-w-2xl text-sm text-zinc-600">
-          Add products from the home page or the products catalog first, then come back here to review your selected items.
+          Add products from the home page or the product catalog first, then come back here to review your selected items.
         </p>
         <div className="mt-6 flex flex-wrap gap-3">
           <Link href="/products" className={PRIMARY_LINK_CLASSES}>

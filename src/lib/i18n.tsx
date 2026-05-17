@@ -56,7 +56,7 @@ export const translations = {
     },
     products: {
       "single-shirt": {
-        shortName: "Single Shirt",
+        shortName: "Individual Shirt",
         description: "FRESHER PACKAGE 28TH",
       },
       "fresh-jacket": {
