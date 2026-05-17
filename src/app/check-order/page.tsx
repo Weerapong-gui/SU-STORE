@@ -17,7 +17,7 @@ interface PublicOrder {
   createdAt: string;
   updatedAt: string;
   product: { name: string; shortName: string; image: string; category: string };
-  items: { product: { name: string }; size: string; quantity: number; totalAmount: number; school?: string | null }[];
+  items: { product: { name: string; category: string }; size: string; quantity: number; totalAmount: number; school?: string | null }[];
   khantokTicket: boolean;
   khantokTicketValue?: number | null;
   khantokTicketAlreadyClaimed: boolean;
@@ -84,7 +84,9 @@ function OrderCard({ order }: { order: PublicOrder }) {
               <p className="text-sm font-semibold text-zinc-800">{item.product.name}</p>
               <p className="text-xs text-zinc-400">Size {item.size} × {item.quantity}</p>
               {item.school && (
-                <p className="text-xs text-zinc-400">{item.school}</p>
+                <p className="text-xs text-zinc-400">
+                  {item.product.category === "headband" ? "Print on Headband" : "School"}: {item.school}
+                </p>
               )}
             </div>
             <p className="text-sm font-bold text-apple-blue">{baht(item.totalAmount)}</p>
@@ -97,7 +99,7 @@ function OrderCard({ order }: { order: PublicOrder }) {
         <div className="flex flex-wrap gap-4 text-sm text-zinc-500">
           <span>{order.customer.fullName}</span>
           <span>{order.customer.studentCode}</span>
-          <span>{order.customer.school}</span>
+          <span>Enrolled at: {order.customer.school}</span>
         </div>
         <div className="flex items-center gap-3">
           {order.khantokTicket ? (

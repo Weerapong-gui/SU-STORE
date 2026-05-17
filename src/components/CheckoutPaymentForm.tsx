@@ -292,7 +292,7 @@ export function CheckoutPaymentForm({
                     <p>{formatStoredProductSize(item.productCategory, item.size)}</p>
                     {item.school && (
                       <>
-                        <p className="text-zinc-500">School</p>
+                        <p className="text-zinc-500">{item.productCategory === "headband" ? "Print on Headband" : "School"}</p>
                         <p>{item.school}</p>
                       </>
                     )}
@@ -384,7 +384,7 @@ export function CheckoutPaymentForm({
               </label>
 
               <label className="space-y-1 md:col-span-2">
-                <span className="text-xs font-semibold tracking-[0.08em] text-zinc-600">SCHOOL</span>
+                <span className="text-xs font-semibold tracking-[0.08em] text-zinc-600">ENROLLED AT</span>
                 <select
                   name="school"
                   required
