@@ -50,6 +50,7 @@ export default async function CheckoutPaymentPage({ params }: CheckoutPaymentPag
                     <div key={item.id ?? `${item.product.slug}-${item.size}`} className="rounded-2xl bg-[#f7f7f9] p-4">
                       <h2 className="text-lg font-semibold text-zinc-900">{item.product.name}</h2>
                       <p>Size: {formatStoredProductSize(item.product.category, item.size)}</p>
+                      {item.school && <p>School: {item.school}</p>}
                       <p>Quantity: {item.quantity}</p>
                       <p>Unit Price: {formatPrice(item.unitPrice)}</p>
                       <p className="font-semibold text-zinc-900">

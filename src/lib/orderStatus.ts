@@ -190,6 +190,7 @@ export function normalizeOrder(rawOrder: RawOrder) {
             id: readString(item.id) || `${productSnapshot.slug || "item"}-${index + 1}`,
             product: productSnapshot,
             size: readString(item.size),
+            school: readString(item.school) || undefined,
             quantity: itemQuantity,
             unitPrice,
             totalAmount:
@@ -209,10 +210,11 @@ export function normalizeOrder(rawOrder: RawOrder) {
             id: product.slug || "item-1",
             product,
             size: readString(rawOrder.size),
+            school: undefined,
             quantity,
             unitPrice: product.price,
             totalAmount: product.price * quantity
-          }
+          } satisfies OrderItem
         ];
 
   return {

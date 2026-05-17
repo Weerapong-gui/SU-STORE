@@ -17,7 +17,7 @@ interface PublicOrder {
   createdAt: string;
   updatedAt: string;
   product: { name: string; shortName: string; image: string; category: string };
-  items: { product: { name: string }; size: string; quantity: number; totalAmount: number }[];
+  items: { product: { name: string }; size: string; quantity: number; totalAmount: number; school?: string | null }[];
   khantokTicket: boolean;
   khantokTicketValue?: number | null;
   khantokTicketAlreadyClaimed: boolean;
@@ -83,6 +83,9 @@ function OrderCard({ order }: { order: PublicOrder }) {
             <div>
               <p className="text-sm font-semibold text-zinc-800">{item.product.name}</p>
               <p className="text-xs text-zinc-400">Size {item.size} × {item.quantity}</p>
+              {item.school && (
+                <p className="text-xs text-zinc-400">{item.school}</p>
+              )}
             </div>
             <p className="text-sm font-bold text-apple-blue">{baht(item.totalAmount)}</p>
           </div>
