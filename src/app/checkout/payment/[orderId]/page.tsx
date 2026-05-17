@@ -2,6 +2,7 @@ import Image from "next/image";
 import { BankAccountCopyField } from "@/components/BankAccountCopyField";
 import { OrderAccessFallback } from "@/components/OrderAccessFallback";
 import { PaymentSlipUploadForm } from "@/components/PaymentSlipUploadForm";
+import { PreventBackNavigation } from "@/components/PreventBackNavigation";
 import { Container } from "@/components/ui/Container";
 import { formatPrice } from "@/lib/formatPrice";
 import {
@@ -34,6 +35,7 @@ export default async function CheckoutPaymentPage({ params }: CheckoutPaymentPag
 
   return (
     <section className="bg-[#ececec] py-6 md:py-10">
+      {!order.slip && <PreventBackNavigation />}
       <Container className="max-w-5xl">
         <div className="font-sf-pro rounded-[2rem] border border-zinc-300 bg-[#f5f5f7] p-6 md:p-8">
           <p className="text-xs font-semibold tracking-[0.1em] text-zinc-500">PAYMENT</p>
