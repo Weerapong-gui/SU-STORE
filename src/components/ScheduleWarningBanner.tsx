@@ -6,29 +6,32 @@ import { useRouter } from "next/navigation";
 type SiteStatus = {
   siteClosed?: boolean;
   scheduleClosed?: boolean;
+  scheduleEnabled?: boolean;
   scheduleWarning?: boolean;
   scheduleWarningMessage?: string;
 };
 
-function secondsUntilBangkok23(): number {
-  // Bangkok = UTC+7, close at 23:00:00
-  const now = new Date();
-  const utcMs = now.getTime();
-  const bkkOffset = 7 * 60 * 60 * 1000;
-  const bkkMs = utcMs + bkkOffset;
-  const bkkDate = new Date(bkkMs);
-  const h = bkkDate.getUTCHours();
-  const m = bkkDate.getUTCMinutes();
-  const s = bkkDate.getUTCSeconds();
-  const secondsSinceMidnight = h * 3600 + m * 60 + s;
-  const closeAt = 23 * 3600;
-  return Math.max(0, closeAt - secondsSinceMidnight);
+/** Bangkok time helpers (UTC+7, no DST) */
+function bangkokTotalMinutes(): number {
+  const bkkMs = Date.now() + 7 * 60 * 60 * 1000;
+  const d = new Date(bkkMs);
+  return d.getUTCHours() * 60 + d.getUTCMinutes();
 }
+
+function secondsUntilBangkok23(): number {
+  const bkkMs = Date.now() + 7 * 60 * 60 * 1000;
+  const d = new Date(bkkMs);
+  const secondsSinceMidnight = d.getUTCHours() * 3600 + d.getUTCMinutes() * 60 + d.getUTCSeconds();
+  return Math.max(0, 23 * 3600 - secondsSinceMidnight);
+}
+
+const WARN_START_MIN = 22 * 60 + 50; // 22:50
+const CLOSE_MIN = 23 * 60;           // 23:00
 
 export function ScheduleWarningBanner() {
   const router = useRouter();
   const [warning, setWarning] = useState(false);
-  const [message, setMessage] = useState("");
+  const [message, setMessage] = useState("เว็บกำลังจะปิด กรุณาทำรายการให้เสร็จก่อนเวลา 22:59");
   const [secondsLeft, setSecondsLeft] = useState(0);
 
   const checkStatus = useCallback(async () => {
@@ -40,24 +43,32 @@ export function ScheduleWarningBanner() {
       if (data.siteClosed) { router.replace("/maintenance?reason=manual"); return; }
       if (data.scheduleClosed) { router.replace("/maintenance?reason=schedule"); return; }
 
-      const isWarning = data.scheduleWarning === true;
-      setWarning(isWarning);
-      if (isWarning) {
-        setMessage(data.scheduleWarningMessage ?? "เว็บกำลังจะปิด กรุณาทำรายการให้เสร็จก่อนเวลา 22:59");
+      // API says warning (either schedule time or test warning)
+      const apiWarning = data.scheduleWarning === true;
+      // Client-side schedule check — fires immediately at 22:50 without needing poll
+      const min = bangkokTotalMinutes();
+      const clientWarning = data.scheduleEnabled === true && min >= WARN_START_MIN && min < CLOSE_MIN;
+
+      if (apiWarning || clientWarning) {
+        if (data.scheduleWarningMessage) setMessage(data.scheduleWarningMessage);
         setSecondsLeft(secondsUntilBangkok23());
+        setWarning(true);
+      } else {
+        setWarning(false);
       }
     } catch {
       // ignore network errors
     }
   }, [router]);
 
+  // Poll every 10s so test-warning appears quickly
   useEffect(() => {
     checkStatus();
-    const poll = setInterval(checkStatus, 30_000);
+    const poll = setInterval(checkStatus, 10_000);
     return () => clearInterval(poll);
   }, [checkStatus]);
 
-  // Tick down every second
+  // Tick countdown every second
   useEffect(() => {
     if (!warning) return;
     const tick = setInterval(() => {

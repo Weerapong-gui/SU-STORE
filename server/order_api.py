@@ -373,7 +373,8 @@ ADMIN_HTML = r"""<!doctype html>
         </div>
         <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-top:8px">
           <button id="saveScheduleBtn" class="primary">Save Schedule</button>
-          <button id="testWarningBtn" class="secondary">🔔 Test Warning (60s)</button>
+          <button id="testWarningBtn" class="secondary">Test Warning (60s)</button>
+          <button id="stopWarningBtn" class="secondary" style="display:none">Stop Test Warning</button>
           <span id="scheduleNotice" style="color:var(--muted);font-size:13px"></span>
         </div>
       </div>
@@ -1183,7 +1184,23 @@ ADMIN_HTML = r"""<!doctype html>
       try {
         var res = await fetch("/admin/test-warning", { method: "POST", headers: authHeaders() });
         if (!res.ok) throw new Error(await res.text());
-        setScheduleNotice("Test warning active for 60 seconds — เปิดหน้าเว็บเพื่อดูผล");
+        document.querySelector("#testWarningBtn").style.display = "none";
+        document.querySelector("#stopWarningBtn").style.display = "";
+        setScheduleNotice("Test warning active for 60s — แถบจะปรากฏบนหน้าเว็บทันที");
+        setTimeout(function() {
+          document.querySelector("#testWarningBtn").style.display = "";
+          document.querySelector("#stopWarningBtn").style.display = "none";
+          setScheduleNotice("");
+        }, 60000);
+      } catch(e) { setScheduleNotice(e.message, true); }
+    });
+    document.querySelector("#stopWarningBtn").addEventListener("click", async function() {
+      try {
+        var res = await fetch("/admin/stop-test-warning", { method: "POST", headers: authHeaders() });
+        if (!res.ok) throw new Error(await res.text());
+        document.querySelector("#testWarningBtn").style.display = "";
+        document.querySelector("#stopWarningBtn").style.display = "none";
+        setScheduleNotice("Test warning stopped");
       } catch(e) { setScheduleNotice(e.message, true); }
     });
 
@@ -3412,6 +3429,14 @@ class OrderRequestHandler(BaseHTTPRequestHandler):
                 return
             global _test_warning_until
             _test_warning_until = time.time() + 60
+            self._send_json(HTTPStatus.OK, {"ok": True})
+            return
+
+        if path == "/admin/stop-test-warning":
+            if not self._require_admin_authorization():
+                return
+            global _test_warning_until
+            _test_warning_until = 0
             self._send_json(HTTPStatus.OK, {"ok": True})
             return
 
