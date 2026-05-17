@@ -34,7 +34,7 @@ export default function MaintenancePage() {
           src="/images/anc/BE_BACK_horizontal.png"
           alt="We'll be back"
           fill
-          className="object-contain"
+          className="object-cover"
           priority
         />
       </div>
@@ -44,7 +44,7 @@ export default function MaintenancePage() {
           src="/images/anc/BE_BACK_vertical.png"
           alt="We'll be back"
           fill
-          className="object-contain"
+          className="object-cover"
           priority
         />
       </div>
