@@ -2718,8 +2718,11 @@ def create_orders_summary(connection: sqlite3.Connection) -> dict[str, int]:
     }
     total_row = connection.execute("SELECT COUNT(*) AS cnt FROM orders").fetchone()
     # Count per-category qty from items_json so multi-item orders are fully counted
+    # Exclude rejected and cancelled orders from product quantity totals
     category_counts: dict[str, int] = {}
-    for row in connection.execute("SELECT items_json, product_category, quantity FROM orders").fetchall():
+    for row in connection.execute(
+        "SELECT items_json, product_category, quantity FROM orders WHERE status NOT IN ('rejected', 'cancelled')"
+    ).fetchall():
         counted = False
         if row["items_json"]:
             try:
