@@ -1,5 +1,7 @@
-import Image from "next/image";
+"use client";
+
 import Link from "next/link";
+import { SkeletonImage } from "@/components/SkeletonImage";
 import { Product } from "@/types/product";
 import { createConfiguratorHref } from "@/lib/cart";
 import { formatPrice } from "@/lib/formatPrice";
@@ -16,7 +18,7 @@ export function ProductCard({ product }: ProductCardProps) {
     return (
       <article className="overflow-hidden rounded-3xl bg-zinc-100 opacity-60 grayscale">
         <div className="relative aspect-[4/3] overflow-hidden bg-zinc-200">
-          <Image
+          <SkeletonImage
             src={product.images[0]}
             alt={product.name}
             fill
@@ -41,7 +43,7 @@ export function ProductCard({ product }: ProductCardProps) {
         className="block focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-apple-blue/20"
       >
         <div className="relative aspect-[4/3] overflow-hidden bg-zinc-200">
-          <Image
+          <SkeletonImage
             src={product.images[0]}
             alt={product.name}
             fill

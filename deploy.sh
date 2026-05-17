@@ -27,8 +27,8 @@ $SSH "
   rm /tmp/su-store-deploy.tar.gz
 "
 
-echo "==> Rebuilding Docker..."
-$SSH "sg docker -c 'cd $REMOTE_DIR && docker compose --env-file $REMOTE_DIR/.env up -d --build --no-deps su-store'" 2>&1
+echo "==> Rebuilding Docker (su-store + order-api)..."
+$SSH "sg docker -c 'cd $REMOTE_DIR && docker compose --env-file $REMOTE_DIR/.env up -d --build --no-deps su-store order-api'" 2>&1
 
 rm -f /tmp/su-store-deploy.tar.gz
 echo ""

@@ -4,6 +4,7 @@ from __future__ import annotations
 import base64
 import binascii
 import csv
+import hmac
 import html
 import io
 import json
@@ -229,12 +230,13 @@ ADMIN_HTML = r"""<!doctype html>
     <button class="tab-btn" data-tab="products">Products</button>
     <button class="tab-btn" data-tab="analytics">Analytics</button>
     <button class="tab-btn" data-tab="settings">Settings</button>
+    <button class="tab-btn" data-tab="audit">Audit Log</button>
   </nav>
 
   <!-- ORDERS TAB -->
   <div class="tab-pane active" id="tab-orders">
     <main>
-      <div class="stats" id="orderStats"></div>
+      <div id="orderStats"></div>
       <div class="toolbar">
         <input id="searchInput" type="search" placeholder="Search order, name, school..." />
         <select id="statusFilter">
@@ -250,10 +252,26 @@ ADMIN_HTML = r"""<!doctype html>
         <button class="ghost" id="exportCsvBtn">Export CSV</button>
         <button class="primary" id="refreshOrdersBtn">Refresh</button>
       </div>
+      <div id="bulkBar" style="display:none;padding:10px 0;display:flex;gap:10px;align-items:center">
+        <span id="bulkCount" style="font-size:13px;color:var(--muted)"></span>
+        <select id="bulkStatusSelect">
+          <option value="">-- Change status to --</option>
+          <option value="pending_payment">pending_payment</option>
+          <option value="waiting_confirm">waiting_confirm</option>
+          <option value="paid">paid</option>
+          <option value="preparing">preparing</option>
+          <option value="shipped">Ready to Receive</option>
+          <option value="cancelled">cancelled</option>
+          <option value="rejected">rejected</option>
+        </select>
+        <button class="primary" id="bulkApplyBtn">Apply</button>
+        <button class="ghost" id="bulkClearBtn">Clear</button>
+      </div>
       <div class="table-card">
         <table>
           <thead>
             <tr>
+              <th style="width:3%"><input type="checkbox" id="selectAllOrders" /></th>
               <th style="width:11%">Order</th>
               <th style="width:17%">Customer</th>
               <th style="width:19%">Product</th>
@@ -265,6 +283,7 @@ ADMIN_HTML = r"""<!doctype html>
           <tbody id="ordersBody"></tbody>
         </table>
       </div>
+      <div id="paginationBar" style="display:flex;gap:12px;align-items:center;padding:12px 0;justify-content:center"></div>
       <p class="notice" id="ordersNotice"></p>
     </main>
   </div>
@@ -338,9 +357,44 @@ ADMIN_HTML = r"""<!doctype html>
         </div>
         <p style="font-size:12px;color:var(--muted);margin:10px 0 0">Phase 0 = ก่อน 18 May &nbsp;|&nbsp; 1 = 18–23 May &nbsp;|&nbsp; 2 = 25–30 May &nbsp;|&nbsp; 3 = 1–7 Jun</p>
       </div>
+      <div class="settings-card">
+        <h3>Khantok Ticket Quota</h3>
+        <div class="field-row">
+          <div class="field">
+            <label>Quota ฿100</label>
+            <input id="khantokQuota100" type="number" min="0" style="max-width:140px" />
+          </div>
+          <div class="field">
+            <label>Quota ฿50</label>
+            <input id="khantokQuota50" type="number" min="0" style="max-width:140px" />
+          </div>
+        </div>
+      </div>
       <div style="display:flex;gap:10px;align-items:center">
         <button class="primary" id="saveSettingsBtn">Save Settings</button>
         <span id="settingsNotice" style="color:var(--muted);font-size:13px"></span>
+      </div>
+    </main>
+  </div>
+
+  <!-- AUDIT LOG TAB -->
+  <div class="tab-pane" id="tab-audit">
+    <main>
+      <div class="toolbar">
+        <input id="auditSearch" type="text" placeholder="Filter by order ID..." style="max-width:220px" />
+        <button class="primary" id="refreshAuditBtn">Refresh</button>
+        <span id="auditNotice" style="color:var(--muted);font-size:13px"></span>
+      </div>
+      <div class="table-card">
+        <table>
+          <thead><tr>
+            <th style="width:12%">Time</th>
+            <th style="width:16%">Order</th>
+            <th style="width:16%">Event</th>
+            <th>Detail</th>
+          </tr></thead>
+          <tbody id="auditBody"></tbody>
+        </table>
       </div>
     </main>
   </div>
@@ -414,22 +468,32 @@ ADMIN_HTML = r"""<!doctype html>
     </div>
   </div>
 
+  <div class="modal-backdrop" id="breakdownModal">
+    <div class="modal" style="width:min(480px,100%)">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px">
+        <h2 style="margin:0" id="breakdownModalTitle">รายละเอียด</h2>
+        <button class="ghost" id="closeBreakdownBtn" style="font-size:20px;line-height:1;padding:4px 10px;min-height:0;border-radius:8px">×</button>
+      </div>
+      <div id="breakdownModalContent"><p style="color:var(--muted);text-align:center;padding:24px">Loading...</p></div>
+    </div>
+  </div>
+
   <script>
     // ── Token ──────────────────────────────────────────────────────────────────
     const tokenInput = document.querySelector("#tokenInput");
-    tokenInput.value = localStorage.getItem("suStoreAdminToken") || "";
+    tokenInput.value = sessionStorage.getItem("suStoreAdminToken") || "";
 
     function authHeaders(extra) {
       return Object.assign({ "Authorization": "Bearer " + tokenInput.value.trim(), "Content-Type": "application/json" }, extra || {});
     }
 
     document.querySelector("#saveTokenBtn").addEventListener("click", () => {
-      localStorage.setItem("suStoreAdminToken", tokenInput.value.trim());
+      sessionStorage.setItem("suStoreAdminToken", tokenInput.value.trim());
       loadOrders();
       loadProducts();
     });
     document.querySelector("#clearTokenBtn").addEventListener("click", () => {
-      localStorage.removeItem("suStoreAdminToken");
+      sessionStorage.removeItem("suStoreAdminToken");
       tokenInput.value = "";
     });
 
@@ -442,6 +506,7 @@ ADMIN_HTML = r"""<!doctype html>
         document.querySelector("#tab-" + btn.dataset.tab).classList.add("active");
         if (btn.dataset.tab === "analytics") loadAnalytics();
         if (btn.dataset.tab === "settings") loadSettings();
+        if (btn.dataset.tab === "audit") loadAuditLog();
       });
     });
 
@@ -459,6 +524,10 @@ ADMIN_HTML = r"""<!doctype html>
     var statuses = ["pending_payment","waiting_confirm","paid","preparing","shipped","cancelled","rejected"];
     var allOrders = [];
     var serverSummary = {};
+    var currentPage = 1;
+    var totalPages = 1;
+    var totalOrders = 0;
+    var searchTimer = null;
 
     function setOrdersNotice(msg, err) {
       var el = document.querySelector("#ordersNotice");
@@ -473,38 +542,33 @@ ADMIN_HTML = r"""<!doctype html>
       var k50Used = Number(summary.khantokTicket50Used || 0);
       var k50Quota = Number(summary.khantokTicket50Quota || 0);
       var k50Rem = Number(summary.khantokTicket50Remaining || 0);
-      var items = [
-        ["Total", summary.total || 0],
-        ["Waiting Slip", summary.pendingPayment || 0],
-        ["Waiting Confirm", summary.waitingConfirm || 0],
-        ["Paid", summary.paid || 0],
-        ["Rejected", summary.rejected || 0],
-        {label: "บัตรขันโตก ฿100", value: k100Used + "/" + k100Quota + " (เหลือ " + k100Rem + ")", compact: true},
-        {label: "บัตรขันโตก ฿50", value: k50Used + "/" + k50Quota + " (เหลือ " + k50Rem + ")", compact: true},
-      ];
-      document.querySelector("#orderStats").innerHTML = items.map(function(item) {
-        var isArr = Array.isArray(item);
-        var label = isArr ? item[0] : item.label;
-        var value = isArr ? item[1] : item.value;
-        var cls = (!isArr && item.compact) ? "stat compact" : "stat";
-        return '<div class="' + cls + '"><span>' + esc(label) + '</span><strong>' + esc(value) + '</strong></div>';
-      }).join("");
-    }
-
-    function filteredOrders() {
-      var q = document.querySelector("#searchInput").value.trim().toLowerCase();
-      var s = document.querySelector("#statusFilter").value;
-      return allOrders.filter(function(o) {
-        var c = o.customer || {};
-        var p = o.product || {};
-        var hay = [o.id, o.status, p.name, c.fullName, c.studentCode, c.phone, c.school, o.size].join(" ").toLowerCase();
-        return (!s || o.status === s) && (!q || hay.includes(q));
-      });
+      function statHtml(label, value, compact) {
+        return '<div class="' + (compact ? "stat compact" : "stat") + '"><span>' + esc(label) + '</span><strong>' + esc(value) + '</strong></div>';
+      }
+      function statClickHtml(label, value, category) {
+        return '<div class="stat compact" style="cursor:pointer;border-bottom:2px solid var(--accent)" data-breakdown="' + esc(category) + '" title="คลิกดูรายละเอียด"><span>' + esc(label) + '</span><strong>' + esc(value) + '</strong></div>';
+      }
+      var row1 = [
+        statHtml("Total", summary.total || 0, false),
+        statHtml("Waiting Slip", summary.pendingPayment || 0, false),
+        statHtml("Waiting Confirm", summary.waitingConfirm || 0, false),
+        statHtml("Paid", summary.paid || 0, false),
+        statHtml("Rejected", summary.rejected || 0, false),
+        statHtml("บัตรขันโตก ฿100", k100Used + "/" + k100Quota + " (เหลือ " + k100Rem + ")", true),
+        statHtml("บัตรขันโตก ฿50", k50Used + "/" + k50Quota + " (เหลือ " + k50Rem + ")", true),
+      ].join("");
+      var row2 = [
+        statClickHtml("โปโล", (summary.qtySingle || 0) + " ตัว", "single"),
+        statClickHtml("แจ็กเก็ต", (summary.qtyJacket || 0) + " ตัว", "jacket"),
+        statClickHtml("Headband", (summary.qtyHeadband || 0) + " อัน", "headband"),
+      ].join("");
+      document.querySelector("#orderStats").innerHTML =
+        '<div class="stats" style="margin-bottom:8px">' + row1 + '</div>' +
+        '<div class="stats" style="margin-bottom:0">' + row2 + '</div>';
     }
 
     function renderOrders() {
-      var orders = filteredOrders();
-      document.querySelector("#ordersBody").innerHTML = orders.map(function(order) {
+      document.querySelector("#ordersBody").innerHTML = allOrders.map(function(order) {
         var c = order.customer || {};
         var p = order.product || {};
         var statusBtns = statuses.map(function(s) {
@@ -514,30 +578,74 @@ ADMIN_HTML = r"""<!doctype html>
           var style = 'font-size:11px;padding:2px 7px;min-height:24px;border-radius:6px' + (isDanger && !isActive ? ';border-color:var(--danger);color:var(--danger)' : '');
           return '<button class="' + (isActive ? 'primary' : 'ghost') + ' statusBtn" data-oid="' + esc(order.id) + '" data-status="' + esc(s) + '" style="' + style + '">' + esc(label) + '</button>';
         }).join('');
+        var orderItems = (order.items && order.items.length > 0)
+          ? order.items
+          : [{product: order.product || {}, size: order.size, quantity: order.quantity, totalAmount: order.totalAmount}];
+        var itemsHtml = orderItems.map(function(item, idx) {
+          var ip = item.product || {};
+          var sep = idx > 0 ? '<hr style="border:none;border-top:1px solid #e5e7eb;margin:4px 0">' : '';
+          var schoolLine = item.school ? '<br/><span class="muted" style="font-size:11px">' + esc(item.school) + '</span>' : '';
+          return sep + '<strong>' + esc(ip.name||"-") + '</strong><br/><span class="muted">Size: ' + esc(item.size||"-") + ' / Qty: ' + esc(item.quantity||0) + '</span>' + schoolLine;
+        }).join('');
+        var schoolHtml = c.school ? '<br/><span class="muted">' + esc(c.school) + '</span>' : '';
         return '<tr>' +
+          '<td><input type="checkbox" class="orderCheckbox" data-oid="' + esc(order.id) + '" /></td>' +
           '<td><strong>' + esc(order.id) + '</strong><br/><span class="muted">' + esc(order.createdAt||"") + '</span></td>' +
           '<td><strong>' + esc(c.fullName||"-") + '</strong><br/><span class="muted">' + esc(c.studentCode||"-") + '</span><br/><span class="muted">' + esc(c.phone||"") + '</span></td>' +
-          '<td><strong>' + esc(p.name||"-") + '</strong><br/><span class="muted">Size: ' + esc(order.size||"-") + ' / Qty: ' + esc(order.quantity||0) + '</span><br/><span class="money">' + esc(baht(order.totalAmount)) + '</span><br/><span class="muted">' + esc(c.school||"") + '</span></td>' +
-          '<td><span class="muted">' + esc(order.paymentStatus||"-") + '</span><br/><span class="muted">' + (order.slip ? "Slip uploaded" : "No slip") + '</span></td>' +
+          '<td>' + itemsHtml + '<br/><span class="money">' + esc(baht(order.totalAmount)) + '</span>' + schoolHtml + '</td>' +
+          '<td><span class="muted">' + esc(order.paymentStatus||"-") + '</span><br/><span class="muted">' + (order.slip ? "Slip uploaded" : "No slip") + '</span><br/>' + (order.khantokTicket ? '<span style="font-size:11px;font-weight:700;color:var(--ok)">🎟 บัตรขันโตก ฿' + (order.khantokTicketValue || 100) + '</span>' : '<span style="font-size:11px;color:var(--muted)">ไม่ได้บัตร</span>') + '</td>' +
           '<td><span class="badge ' + esc(order.status) + '">' + (order.status === 'shipped' ? 'Ready to Receive' : esc(order.status)) + '</span></td>' +
           '<td><div style="display:flex;flex-wrap:wrap;gap:3px;margin-bottom:6px">' + statusBtns + '</div>' +
             '<button class="ghost slipBtn" data-oid="' + esc(order.id) + '" data-total="' + esc(order.totalAmount||0) + '" style="font-size:12px;min-height:28px;width:100%"' + (order.slip ? "" : " disabled") + '>View Slip</button>' +
           '</td>' +
         '</tr>';
       }).join("");
+      updateBulkBar();
+      renderPagination();
+    }
+
+    function renderPagination() {
+      var el = document.querySelector("#paginationBar");
+      if (!el) return;
+      el.innerHTML = '<button class="ghost" id="prevPageBtn"' + (currentPage <= 1 ? ' disabled' : '') + '>← Prev</button>' +
+        '<span style="font-size:13px;color:var(--muted)">Page ' + currentPage + ' / ' + totalPages + ' (' + totalOrders + ' orders)</span>' +
+        '<button class="ghost" id="nextPageBtn"' + (currentPage >= totalPages ? ' disabled' : '') + '>Next →</button>';
+      var prev = document.querySelector("#prevPageBtn");
+      var next = document.querySelector("#nextPageBtn");
+      if (prev) prev.addEventListener("click", function() { if (currentPage > 1) { currentPage--; loadOrders(); } });
+      if (next) next.addEventListener("click", function() { if (currentPage < totalPages) { currentPage++; loadOrders(); } });
+    }
+
+    function getSelectedOrderIds() {
+      return Array.from(document.querySelectorAll(".orderCheckbox:checked")).map(function(cb) { return cb.dataset.oid; });
+    }
+
+    function updateBulkBar() {
+      var selected = getSelectedOrderIds();
+      var bar = document.querySelector("#bulkBar");
+      var countEl = document.querySelector("#bulkCount");
+      if (bar) bar.style.display = selected.length ? "flex" : "none";
+      if (countEl) countEl.textContent = selected.length + " selected";
     }
 
     async function loadOrders() {
       setOrdersNotice("Loading...");
+      var search = document.querySelector("#searchInput").value.trim();
+      var statusF = document.querySelector("#statusFilter").value;
+      var url = "/admin/orders?page=" + currentPage + "&per_page=50";
+      if (search) url += "&search=" + encodeURIComponent(search);
+      if (statusF) url += "&status=" + encodeURIComponent(statusF);
       try {
-        var res = await fetch("/admin/orders", { headers: authHeaders(), cache: "no-store" });
+        var res = await fetch(url, { headers: authHeaders(), cache: "no-store" });
         if (!res.ok) throw new Error(await res.text());
         var data = await res.json();
         allOrders = data.orders || [];
         serverSummary = data.summary || {};
+        totalOrders = data.total || 0;
+        totalPages = data.pages || 1;
         renderOrderStats(serverSummary);
         renderOrders();
-        setOrdersNotice("Loaded " + allOrders.length + " orders");
+        setOrdersNotice("Page " + currentPage + "/" + totalPages + " — " + totalOrders + " total orders");
       } catch(e) { setOrdersNotice(e.message, true); }
     }
 
@@ -573,30 +681,28 @@ ADMIN_HTML = r"""<!doctype html>
       }
     }
 
-    function exportCsv() {
-      var orders = filteredOrders();
-      var cols = ["id","status","paymentStatus","totalAmount","size","quantity","createdAt","fullName","studentCode","phone","email","school","productName","productCategory"];
-      var rows = orders.map(function(o) {
-        var c = o.customer || {};
-        var p = o.product || {};
-        return [o.id, o.status, o.paymentStatus, o.totalAmount, o.size, o.quantity, o.createdAt,
-          c.fullName, c.studentCode, c.phone, c.email, c.school, p.name, p.category
-        ].map(function(v) { return '"' + String(v == null ? "" : v).replace(/"/g, '""') + '"'; }).join(",");
-      });
-      var csv = [cols.join(",")].concat(rows).join("\n");
-      var blob = new Blob(["﻿" + csv], { type: "text/csv;charset=utf-8" });
-      var url = URL.createObjectURL(blob);
+    document.querySelector("#refreshOrdersBtn").addEventListener("click", function() { currentPage = 1; loadOrders().catch(function(e) { setOrdersNotice(e.message, true); }); });
+    document.querySelector("#exportCsvBtn").addEventListener("click", function() {
+      var url = "/admin/orders/export.csv";
       var a = document.createElement("a");
-      a.href = url; a.download = "orders-" + new Date().toISOString().slice(0,10) + ".csv"; a.click();
-      setTimeout(function() { URL.revokeObjectURL(url); }, 5000);
-    }
-
-    document.querySelector("#refreshOrdersBtn").addEventListener("click", function() { loadOrders().catch(function(e) { setOrdersNotice(e.message, true); }); });
-    document.querySelector("#exportCsvBtn").addEventListener("click", exportCsv);
-    document.querySelector("#searchInput").addEventListener("input", renderOrders);
-    document.querySelector("#statusFilter").addEventListener("change", renderOrders);
+      a.href = url;
+      a.download = "orders-" + new Date().toISOString().slice(0,10) + ".csv";
+      a.click();
+    });
+    document.querySelector("#searchInput").addEventListener("input", function() {
+      clearTimeout(searchTimer);
+      searchTimer = setTimeout(function() { currentPage = 1; loadOrders(); }, 400);
+    });
+    document.querySelector("#statusFilter").addEventListener("change", function() { currentPage = 1; loadOrders(); });
 
     document.addEventListener("click", async function(e) {
+      if (e.target.id === "selectAllOrders") {
+        document.querySelectorAll(".orderCheckbox").forEach(function(cb) { cb.checked = e.target.checked; });
+        updateBulkBar();
+        return;
+      }
+      if (e.target.closest(".orderCheckbox")) { updateBulkBar(); return; }
+
       var statusBtn = e.target.closest(".statusBtn");
       if (statusBtn) {
         var oid = statusBtn.dataset.oid;
@@ -611,6 +717,29 @@ ADMIN_HTML = r"""<!doctype html>
       if (slipBtn) { viewSlip(slipBtn.dataset.oid, slipBtn.dataset.total).catch(function(err) { setOrdersNotice(err.message, true); }); return; }
     });
 
+    document.querySelector("#bulkApplyBtn").addEventListener("click", async function() {
+      var ids = getSelectedOrderIds();
+      var status = document.querySelector("#bulkStatusSelect").value;
+      if (!ids.length || !status) { alert("Select orders and a target status"); return; }
+      if (!confirm("Change " + ids.length + " orders to '" + status + "'?")) return;
+      try {
+        var res = await fetch("/admin/orders/bulk-status", {
+          method: "PATCH", headers: authHeaders(), body: JSON.stringify({ orderIds: ids, status: status })
+        });
+        if (!res.ok) throw new Error(await res.text());
+        var result = await res.json();
+        setOrdersNotice("Bulk: updated " + result.updated.length + (result.failed.length ? ", failed " + result.failed.length : ""));
+        document.querySelector("#bulkStatusSelect").value = "";
+        await loadOrders();
+      } catch(e) { setOrdersNotice(e.message, true); }
+    });
+    document.querySelector("#bulkClearBtn").addEventListener("click", function() {
+      document.querySelectorAll(".orderCheckbox").forEach(function(cb) { cb.checked = false; });
+      var all = document.querySelector("#selectAllOrders");
+      if (all) all.checked = false;
+      updateBulkBar();
+    });
+
     document.querySelector("#closeSlipBtn").addEventListener("click", function() {
       document.querySelector("#slipModal").classList.remove("open");
       document.querySelector("#slipModalContent").innerHTML = "";
@@ -620,6 +749,71 @@ ADMIN_HTML = r"""<!doctype html>
         this.classList.remove("open");
         document.querySelector("#slipModalContent").innerHTML = "";
       }
+    });
+
+    // ── BREAKDOWN MODAL ────────────────────────────────────────────────────────
+    var BREAKDOWN_LABELS = { single: "โปโล — แยกตามไซซ์", jacket: "แจ็กเก็ต — แยกตามไซซ์ / สี", headband: "Headband — แยกตามสำนักวิชา" };
+
+    async function openBreakdownModal(category) {
+      var modal = document.querySelector("#breakdownModal");
+      var content = document.querySelector("#breakdownModalContent");
+      document.querySelector("#breakdownModalTitle").textContent = BREAKDOWN_LABELS[category] || category;
+      content.innerHTML = '<p style="color:var(--muted);text-align:center;padding:24px">Loading...</p>';
+      modal.classList.add("open");
+      try {
+        var res = await fetch("/admin/product-breakdown?category=" + encodeURIComponent(category), { headers: authHeaders(), cache: "no-store" });
+        if (!res.ok) throw new Error(await res.text());
+        var data = await res.json();
+
+        function renderFlatTable(rows) {
+          if (!rows || !rows.length) return '<p style="color:var(--muted);text-align:center;padding:24px">ไม่มีข้อมูล</p>';
+          var total = rows.reduce(function(s, r) { return s + r.count; }, 0);
+          var maxCount = Math.max.apply(null, rows.map(function(r) { return r.count; }));
+          return '<table style="width:100%;border-collapse:collapse;font-size:14px">' +
+            '<thead><tr style="border-bottom:2px solid var(--line)"><th style="text-align:left;padding:6px 8px;font-size:11px;color:var(--muted);font-weight:700;letter-spacing:.08em">รายการ</th><th style="text-align:right;padding:6px 8px;font-size:11px;color:var(--muted);font-weight:700;letter-spacing:.08em">จำนวน</th><th style="text-align:right;padding:6px 8px;font-size:11px;color:var(--muted);font-weight:700;letter-spacing:.08em">%</th></tr></thead>' +
+            '<tbody>' + rows.map(function(r) {
+              var pct = total ? Math.round(r.count / total * 100) : 0;
+              var barW = maxCount ? Math.round(r.count / maxCount * 60) : 0;
+              return '<tr style="border-bottom:1px solid var(--line)">' +
+                '<td style="padding:8px 8px"><div style="display:flex;align-items:center;gap:8px"><div style="width:' + barW + 'px;height:6px;background:var(--accent);border-radius:3px;min-width:2px"></div>' + esc(r.label) + '</div></td>' +
+                '<td style="padding:8px 8px;text-align:right;font-weight:700">' + r.count.toLocaleString() + '</td>' +
+                '<td style="padding:8px 8px;text-align:right;color:var(--muted)">' + pct + '%</td>' +
+              '</tr>';
+            }).join('') +
+            '<tr style="border-top:2px solid var(--line)"><td style="padding:8px 8px;font-weight:700">รวม</td><td style="padding:8px 8px;text-align:right;font-weight:700">' + total.toLocaleString() + '</td><td></td></tr>' +
+            '</tbody></table>';
+        }
+
+        if (data.groups) {
+          // Jacket grouped by color
+          if (!data.groups.length) { content.innerHTML = '<p style="color:var(--muted);text-align:center;padding:24px">ไม่มีข้อมูล</p>'; return; }
+          var grandTotal = data.groups.reduce(function(s, g) { return s + g.total; }, 0);
+          content.innerHTML = data.groups.map(function(g) {
+            return '<div style="margin-bottom:20px">' +
+              '<div style="font-size:13px;font-weight:700;color:var(--muted);letter-spacing:.08em;text-transform:uppercase;margin-bottom:8px;padding-bottom:6px;border-bottom:2px solid var(--line)">' +
+                esc(g.colorThai) + ' <span style="font-weight:400;color:var(--muted)">(' + g.total.toLocaleString() + ' ตัว)</span>' +
+              '</div>' +
+              renderFlatTable(g.rows) +
+            '</div>';
+          }).join('') +
+          '<div style="padding:10px 8px;font-size:14px;font-weight:700;border-top:2px solid var(--line)">รวมทั้งหมด <span style="float:right">' + grandTotal.toLocaleString() + ' ตัว</span></div>';
+        } else {
+          content.innerHTML = renderFlatTable(data.rows || []);
+        }
+      } catch(e) {
+        content.innerHTML = '<p style="color:var(--danger);text-align:center;padding:24px">' + esc(e.message) + '</p>';
+      }
+    }
+
+    document.querySelector("#closeBreakdownBtn").addEventListener("click", function() {
+      document.querySelector("#breakdownModal").classList.remove("open");
+    });
+    document.querySelector("#breakdownModal").addEventListener("click", function(e) {
+      if (e.target === this) this.classList.remove("open");
+    });
+    document.addEventListener("click", function(e) {
+      var el = e.target.closest("[data-breakdown]");
+      if (el) openBreakdownModal(el.dataset.breakdown);
     });
 
     // ── PRODUCTS ───────────────────────────────────────────────────────────────
@@ -774,8 +968,8 @@ ADMIN_HTML = r"""<!doctype html>
       var el = document.querySelector("#analyticsNotice");
       el.textContent = msg; el.style.color = err ? "var(--danger)" : "var(--muted)";
     }
-
     function renderBarChart(container, items, maxVal) {
+      if (!container) return;
       container.innerHTML = items.map(function(item) {
         var pct = maxVal ? Math.round(item[1] / maxVal * 100) : 0;
         return '<div class="bar-row">' +
@@ -784,51 +978,37 @@ ADMIN_HTML = r"""<!doctype html>
           '<div class="bar-count">' + item[1] + '</div></div>';
       }).join("");
     }
-
     async function loadAnalytics() {
-      if (!allOrders.length) {
-        try {
-          var res = await fetch("/admin/orders", { headers: authHeaders(), cache: "no-store" });
-          if (!res.ok) throw new Error(await res.text());
-          var data = await res.json();
-          allOrders = data.orders || [];
-          serverSummary = data.summary || {};
-        } catch(e) { setAnalyticsNotice(e.message, true); return; }
-      }
-      var schoolMap = {}, productMap = {}, statusMap = {}, totalRevenue = 0;
-      allOrders.forEach(function(o) {
-        var school = (o.customer||{}).school || "Unknown";
-        var prod = (o.product||{}).name || "Unknown";
-        var status = o.status || "unknown";
-        schoolMap[school] = (schoolMap[school]||0) + 1;
-        productMap[prod] = (productMap[prod]||0) + 1;
-        statusMap[status] = (statusMap[status]||0) + 1;
-        if (["paid","preparing","shipped"].includes(status)) totalRevenue += Number(o.totalAmount||0);
-      });
-      var sortDesc = function(obj) { return Object.entries(obj).sort(function(a,b) { return b[1]-a[1]; }); };
-      var schoolItems = sortDesc(schoolMap), productItems = sortDesc(productMap), statusItems = sortDesc(statusMap);
-
-      document.querySelector("#analyticsGrid").innerHTML =
-        '<div class="analytics-card" style="grid-column:1/-1">' +
-          '<div class="stats" style="margin:0">' +
-            '<div class="stat"><span>Total Orders</span><strong>' + allOrders.length + '</strong></div>' +
-            '<div class="stat"><span>Confirmed Revenue</span><strong>' + baht(totalRevenue) + '</strong></div>' +
-            '<div class="stat"><span>Schools</span><strong>' + schoolItems.length + '</strong></div>' +
-            '<div class="stat"><span>Avg Order</span><strong>' + (allOrders.length ? baht(totalRevenue/allOrders.length) : "฿0") + '</strong></div>' +
+      setAnalyticsNotice("Loading...");
+      try {
+        var res = await fetch("/admin/analytics", { headers: authHeaders(), cache: "no-store" });
+        if (!res.ok) throw new Error(await res.text());
+        var d = await res.json();
+        document.querySelector("#analyticsGrid").innerHTML =
+          '<div class="analytics-card" style="grid-column:1/-1">' +
+            '<div class="stats" style="margin:0">' +
+              '<div class="stat"><span>Total Orders</span><strong>' + d.total + '</strong></div>' +
+              '<div class="stat"><span>Confirmed Revenue</span><strong>' + baht(d.revenue) + '</strong></div>' +
+              '<div class="stat"><span>Schools</span><strong>' + d.schoolCount + '</strong></div>' +
+              '<div class="stat"><span>Avg Order</span><strong>' + baht(d.avgOrder) + '</strong></div>' +
+            '</div>' +
           '</div>' +
-        '</div>' +
-        '<div class="analytics-card"><h3>By School</h3><div id="schoolChart"></div></div>' +
-        '<div class="analytics-card"><h3>By Product</h3><div id="productChart"></div></div>' +
-        '<div class="analytics-card"><h3>By Status</h3><div id="statusChart"></div></div>';
-
-      renderBarChart(document.querySelector("#schoolChart"), schoolItems, schoolItems[0]?.[1]||1);
-      renderBarChart(document.querySelector("#productChart"), productItems, productItems[0]?.[1]||1);
-      renderBarChart(document.querySelector("#statusChart"), statusItems, statusItems[0]?.[1]||1);
-      setAnalyticsNotice("Analytics from " + allOrders.length + " orders");
+          '<div class="analytics-card"><h3>By School</h3><div id="schoolChart"></div></div>' +
+          '<div class="analytics-card"><h3>By Product</h3><div id="productChart"></div></div>' +
+          '<div class="analytics-card"><h3>By Status</h3><div id="statusChart"></div></div>' +
+          '<div class="analytics-card"><h3>By Size</h3><div id="sizeChart"></div></div>';
+        var maxS = d.bySchool[0] ? d.bySchool[0][1] : 1;
+        var maxP = d.byProduct[0] ? d.byProduct[0][1] : 1;
+        var maxSt = d.byStatus[0] ? d.byStatus[0][1] : 1;
+        var maxSz = d.bySize[0] ? d.bySize[0][1] : 1;
+        renderBarChart(document.querySelector("#schoolChart"), d.bySchool, maxS);
+        renderBarChart(document.querySelector("#productChart"), d.byProduct, maxP);
+        renderBarChart(document.querySelector("#statusChart"), d.byStatus, maxSt);
+        renderBarChart(document.querySelector("#sizeChart"), d.bySize, maxSz);
+        setAnalyticsNotice("Loaded from " + d.total + " orders");
+      } catch(e) { setAnalyticsNotice(e.message, true); }
     }
-
     document.querySelector("#refreshAnalyticsBtn").addEventListener("click", function() {
-      allOrders = [];
       loadAnalytics().catch(function(e) { setAnalyticsNotice(e.message, true); });
     });
 
@@ -885,6 +1065,8 @@ ADMIN_HTML = r"""<!doctype html>
         document.querySelector("#storeOpen").checked = s.storeOpen !== false;
         if (s.orderDeadline) document.querySelector("#orderDeadline").value = s.orderDeadline.slice(0,16);
         renderPhase(s);
+        if (s.khantokQuota100 != null) document.querySelector("#khantokQuota100").value = s.khantokQuota100;
+        if (s.khantokQuota50 != null) document.querySelector("#khantokQuota50").value = s.khantokQuota50;
         setSettingsNotice("Settings loaded");
       } catch(e) { setSettingsNotice(e.message, true); }
     }
@@ -895,6 +1077,8 @@ ADMIN_HTML = r"""<!doctype html>
         announcementBannerEnabled: document.querySelector("#bannerEnabled").checked,
         storeOpen: document.querySelector("#storeOpen").checked,
         orderDeadline: document.querySelector("#orderDeadline").value || null,
+        khantokQuota100: parseInt(document.querySelector("#khantokQuota100").value, 10) || 0,
+        khantokQuota50: parseInt(document.querySelector("#khantokQuota50").value, 10) || 0,
       };
       try {
         var res = await fetch("/admin/site-settings", {
@@ -903,6 +1087,38 @@ ADMIN_HTML = r"""<!doctype html>
         if (!res.ok) throw new Error(await res.text());
         setSettingsNotice("Settings saved");
       } catch(e) { setSettingsNotice(e.message, true); }
+    });
+
+    // ── AUDIT LOG ─────────────────────────────────────────────────────────────
+    function setAuditNotice(msg, err) {
+      var el = document.querySelector("#auditNotice");
+      el.textContent = msg; el.style.color = err ? "var(--danger)" : "var(--muted)";
+    }
+    async function loadAuditLog() {
+      setAuditNotice("Loading...");
+      var orderCode = (document.querySelector("#auditSearch").value || "").trim().toUpperCase();
+      var url = "/admin/audit-log?limit=200" + (orderCode ? "&orderCode=" + encodeURIComponent(orderCode) : "");
+      try {
+        var res = await fetch(url, { headers: authHeaders(), cache: "no-store" });
+        if (!res.ok) throw new Error(await res.text());
+        var data = await res.json();
+        var log = data.log || [];
+        document.querySelector("#auditBody").innerHTML = log.map(function(entry) {
+          return '<tr>' +
+            '<td><span class="muted">' + esc(entry.createdAt) + '</span></td>' +
+            '<td><strong>' + esc(entry.orderCode) + '</strong></td>' +
+            '<td>' + esc(entry.event) + '</td>' +
+            '<td>' + esc(entry.detail) + '</td>' +
+          '</tr>';
+        }).join("") || '<tr><td colspan="4" style="text-align:center;color:var(--muted);padding:24px">No audit entries</td></tr>';
+        setAuditNotice(log.length + " entries");
+      } catch(e) { setAuditNotice(e.message, true); }
+    }
+    document.querySelector("#refreshAuditBtn").addEventListener("click", function() {
+      loadAuditLog().catch(function(e) { setAuditNotice(e.message, true); });
+    });
+    document.querySelector("#auditSearch").addEventListener("change", function() {
+      loadAuditLog().catch(function(e) { setAuditNotice(e.message, true); });
     });
 
     // ── Init ───────────────────────────────────────────────────────────────────
@@ -1377,6 +1593,13 @@ def now_iso() -> str:
     return datetime.now(TZ_BANGKOK).replace(microsecond=0).isoformat()
 
 
+def log_audit(connection: sqlite3.Connection, order_code: str, event: str, detail: str = "") -> None:
+    connection.execute(
+        "INSERT INTO order_audit_log (order_code, event, detail, created_at) VALUES (?, ?, ?, ?)",
+        (order_code, event, detail, now_iso()),
+    )
+
+
 def ensure_db() -> None:
     DB_PATH.parent.mkdir(parents=True, exist_ok=True)
     SLIPS_DIR.mkdir(parents=True, exist_ok=True)
@@ -1536,6 +1759,19 @@ def ensure_db() -> None:
           )
           """
       )
+      connection.execute(
+          """
+          CREATE TABLE IF NOT EXISTS order_audit_log (
+              id INTEGER PRIMARY KEY AUTOINCREMENT,
+              order_code TEXT NOT NULL,
+              event TEXT NOT NULL,
+              detail TEXT NOT NULL DEFAULT '',
+              created_at TEXT NOT NULL
+          )
+          """
+      )
+      connection.execute("CREATE INDEX IF NOT EXISTS idx_audit_order_code ON order_audit_log(order_code)")
+      connection.execute("CREATE INDEX IF NOT EXISTS idx_audit_created_at ON order_audit_log(created_at)")
       product_count_row = connection.execute("SELECT COUNT(*) FROM products").fetchone()
       if product_count_row[0] == 0:
           seed_now = now_iso()
@@ -1941,11 +2177,13 @@ def validate_order_payload(payload: Any) -> tuple[dict[str, Any] | None, str | N
             if not isinstance(item_total_amount, int):
                 item_total_amount = item_unit_price * item_quantity
 
+            item_school = item.get("school")
             normalized_items.append(
                 {
                     "id": str(item.get("id") or f"{item_product.get('slug', 'item')}-{index + 1}"),
                     "product": item_product,
                     "size": item_size.strip(),
+                    "school": item_school if isinstance(item_school, str) and item_school.strip() else None,
                     "quantity": item_quantity,
                     "unitPrice": item_unit_price,
                     "totalAmount": item_total_amount,
@@ -2003,21 +2241,47 @@ def fetch_order_by_code(connection: sqlite3.Connection, order_code: str) -> sqli
     ).fetchone()
 
 
-def list_orders(connection: sqlite3.Connection) -> list[dict[str, Any]]:
+def list_orders(
+    connection: sqlite3.Connection,
+    *,
+    page: int = 1,
+    per_page: int = 50,
+    search: str = "",
+    status_filter: str = "",
+) -> tuple[list[dict[str, Any]], int]:
+    conditions: list[str] = []
+    params: list[Any] = []
+    if status_filter:
+        conditions.append("status = ?")
+        params.append(status_filter)
+    if search:
+        like = f"%{search}%"
+        conditions.append(
+            "(order_code LIKE ? OR full_name LIKE ? OR student_code LIKE ? OR phone LIKE ? OR school LIKE ? OR product_name LIKE ?)"
+        )
+        params.extend([like] * 6)
+    where = ("WHERE " + " AND ".join(conditions)) if conditions else ""
+    total_row = connection.execute(f"SELECT COUNT(*) AS cnt FROM orders {where}", params).fetchone()
+    total = int(total_row["cnt"] if total_row else 0)
+    offset = (page - 1) * per_page
     rows = connection.execute(
-        "SELECT * FROM orders ORDER BY internal_id DESC"
+        f"SELECT * FROM orders {where} ORDER BY internal_id DESC LIMIT ? OFFSET ?",
+        params + [per_page, offset],
     ).fetchall()
-    return [serialize_order(row) for row in rows]
+    return [serialize_order(row) for row in rows], total
 
 
-def create_orders_summary(connection: sqlite3.Connection, orders: list[dict[str, Any]]) -> dict[str, int]:
+def create_orders_summary(connection: sqlite3.Connection) -> dict[str, int]:
+    settings_rows = connection.execute("SELECT key, value FROM site_settings WHERE key IN ('khantok_quota_100','khantok_quota_50')").fetchall()
+    settings_map = {row["key"]: row["value"] for row in settings_rows}
+    quota_100 = int(settings_map.get("khantok_quota_100") or KHANTOK_QUOTA_100)
+    quota_50 = int(settings_map.get("khantok_quota_50") or KHANTOK_QUOTA_50)
     used_100 = int(connection.execute(
         "SELECT COUNT(*) AS c FROM khantok_ticket_claims WHERE ticket_value = 100"
     ).fetchone()["c"])
     used_50 = int(connection.execute(
         "SELECT COUNT(*) AS c FROM khantok_ticket_claims WHERE ticket_value = 50"
     ).fetchone()["c"])
-
     counts = {
         row["status"]: row["cnt"]
         for row in connection.execute(
@@ -2025,7 +2289,26 @@ def create_orders_summary(connection: sqlite3.Connection, orders: list[dict[str,
         ).fetchall()
     }
     total_row = connection.execute("SELECT COUNT(*) AS cnt FROM orders").fetchone()
-
+    # Count per-category qty from items_json so multi-item orders are fully counted
+    category_counts: dict[str, int] = {}
+    for row in connection.execute("SELECT items_json, product_category, quantity FROM orders").fetchall():
+        counted = False
+        if row["items_json"]:
+            try:
+                parsed = json.loads(row["items_json"])
+                if isinstance(parsed, list) and parsed:
+                    for item in parsed:
+                        cat = (item.get("product") or {}).get("category") or ""
+                        qty = item.get("quantity") or 0
+                        if cat:
+                            category_counts[cat] = category_counts.get(cat, 0) + int(qty)
+                    counted = True
+            except (json.JSONDecodeError, TypeError, ValueError):
+                pass
+        if not counted:
+            cat = row["product_category"] or ""
+            if cat:
+                category_counts[cat] = category_counts.get(cat, 0) + int(row["quantity"] or 0)
     return {
         "total": int(total_row["cnt"] if total_row else 0),
         "pendingPayment": counts.get("pending_payment", 0),
@@ -2033,12 +2316,15 @@ def create_orders_summary(connection: sqlite3.Connection, orders: list[dict[str,
         "paid": counts.get("paid", 0) + counts.get("preparing", 0) + counts.get("shipped", 0),
         "rejected": counts.get("rejected", 0),
         "cancelled": counts.get("cancelled", 0),
-        "khantokTicket100Quota": KHANTOK_QUOTA_100,
+        "khantokTicket100Quota": quota_100,
         "khantokTicket100Used": used_100,
-        "khantokTicket100Remaining": max(KHANTOK_QUOTA_100 - used_100, 0),
-        "khantokTicket50Quota": KHANTOK_QUOTA_50,
+        "khantokTicket100Remaining": max(quota_100 - used_100, 0),
+        "khantokTicket50Quota": quota_50,
         "khantokTicket50Used": used_50,
-        "khantokTicket50Remaining": max(KHANTOK_QUOTA_50 - used_50, 0),
+        "khantokTicket50Remaining": max(quota_50 - used_50, 0),
+        "qtySingle": category_counts.get("single", 0),
+        "qtyJacket": category_counts.get("jacket", 0),
+        "qtyHeadband": category_counts.get("headband", 0),
     }
 
 
@@ -2060,6 +2346,7 @@ def update_order_status(
         """,
         (status, payment_status, now_iso(), order_code),
     )
+    log_audit(connection, order_code, "status_changed", f"{existing_order['status']} → {status}")
     row = fetch_order_by_code(connection, order_code)
     assert row is not None
     return serialize_order(row)
@@ -2394,6 +2681,8 @@ def get_site_settings(connection: sqlite3.Connection) -> dict[str, Any]:
         "orderDeadline": settings.get("order_deadline", ""),
         "phaseOverride": phase_override,
         "currentPhase": get_current_phase(connection),
+        "khantokQuota100": int(settings.get("khantok_quota_100") or KHANTOK_QUOTA_100),
+        "khantokQuota50": int(settings.get("khantok_quota_50") or KHANTOK_QUOTA_50),
     }
 
 
@@ -2439,6 +2728,123 @@ def export_orders_csv(orders: list[dict[str, Any]]) -> str:
             "yes" if order.get("khantokTicket") else "no",
         ])
     return output.getvalue()
+
+
+def get_product_breakdown(connection: sqlite3.Connection, category: str) -> dict[str, Any]:
+    SIZE_ORDER = ["XS", "S", "M", "L", "XL", "2XL", "3XL", "4XL", "5XL", "6XL", "7XL"]
+    COLOR_ORDER = ["Blue", "Red", "White"]
+    COLOR_THAI = {"Blue": "สีน้ำเงิน", "Red": "สีแดง", "White": "สีขาว"}
+
+    if category == "jacket":
+        # color → size → count
+        color_size: dict[str, dict[str, int]] = {}
+        for row in connection.execute("SELECT items_json, product_category, size, quantity FROM orders").fetchall():
+            items_processed = False
+            if row["items_json"]:
+                try:
+                    parsed = json.loads(row["items_json"])
+                    if isinstance(parsed, list):
+                        for item in parsed:
+                            if (item.get("product") or {}).get("category") != "jacket":
+                                continue
+                            qty = int(item.get("quantity") or 0)
+                            raw_size = (item.get("size") or "").strip()
+                            parts = raw_size.split(" / ")
+                            sz = parts[0].strip() or "ONE SIZE"
+                            color = parts[1].strip() if len(parts) > 1 else "(ไม่ระบุสี)"
+                            color_size.setdefault(color, {})
+                            color_size[color][sz] = color_size[color].get(sz, 0) + qty
+                        items_processed = True
+                except (json.JSONDecodeError, TypeError, ValueError):
+                    pass
+            if not items_processed and (row["product_category"] or "") == "jacket":
+                qty = int(row["quantity"] or 0)
+                raw_size = (row["size"] or "").strip()
+                parts = raw_size.split(" / ")
+                sz = parts[0].strip() or "ONE SIZE"
+                color = parts[1].strip() if len(parts) > 1 else "(ไม่ระบุสี)"
+                color_size.setdefault(color, {})
+                color_size[color][sz] = color_size[color].get(sz, 0) + qty
+
+        groups = []
+        for color in COLOR_ORDER + [c for c in color_size if c not in COLOR_ORDER]:
+            if color not in color_size:
+                continue
+            sz_map = color_size[color]
+            sorted_sizes = sorted(sz_map.keys(), key=lambda k: SIZE_ORDER.index(k) if k in SIZE_ORDER else 99)
+            rows = [{"label": sz, "count": sz_map[sz]} for sz in sorted_sizes]
+            groups.append({
+                "color": color,
+                "colorThai": COLOR_THAI.get(color, color),
+                "total": sum(sz_map.values()),
+                "rows": rows,
+            })
+        return {"category": category, "groups": groups}
+
+    # single / headband — flat rows
+    counts: dict[str, int] = {}
+    for row in connection.execute("SELECT items_json, product_category, size, quantity FROM orders").fetchall():
+        items_processed = False
+        if row["items_json"]:
+            try:
+                parsed = json.loads(row["items_json"])
+                if isinstance(parsed, list):
+                    for item in parsed:
+                        if (item.get("product") or {}).get("category") != category:
+                            continue
+                        qty = int(item.get("quantity") or 0)
+                        if category == "headband":
+                            key = (item.get("school") or "").strip() or "(ไม่ระบุสำนัก)"
+                        else:
+                            key = (item.get("size") or "").strip() or "ONE SIZE"
+                        counts[key] = counts.get(key, 0) + qty
+                    items_processed = True
+            except (json.JSONDecodeError, TypeError, ValueError):
+                pass
+        if not items_processed and (row["product_category"] or "") == category:
+            qty = int(row["quantity"] or 0)
+            key = "(ไม่ระบุสำนัก)" if category == "headband" else (row["size"] or "").strip() or "ONE SIZE"
+            counts[key] = counts.get(key, 0) + qty
+
+    if category == "single":
+        sorted_keys = sorted(counts.keys(), key=lambda k: SIZE_ORDER.index(k) if k in SIZE_ORDER else 99)
+    else:
+        sorted_keys = sorted(counts.keys(), key=lambda k: -counts[k])
+
+    return {"category": category, "rows": [{"label": k, "count": counts[k]} for k in sorted_keys]}
+
+
+def get_analytics(connection: sqlite3.Connection) -> dict[str, Any]:
+    total_row = connection.execute("SELECT COUNT(*) AS cnt FROM orders").fetchone()
+    total = int(total_row["cnt"] if total_row else 0)
+    revenue_row = connection.execute(
+        "SELECT COALESCE(SUM(total_amount), 0) AS rev FROM orders WHERE status IN ('paid','preparing','shipped')"
+    ).fetchone()
+    revenue = int(revenue_row["rev"] if revenue_row else 0)
+    school_count_row = connection.execute("SELECT COUNT(DISTINCT school) AS cnt FROM orders").fetchone()
+    school_count = int(school_count_row["cnt"] if school_count_row else 0)
+    by_school = connection.execute(
+        "SELECT school, COUNT(*) AS cnt FROM orders GROUP BY school ORDER BY cnt DESC"
+    ).fetchall()
+    by_product = connection.execute(
+        "SELECT product_name, COUNT(*) AS cnt FROM orders GROUP BY product_name ORDER BY cnt DESC"
+    ).fetchall()
+    by_status = connection.execute(
+        "SELECT status, COUNT(*) AS cnt FROM orders GROUP BY status ORDER BY cnt DESC"
+    ).fetchall()
+    by_size = connection.execute(
+        "SELECT size, COUNT(*) AS cnt FROM orders WHERE size != '' GROUP BY size ORDER BY cnt DESC LIMIT 20"
+    ).fetchall()
+    return {
+        "total": total,
+        "revenue": revenue,
+        "schoolCount": school_count,
+        "avgOrder": round(revenue / total, 2) if total else 0,
+        "bySchool": [[row["school"], row["cnt"]] for row in by_school],
+        "byProduct": [[row["product_name"], row["cnt"]] for row in by_product],
+        "byStatus": [[row["status"], row["cnt"]] for row in by_status],
+        "bySize": [[row["size"], row["cnt"]] for row in by_size],
+    }
 
 
 class OrderRequestHandler(BaseHTTPRequestHandler):
@@ -2546,7 +2952,9 @@ class OrderRequestHandler(BaseHTTPRequestHandler):
         )
 
     def _has_global_authorization(self) -> bool:
-        return bool(ORDER_API_TOKEN) and self.headers.get("Authorization") == f"Bearer {ORDER_API_TOKEN}"
+        incoming = self.headers.get("Authorization", "")
+        expected = f"Bearer {ORDER_API_TOKEN}"
+        return bool(ORDER_API_TOKEN) and hmac.compare_digest(incoming, expected)
 
     def _is_authorized_for_order(self, row: sqlite3.Row) -> bool:
         if self._has_global_authorization():
@@ -2633,14 +3041,24 @@ class OrderRequestHandler(BaseHTTPRequestHandler):
         if path == "/admin/orders":
             if not self._require_admin_authorization():
                 return
+            from urllib.parse import parse_qs as _parse_qs
+            qs = _parse_qs(urlparse(self.path).query)
+            page = max(1, int((qs.get("page") or ["1"])[0]))
+            per_page = min(max(1, int((qs.get("per_page") or ["50"])[0])), 200)
+            search = (qs.get("search") or [""])[0].strip()
+            status_f = (qs.get("status") or [""])[0].strip()
             with open_db() as connection:
-                orders = list_orders(connection)
-                summary = create_orders_summary(connection, orders)
+                orders, total = list_orders(connection, page=page, per_page=per_page, search=search, status_filter=status_f)
+                summary = create_orders_summary(connection)
             self._send_json(
                 HTTPStatus.OK,
                 {
                     "orders": orders,
                     "summary": summary,
+                    "total": total,
+                    "page": page,
+                    "perPage": per_page,
+                    "pages": max(1, (total + per_page - 1) // per_page),
                 },
             )
             return
@@ -2679,7 +3097,7 @@ class OrderRequestHandler(BaseHTTPRequestHandler):
             if not self._require_admin_authorization():
                 return
             with open_db() as connection:
-                orders = list_orders(connection)
+                orders, _ = list_orders(connection, page=1, per_page=999999)
             csv_content = export_orders_csv(orders)
             response_body = ("﻿" + csv_content).encode("utf-8")
             self.send_response(HTTPStatus.OK)
@@ -2688,6 +3106,55 @@ class OrderRequestHandler(BaseHTTPRequestHandler):
             self.send_header("Content-Disposition", 'attachment; filename="orders.csv"')
             self.end_headers()
             self.wfile.write(response_body)
+            return
+
+        if path == "/admin/product-breakdown":
+            if not self._require_admin_authorization():
+                return
+            from urllib.parse import parse_qs as _parse_qs_pb
+            qs = _parse_qs_pb(urlparse(self.path).query)
+            category = (qs.get("category") or ["single"])[0].strip()
+            if category not in ("single", "jacket", "headband"):
+                self._send_json(HTTPStatus.BAD_REQUEST, {"message": "invalid category"})
+                return
+            with open_db() as connection:
+                result = get_product_breakdown(connection, category)
+            self._send_json(HTTPStatus.OK, result)
+            return
+
+        if path == "/admin/analytics":
+            if not self._require_admin_authorization():
+                return
+            with open_db() as connection:
+                analytics = get_analytics(connection)
+            self._send_json(HTTPStatus.OK, analytics)
+            return
+
+        if path == "/admin/audit-log":
+            if not self._require_admin_authorization():
+                return
+            from urllib.parse import parse_qs as _parse_qs2
+            qs = _parse_qs2(urlparse(self.path).query)
+            order_code = (qs.get("orderCode") or [""])[0].strip().upper()
+            limit = min(max(1, int((qs.get("limit") or ["200"])[0])), 1000)
+            with open_db() as connection:
+                if order_code:
+                    rows = connection.execute(
+                        "SELECT * FROM order_audit_log WHERE order_code = ? ORDER BY created_at DESC LIMIT ?",
+                        (order_code, limit),
+                    ).fetchall()
+                else:
+                    rows = connection.execute(
+                        "SELECT * FROM order_audit_log ORDER BY created_at DESC LIMIT ?",
+                        (limit,),
+                    ).fetchall()
+            self._send_json(HTTPStatus.OK, {
+                "log": [
+                    {"id": row["id"], "orderCode": row["order_code"], "event": row["event"],
+                     "detail": row["detail"], "createdAt": row["created_at"]}
+                    for row in rows
+                ]
+            })
             return
 
         product_image_match = re.fullmatch(r"/product-images/([^/]+)", path)
@@ -2903,6 +3370,41 @@ class OrderRequestHandler(BaseHTTPRequestHandler):
             self._send_json(HTTPStatus.OK, order)
             return
 
+        if path == "/admin/orders/bulk-status":
+            if not self._require_admin_authorization():
+                return
+            try:
+                payload = self._read_json()
+            except json.JSONDecodeError:
+                self._send_json(HTTPStatus.BAD_REQUEST, {"message": "invalid json"})
+                return
+            if not isinstance(payload, dict):
+                self._send_json(HTTPStatus.BAD_REQUEST, {"message": "invalid payload"})
+                return
+            order_ids = payload.get("orderIds")
+            status = payload.get("status")
+            if not isinstance(order_ids, list) or not order_ids:
+                self._send_json(HTTPStatus.BAD_REQUEST, {"message": "orderIds must be a non-empty list"})
+                return
+            if not isinstance(status, str) or status not in ORDER_STATUSES:
+                self._send_json(HTTPStatus.BAD_REQUEST, {"message": "invalid status"})
+                return
+            updated = []
+            failed = []
+            with open_db() as connection:
+                connection.execute("BEGIN IMMEDIATE")
+                for oid in order_ids[:100]:
+                    order = update_order_status(connection, str(oid), status)
+                    if order:
+                        updated.append(oid)
+                    else:
+                        failed.append(oid)
+                connection.commit()
+            for oid in updated:
+                pass  # could sync sheets here if needed
+            self._send_json(HTTPStatus.OK, {"updated": updated, "failed": failed})
+            return
+
         product_avail_match = re.fullmatch(r"/admin/products/([a-z0-9-]+)/available", path)
         if product_avail_match:
             if not self._require_admin_authorization():
@@ -2948,6 +3450,10 @@ class OrderRequestHandler(BaseHTTPRequestHandler):
                 if "phaseOverride" in payload:
                     v = payload["phaseOverride"]
                     upsert_site_setting(connection, "phase_override", str(int(v)) if v is not None else "")
+                if "khantokQuota100" in payload:
+                    upsert_site_setting(connection, "khantok_quota_100", str(int(payload["khantokQuota100"])))
+                if "khantokQuota50" in payload:
+                    upsert_site_setting(connection, "khantok_quota_50", str(int(payload["khantokQuota50"])))
                 connection.commit()
                 settings = get_site_settings(connection)
             self._send_json(HTTPStatus.OK, settings)

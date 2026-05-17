@@ -1,8 +1,8 @@
 "use client";
 
-import Image from "next/image";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import { useEffect, useState } from "react";
+import { SkeletonImage } from "@/components/SkeletonImage";
 import { cn } from "@/lib/utils";
 
 type MobileProductSliderProps = {
@@ -108,7 +108,7 @@ export function MobileProductSlider({
               key={`${image}-${index}`}
               className={cn("relative w-full shrink-0 overflow-hidden", slideClassName)}
             >
-              <Image
+              <SkeletonImage
                 src={image}
                 alt={`${productName} image ${index + 1}`}
                 fill

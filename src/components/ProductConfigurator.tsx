@@ -1,6 +1,6 @@
 "use client";
 
-import Image from "next/image";
+import { SkeletonImage } from "@/components/SkeletonImage";
 import { useCallback, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useCart } from "@/components/CartProvider";
@@ -83,7 +83,20 @@ export function ProductConfigurator({
   const storedSize = selectedColor
     ? `${baseStoredSize} / ${selectedColor.name}`
     : baseStoredSize;
-  const displayImages = selectedColor ? [selectedColor.image] : product.images;
+  const headbandSchoolImage =
+    product.category === "headband" && selectedSchool
+      ? `/images/1x/${selectedSchool}.png`
+      : null;
+  const displayImages = selectedColor
+    ? [selectedColor.image]
+    : headbandSchoolImage
+      ? [headbandSchoolImage]
+      : product.category === "headband"
+        ? SCHOOL_OPTIONS.map((s) => `/images/1x/${s}.png`)
+        : product.images;
+  const displayImageSize = product.category === "headband"
+    ? { width: 5000, height: 1000 }
+    : product.imageSize;
 
   const showSurchargeToast = useCallback(() => {
     setToastVisible(true);
@@ -136,18 +149,26 @@ export function ProductConfigurator({
         />
 
         <div className="hidden space-y-4 lg:block">
-          {displayImages.map((image, index) => (
-            <Image
-              key={`${image}-${index}`}
-              src={image}
-              alt={`${product.name} image ${index + 1}`}
-              width={product.imageSize?.width ?? 1000}
-              height={product.imageSize?.height ?? 1000}
-              priority={index === 0}
-              sizes="(min-width: 1024px) 55vw, 100vw"
-              className="h-auto w-full"
-            />
-          ))}
+          {displayImages.map((image, index) => {
+            const w = displayImageSize?.width ?? 1000;
+            const h = displayImageSize?.height ?? 1000;
+            return (
+              <div
+                key={`${image}-${index}`}
+                className="relative w-full overflow-hidden rounded-sm bg-zinc-200"
+                style={{ aspectRatio: `${w} / ${h}` }}
+              >
+                <SkeletonImage
+                  src={image}
+                  alt={`${product.name} image ${index + 1}`}
+                  fill
+                  priority={index === 0}
+                  sizes="(min-width: 1024px) 55vw, 100vw"
+                  className="object-contain"
+                />
+              </div>
+            );
+          })}
         </div>
       </div>
 
