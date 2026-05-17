@@ -7,7 +7,7 @@ const MAX_REQUESTS = 10;
 
 // ── Site-closed cache ──────────────────────────────────────────────────────────
 // Edge Runtime modules may not be shared between requests so this is best-effort.
-let siteClosedCache = { closed: false, reason: "", ts: 0 };
+let siteClosedCache = { closed: false, reason: "", beRightBack: false, ts: 0 };
 const SITE_STATUS_TTL = 15_000; // 15 seconds
 
 const API_BASE = (process.env.ORDER_API_BASE_URL ?? "").replace(/\/$/, "");
@@ -77,10 +77,11 @@ export async function middleware(request: NextRequest) {
             { signal: AbortSignal.timeout(2000), cache: "no-store" }
           );
           if (res.ok) {
-            const data = (await res.json()) as { siteClosed?: boolean; scheduleClosed?: boolean };
-            const closed = data.siteClosed === true || data.scheduleClosed === true;
-            const reason = data.siteClosed ? "manual" : data.scheduleClosed ? "schedule" : "";
-            siteClosedCache = { closed, reason, ts: now };
+            const data = (await res.json()) as { siteClosed?: boolean; scheduleClosed?: boolean; beRightBack?: boolean };
+            const brb = data.beRightBack === true;
+            const closed = brb || data.siteClosed === true || data.scheduleClosed === true;
+            const reason = brb ? "beRightBack" : data.siteClosed ? "manual" : data.scheduleClosed ? "schedule" : "";
+            siteClosedCache = { closed, reason, beRightBack: brb, ts: now };
           }
         } catch {
           // Fail open — don't block if API unreachable

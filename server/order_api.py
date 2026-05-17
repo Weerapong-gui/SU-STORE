@@ -402,6 +402,21 @@ ADMIN_HTML = r"""<!doctype html>
         </div>
       </div>
       <div class="settings-card">
+        <h3>Be Right Back</h3>
+        <p style="color:var(--muted);font-size:13px;margin:0 0 12px">เมื่อถึงวันที่กำหนด (เวลาไทย) หน้าเว็บจะแสดงรูป BE_RIGHT_BACK และเข้าหน้าอื่นไม่ได้ — ใช้ "Activate Now" เพื่อเปิดทันทีโดยไม่รอวัน</p>
+        <div class="field" style="margin-bottom:12px">
+          <label>วันที่ (คั่นด้วย comma, รูปแบบ YYYY-MM-DD)</label>
+          <input id="beRightBackDates" type="text" placeholder="2026-05-24,2026-05-31,2026-06-07" style="max-width:420px" />
+        </div>
+        <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
+          <button id="saveBeRightBackBtn" class="secondary">Save Dates</button>
+          <button id="activateBeRightBackBtn" class="primary" style="background:var(--danger);min-width:140px">Activate Now</button>
+          <button id="deactivateBeRightBackBtn" class="secondary" style="min-width:140px;display:none">Deactivate</button>
+          <span id="beRightBackStatus" style="font-size:13px;font-weight:600;color:var(--danger);display:none">⚠ Be Right Back is active</span>
+          <span id="beRightBackNotice" style="color:var(--muted);font-size:13px"></span>
+        </div>
+      </div>
+      <div class="settings-card">
         <h3>Store Status</h3>
         <div class="field" style="display:flex;gap:12px;align-items:center">
           <label style="margin:0;text-transform:none;font-size:14px;font-weight:600">Store Open</label>
@@ -1232,6 +1247,8 @@ ADMIN_HTML = r"""<!doctype html>
         document.querySelector("#scheduleEnabled").checked = s.scheduleEnabled === true;
         document.querySelector("#scheduleWarningMsg").value = s.scheduleWarningMessage || "";
         renderScheduleStatus(s.scheduleEnabled === true);
+        if (s.beRightBackDates != null) document.querySelector("#beRightBackDates").value = s.beRightBackDates || "";
+        renderBeRightBack(s.beRightBackActive === true);
         setSettingsNotice("Settings loaded");
         refreshActiveVisitors();
       } catch(e) { setSettingsNotice(e.message, true); }
@@ -1270,6 +1287,55 @@ ADMIN_HTML = r"""<!doctype html>
         renderSiteClosed(false);
         setSettingsNotice("Website opened");
       } catch(e) { setSettingsNotice(e.message, true); }
+    });
+
+    // ── BE RIGHT BACK ─────────────────────────────────────────────────────────
+    function renderBeRightBack(active) {
+      var btn = document.querySelector("#activateBeRightBackBtn");
+      var deBtn = document.querySelector("#deactivateBeRightBackBtn");
+      var status = document.querySelector("#beRightBackStatus");
+      if (active) {
+        btn.style.display = "none"; deBtn.style.display = ""; status.style.display = "";
+      } else {
+        btn.style.display = ""; deBtn.style.display = "none"; status.style.display = "none";
+      }
+    }
+    function setBeRightBackNotice(msg, err) {
+      var el = document.querySelector("#beRightBackNotice");
+      el.textContent = msg; el.style.color = err ? "var(--danger)" : "var(--muted)";
+    }
+    document.querySelector("#saveBeRightBackBtn").addEventListener("click", async function() {
+      try {
+        var res = await fetch("/admin/site-settings", {
+          method: "PATCH", headers: authHeaders(),
+          body: JSON.stringify({ beRightBackDates: document.querySelector("#beRightBackDates").value })
+        });
+        if (!res.ok) throw new Error(await res.text());
+        setBeRightBackNotice("Dates saved");
+        setTimeout(function() { setBeRightBackNotice(""); }, 3000);
+      } catch(e) { setBeRightBackNotice(e.message, true); }
+    });
+    document.querySelector("#activateBeRightBackBtn").addEventListener("click", async function() {
+      try {
+        var res = await fetch("/admin/site-settings", {
+          method: "PATCH", headers: authHeaders(),
+          body: JSON.stringify({ beRightBackActive: true })
+        });
+        if (!res.ok) throw new Error(await res.text());
+        renderBeRightBack(true);
+        setBeRightBackNotice("Activated");
+      } catch(e) { setBeRightBackNotice(e.message, true); }
+    });
+    document.querySelector("#deactivateBeRightBackBtn").addEventListener("click", async function() {
+      try {
+        var res = await fetch("/admin/site-settings", {
+          method: "PATCH", headers: authHeaders(),
+          body: JSON.stringify({ beRightBackActive: false })
+        });
+        if (!res.ok) throw new Error(await res.text());
+        renderBeRightBack(false);
+        setBeRightBackNotice("Deactivated");
+      } catch(e) { setBeRightBackNotice(e.message, true); }
     });
 
     document.querySelector("#saveSettingsBtn").addEventListener("click", async function() {
@@ -2888,6 +2954,8 @@ def get_site_settings(connection: sqlite3.Connection) -> dict[str, Any]:
         "currentPhase": get_current_phase(connection),
         "khantokQuota100": int(settings.get("khantok_quota_100") or KHANTOK_QUOTA_100),
         "khantokQuota50": int(settings.get("khantok_quota_50") or KHANTOK_QUOTA_50),
+        "beRightBackDates": settings.get("be_right_back_dates", "2026-05-24,2026-05-31,2026-06-07"),
+        "beRightBackActive": settings.get("be_right_back_active", "0") == "1",
     }
 
 
@@ -3308,12 +3376,18 @@ class OrderRequestHandler(BaseHTTPRequestHandler):
             active_count = sum(1 for t in list(_visitor_registry.values()) if t >= cutoff)
             with open_db() as connection:
                 rows = connection.execute(
-                    "SELECT key, value FROM site_settings WHERE key IN ('site_closed','schedule_enabled','schedule_warning_message')"
+                    "SELECT key, value FROM site_settings WHERE key IN ('site_closed','schedule_enabled','schedule_warning_message','be_right_back_dates','be_right_back_active')"
                 ).fetchall()
                 s = {r["key"]: r["value"] for r in rows}
                 site_closed = s.get("site_closed", "0") == "1"
                 schedule_enabled = s.get("schedule_enabled", "0") == "1"
                 warning_message = s.get("schedule_warning_message", "เว็บกำลังจะปิด กรุณาทำรายการให้เสร็จก่อนเวลา 22:59")
+                be_right_back_dates_str = s.get("be_right_back_dates", "2026-05-24,2026-05-31,2026-06-07")
+                be_right_back_dates = [d.strip() for d in be_right_back_dates_str.split(",") if d.strip()]
+                be_right_back_active = s.get("be_right_back_active", "0") == "1"
+                _TZ_BKK = timezone(timedelta(hours=7))
+                today_bkk = datetime.now(_TZ_BKK).strftime("%Y-%m-%d")
+                be_right_back = be_right_back_active or (today_bkk in be_right_back_dates)
             sched = get_schedule_status(schedule_enabled, warning_message)
             test_warn = time.time() < _test_warning_until
             self._send_json(HTTPStatus.OK, {
@@ -3323,6 +3397,7 @@ class OrderRequestHandler(BaseHTTPRequestHandler):
                 "scheduleWarning": sched["scheduleWarning"] or test_warn,
                 "scheduleWarningMessage": sched["scheduleWarningMessage"],
                 "activeVisitors": active_count,
+                "beRightBack": be_right_back,
             })
             return
 
@@ -3705,6 +3780,10 @@ class OrderRequestHandler(BaseHTTPRequestHandler):
                     upsert_site_setting(connection, "khantok_quota_100", str(int(payload["khantokQuota100"])))
                 if "khantokQuota50" in payload:
                     upsert_site_setting(connection, "khantok_quota_50", str(int(payload["khantokQuota50"])))
+                if "beRightBackDates" in payload:
+                    upsert_site_setting(connection, "be_right_back_dates", str(payload["beRightBackDates"]))
+                if "beRightBackActive" in payload:
+                    upsert_site_setting(connection, "be_right_back_active", "1" if payload["beRightBackActive"] else "0")
                 connection.commit()
                 settings = get_site_settings(connection)
             self._send_json(HTTPStatus.OK, settings)

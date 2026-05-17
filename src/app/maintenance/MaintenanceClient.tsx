@@ -7,6 +7,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 type SiteStatus = {
   siteClosed?: boolean;
   scheduleClosed?: boolean;
+  beRightBack?: boolean;
 };
 
 export function MaintenanceClient() {
@@ -14,11 +15,16 @@ export function MaintenanceClient() {
   const searchParams = useSearchParams();
   const reason = searchParams.get("reason");
   const isSchedule = reason === "schedule";
+  const isBeRightBack = reason === "beRightBack";
 
-  const horizontal = isSchedule
+  const horizontal = isBeRightBack
+    ? "/images/anc/BE_RIGHT_BACK_horizontal.png"
+    : isSchedule
     ? "/images/anc/STAY_TUNED_horizontal.png"
     : "/images/anc/BE_BACK_horizontal.png";
-  const vertical = isSchedule
+  const vertical = isBeRightBack
+    ? "/images/anc/BE_RIGHT_BACK_vertical.png"
+    : isSchedule
     ? "/images/anc/STAY_TUNED_vertical.png"
     : "/images/anc/BE_BACK_vertical.png";
 
@@ -28,7 +34,7 @@ export function MaintenanceClient() {
         const res = await fetch("/api/site-status", { cache: "no-store" });
         if (!res.ok) return;
         const data = (await res.json()) as SiteStatus;
-        if (!data.siteClosed && !data.scheduleClosed) {
+        if (!data.siteClosed && !data.scheduleClosed && !data.beRightBack) {
           router.replace("/");
         }
       } catch {
@@ -39,7 +45,7 @@ export function MaintenanceClient() {
     check();
     const interval = setInterval(check, 10_000);
     return () => clearInterval(interval);
-  }, [router]);
+  }, [router, isBeRightBack]);
 
   return (
     <div className="fixed inset-0 z-50 bg-white">
