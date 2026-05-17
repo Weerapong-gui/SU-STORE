@@ -289,7 +289,13 @@ export function CheckoutPaymentForm({
 
                   <div className="mt-3 grid gap-x-6 gap-y-1 text-sm text-zinc-700 sm:grid-cols-[auto_1fr]">
                     <p className="text-zinc-500">Size</p>
-                    <p>{formatStoredProductSize(item.productCategory, item.size)}</p>
+                    <p>{formatStoredProductSize(item.productCategory, item.size).split(" / ")[0]}</p>
+                    {item.size.includes(" / ") && (
+                      <>
+                        <p className="text-zinc-500">Color</p>
+                        <p>{item.size.split(" / ")[1]}</p>
+                      </>
+                    )}
                     {item.school && (
                       <>
                         <p className="text-zinc-500">{item.productCategory === "headband" ? "Print on Headband" : "School"}</p>
