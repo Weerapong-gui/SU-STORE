@@ -103,9 +103,9 @@ DEFAULT_PRODUCTS = [
     {
         "slug": "fresh-jacket",
         "name": "FRESHER JACKET",
-        "short_name": "แจ็กเก็ต",
+        "short_name": "แจ็คเก็ต",
         "tagline": "Layer up with a clean campus-ready jacket.",
-        "description": "แจ็กเก็ตสำหรับวันกิจกรรมหรือวันที่อยากได้เลเยอร์เพิ่ม โดยใช้ flow เลือกไซซ์ จำนวน และสำนักวิชาเหมือนสินค้ากลุ่มเสื้อ.",
+        "description": "แจ็คเก็ตสำหรับวันกิจกรรมหรือวันที่อยากได้เลเยอร์เพิ่ม โดยใช้ flow เลือกไซซ์ จำนวน และสำนักวิชาเหมือนสินค้ากลุ่มเสื้อ.",
         "price": 899,
         "category": "jacket",
         "requires_size": 1,
@@ -632,7 +632,7 @@ ADMIN_HTML = r"""<!doctype html>
       ].join("");
       var row2 = [
         statClickHtml("โปโล", (summary.qtySingle || 0) + " ตัว", "single"),
-        statClickHtml("แจ็กเก็ต", (summary.qtyJacket || 0) + " ตัว", "jacket"),
+        statClickHtml("แจ็คเก็ต", (summary.qtyJacket || 0) + " ตัว", "jacket"),
         statClickHtml("Headband", (summary.qtyHeadband || 0) + " อัน", "headband"),
       ].join("");
       document.querySelector("#orderStats").innerHTML =
@@ -837,7 +837,7 @@ ADMIN_HTML = r"""<!doctype html>
     });
 
     // ── BREAKDOWN MODAL ────────────────────────────────────────────────────────
-    var BREAKDOWN_LABELS = { single: "โปโล — แยกตามไซซ์", jacket: "แจ็กเก็ต — แยกตามไซซ์ / สี", headband: "Headband — แยกตามสำนักวิชา" };
+    var BREAKDOWN_LABELS = { single: "โปโล — แยกตามไซซ์", jacket: "แจ็คเก็ต — แยกตามไซซ์ / สี", headband: "Headband — แยกตามสำนักวิชา" };
 
     async function openBreakdownModal(category) {
       var modal = document.querySelector("#breakdownModal");

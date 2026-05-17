@@ -23,9 +23,9 @@ export const products: Product[] = [
   {
     slug: "fresh-jacket",
     name: "FRESHER JACKET",
-    shortName: "แจ็กเก็ต",
+    shortName: "แจ็คเก็ต",
     tagline: "FRESHER PACKAGE 28TH",
-    description: "แจ็กเก็ตสำหรับวันกิจกรรมหรือวันที่อยากได้เลเยอร์เพิ่ม โดยใช้ flow เลือกไซซ์ จำนวน และสำนักวิชาเหมือนสินค้ากลุ่มเสื้อ.",
+    description: "แจ็คเก็ตสำหรับวันกิจกรรมหรือวันที่อยากได้เลเยอร์เพิ่ม โดยใช้ flow เลือกไซซ์ จำนวน และสำนักวิชาเหมือนสินค้ากลุ่มเสื้อ.",
     price: 739,
     images: ["/Jacket/B.png"],
     imageSize: { width: 1000, height: 1000 },
