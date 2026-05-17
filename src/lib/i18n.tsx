@@ -57,15 +57,15 @@ export const translations = {
     products: {
       "single-shirt": {
         shortName: "Single Shirt",
-        description: "A clean, easy-to-wear polo shirt and the core piece of the Fresher 28th collection.",
+        description: "FRESHER PACKAGE 28TH",
       },
       "fresh-jacket": {
         shortName: "Jacket",
-        description: "A jacket for activity days or when you want an extra layer — select size, quantity, and school just like the shirt.",
+        description: "FRESHER PACKAGE 28TH",
       },
       "fresh-headband": {
         shortName: "Headband",
-        description: "One-size headband — choose quantity and school before adding to cart or heading to checkout.",
+        description: "FRESHER PACKAGE 28TH",
       },
     } as Record<string, { shortName: string; description: string }>,
     payment: {
@@ -124,15 +124,15 @@ export const translations = {
     products: {
       "single-shirt": {
         shortName: "เสื้อเดี่ยว",
-        description: "เสื้อเดี่ยวทรงเรียบ ใส่ง่าย และเป็นฐานหลักของคอลเลกชัน Fresher 28th.",
+        description: "FRESHER PACKAGE 28TH",
       },
       "fresh-jacket": {
         shortName: "แจ็คเก็ต",
-        description: "แจ็คเก็ตสำหรับวันกิจกรรมหรือวันที่อยากได้เลเยอร์เพิ่ม โดยใช้ flow เลือกไซซ์ จำนวน และสำนักวิชาเหมือนสินค้ากลุ่มเสื้อ.",
+        description: "FRESHER PACKAGE 28TH",
       },
       "fresh-headband": {
         shortName: "ผ้าคาดสำนักวิชา",
-        description: "ผ้าคาดสำนักวิชาที่ใช้ขนาดแบบ one size โดยเลือกจำนวนและสำนักวิชาได้ก่อนเพิ่มลง cart หรือไปชำระเงินต่อ.",
+        description: "FRESHER PACKAGE 28TH",
       },
     } as Record<string, { shortName: string; description: string }>,
     payment: {
