@@ -54,6 +54,23 @@ export const translations = {
       selectSchool: "Select school...",
       surchargeNote: (amount: number, size: string) => `+฿${amount} for size ${size}`,
     },
+    products: {
+      "single-shirt": {
+        shortName: "Single Shirt",
+        description: "A clean, easy-to-wear polo shirt and the core piece of the Fresher 28th collection.",
+      },
+      "fresh-jacket": {
+        shortName: "Jacket",
+        description: "A jacket for activity days or when you want an extra layer — select size, quantity, and school just like the shirt.",
+      },
+      "fresh-headband": {
+        shortName: "Headband",
+        description: "One-size headband — choose quantity and school before adding to cart or heading to checkout.",
+      },
+    } as Record<string, { shortName: string; description: string }>,
+    payment: {
+      bankName: "Bangkok Bank",
+    },
   },
   th: {
     status: {
@@ -103,6 +120,23 @@ export const translations = {
       outOfStock: "หมดแล้ว / ไม่พร้อมจำหน่าย",
       selectSchool: "เลือกสำนักวิชา...",
       surchargeNote: (amount: number, size: string) => `+${amount} บาท สำหรับไซซ์ ${size}`,
+    },
+    products: {
+      "single-shirt": {
+        shortName: "เสื้อเดี่ยว",
+        description: "เสื้อเดี่ยวทรงเรียบ ใส่ง่าย และเป็นฐานหลักของคอลเลกชัน Fresher 28th.",
+      },
+      "fresh-jacket": {
+        shortName: "แจ็คเก็ต",
+        description: "แจ็คเก็ตสำหรับวันกิจกรรมหรือวันที่อยากได้เลเยอร์เพิ่ม โดยใช้ flow เลือกไซซ์ จำนวน และสำนักวิชาเหมือนสินค้ากลุ่มเสื้อ.",
+      },
+      "fresh-headband": {
+        shortName: "เฮดแบนด์",
+        description: "เฮดแบนด์ที่ใช้ขนาดแบบ one size โดยเลือกจำนวนและสำนักวิชาได้ก่อนเพิ่มลง cart หรือไปชำระเงินต่อ.",
+      },
+    } as Record<string, { shortName: string; description: string }>,
+    payment: {
+      bankName: "ธนาคารกรุงเทพ",
     },
   },
 } as const;

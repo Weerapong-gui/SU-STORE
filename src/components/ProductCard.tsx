@@ -29,7 +29,7 @@ export function ProductCard({ product }: ProductCardProps) {
           />
         </div>
         <div className="space-y-1.5 p-6 pb-7">
-          <p className="text-xs font-medium tracking-[0.1em] text-zinc-400">{product.shortName}</p>
+          <p className="text-xs font-medium tracking-[0.1em] text-zinc-400">{t.products[product.slug]?.shortName ?? product.shortName}</p>
           <h3 className="text-2xl font-semibold tracking-tight text-zinc-500">{product.name}</h3>
           <p className="text-sm leading-relaxed text-zinc-400">{product.tagline}</p>
           <p className="pt-2 text-base font-semibold text-zinc-400">{t.product.outOfStock}</p>
@@ -55,10 +55,10 @@ export function ProductCard({ product }: ProductCardProps) {
         </div>
         <div className="space-y-1.5 p-6 pb-7">
           <p className="text-xs font-medium tracking-[0.1em] text-ink-tertiary">
-            {product.shortName}
+            {t.products[product.slug]?.shortName ?? product.shortName}
           </p>
           <h3 className="text-2xl font-semibold tracking-tight text-ink">{product.name}</h3>
-          <p className="text-sm leading-relaxed text-ink-soft">{product.tagline}</p>
+          <p className="text-sm leading-relaxed text-ink-soft">{t.products[product.slug]?.description ?? product.description}</p>
           <p className="pt-2 text-base font-semibold text-apple-blue">
             {formatPrice(product.price)}
           </p>

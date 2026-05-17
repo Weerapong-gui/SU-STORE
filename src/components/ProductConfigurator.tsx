@@ -182,11 +182,11 @@ export function ProductConfigurator({
 
       <div className="font-sf-pro sticky top-6 self-start space-y-6 rounded-[2rem] border border-zinc-300 bg-[#f5f5f7] p-6 md:p-8">
         <div>
-          <p className="text-xs font-semibold tracking-[0.14em] text-zinc-500">{product.shortName}</p>
+          <p className="text-xs font-semibold tracking-[0.14em] text-zinc-500">{t.products[product.slug]?.shortName ?? product.shortName}</p>
           <h1 className="mt-2 text-3xl font-semibold tracking-tight text-zinc-900 md:text-4xl">
             {product.name}
           </h1>
-          <p className="mt-3 text-sm text-zinc-600">{product.description}</p>
+          <p className="mt-3 text-sm text-zinc-600">{t.products[product.slug]?.description ?? product.description}</p>
           <p className="mt-4 text-2xl font-semibold text-apple-blue">{formatPrice(product.price)}</p>
         </div>
 

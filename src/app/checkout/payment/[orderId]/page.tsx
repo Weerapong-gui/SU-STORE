@@ -8,8 +8,8 @@ import { formatPrice } from "@/lib/formatPrice";
 import {
   PAYMENT_ACCOUNT_COPY_VALUE,
   PAYMENT_ACCOUNT_NUMBER,
-  PAYMENT_BANK_NAME
 } from "@/lib/paymentDetails";
+import { BankName } from "@/components/BankName";
 import { getOrderCustomerName, getOrderStatusLabel } from "@/lib/orderStatus";
 import { getOrderById, getPaymentSlipUploadAvailability } from "@/lib/orderStore";
 import { formatStoredProductSize } from "@/lib/productSizing";
@@ -78,7 +78,7 @@ export default async function CheckoutPaymentPage({ params }: CheckoutPaymentPag
 
             <div className={INFO_CARD_CLASSES}>
               <p className="text-xs font-semibold tracking-[0.1em] text-zinc-500">BANK ACCOUNT</p>
-              <h2 className="mt-2 text-xl font-semibold text-zinc-900">{PAYMENT_BANK_NAME}</h2>
+              <h2 className="mt-2 text-xl font-semibold text-zinc-900"><BankName /></h2>
 
               <div className="mx-auto mt-4 max-w-[48rem]">
                 <div className="flex items-center justify-center rounded-[1.75rem] border border-zinc-200 bg-white px-5 py-4">
