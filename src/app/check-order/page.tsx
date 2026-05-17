@@ -195,7 +195,7 @@ function CheckOrderContent() {
                 type="text"
                 value={input}
                 onChange={(e) => setInput(e.target.value)}
-                placeholder="รหัสนักศึกษา เช่น 68XXXXXXXX"
+                placeholder="Student ID"
                 className="h-12 w-full rounded-xl border border-black/[0.1] bg-white pl-10 pr-4 text-sm shadow-sm outline-none ring-apple-blue focus:border-apple-blue focus:ring-1"
               />
             </div>

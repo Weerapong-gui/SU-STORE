@@ -3723,8 +3723,8 @@ class OrderRequestHandler(BaseHTTPRequestHandler):
             if existing_order is None:
                 self._send_json(HTTPStatus.NOT_FOUND, {"message": "order not found"})
                 return
-            if not self._is_authorized_for_order(existing_order):
-                self._deny_unauthorized()
+            if existing_order["status"] != "pending_payment":
+                self._send_json(HTTPStatus.FORBIDDEN, {"message": "slip upload is only allowed for pending_payment orders"})
                 return
             previous_slip_stored_name = existing_order["slip_stored_name"]
             previous_slip_storage_path = existing_order["slip_storage_path"]
