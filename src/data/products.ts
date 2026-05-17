@@ -42,9 +42,9 @@ export const products: Product[] = [
   {
     slug: "fresh-headband",
     name: "FRESHER HEADBAND",
-    shortName: "เฮดแบนด์",
+    shortName: "ผ้าคาดสำนักวิชา",
     tagline: "FRESHER PACKAGE 28TH",
-    description: "เฮดแบนด์ที่ใช้ขนาดแบบ one size โดยเลือกจำนวนและสำนักวิชาได้ก่อนเพิ่มลง cart หรือไปชำระเงินต่อ.",
+    description: "ผ้าคาดสำนักวิชาที่ใช้ขนาดแบบ one size โดยเลือกจำนวนและสำนักวิชาได้ก่อนเพิ่มลง cart หรือไปชำระเงินต่อ.",
     price: 35,
     images: ["/images/handband.png"],
     imageSize: { width: 1920, height: 1080 },

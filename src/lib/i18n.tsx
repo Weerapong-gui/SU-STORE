@@ -131,8 +131,8 @@ export const translations = {
         description: "แจ็คเก็ตสำหรับวันกิจกรรมหรือวันที่อยากได้เลเยอร์เพิ่ม โดยใช้ flow เลือกไซซ์ จำนวน และสำนักวิชาเหมือนสินค้ากลุ่มเสื้อ.",
       },
       "fresh-headband": {
-        shortName: "เฮดแบนด์",
-        description: "เฮดแบนด์ที่ใช้ขนาดแบบ one size โดยเลือกจำนวนและสำนักวิชาได้ก่อนเพิ่มลง cart หรือไปชำระเงินต่อ.",
+        shortName: "ผ้าคาดสำนักวิชา",
+        description: "ผ้าคาดสำนักวิชาที่ใช้ขนาดแบบ one size โดยเลือกจำนวนและสำนักวิชาได้ก่อนเพิ่มลง cart หรือไปชำระเงินต่อ.",
       },
     } as Record<string, { shortName: string; description: string }>,
     payment: {

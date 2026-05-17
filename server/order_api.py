@@ -116,9 +116,9 @@ DEFAULT_PRODUCTS = [
     {
         "slug": "fresh-headband",
         "name": "FRESHER HEADBAND",
-        "short_name": "เฮดแบนด์",
+        "short_name": "ผ้าคาดสำนักวิชา",
         "tagline": "A lightweight accessory for sports day and activity looks.",
-        "description": "เฮดแบนด์ที่ใช้ขนาดแบบ one size โดยเลือกจำนวนและสำนักวิชาได้ก่อนเพิ่มลง cart หรือไปชำระเงินต่อ.",
+        "description": "ผ้าคาดสำนักวิชาที่ใช้ขนาดแบบ one size โดยเลือกจำนวนและสำนักวิชาได้ก่อนเพิ่มลง cart หรือไปชำระเงินต่อ.",
         "price": 35,
         "category": "headband",
         "requires_size": 0,
