@@ -11,7 +11,7 @@ export const translations = {
       waiting_confirm: { label: "Awaiting Confirmation", description: "Our team is verifying your transfer" },
       paid:            { label: "Paid",                  description: "Payment confirmed" },
       preparing:       { label: "Preparing",             description: "Your order is being prepared" },
-      shipped:         { label: "Ready for Pickup",      description: "Your order is ready — contact us to arrange pickup" },
+      shipped:         { label: "Ready for Pickup",      description: "Your order is ready" },
       cancelled:       { label: "Cancelled",             description: "This order has been cancelled" },
       rejected:        { label: "Rejected",              description: "Payment not confirmed. Please contact us" },
     },
