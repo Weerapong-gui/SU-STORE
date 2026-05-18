@@ -798,8 +798,6 @@ export async function attachSlipToOrder(orderId: string, file: File) {
     return null;
   }
 
-  let remoteUploadUnavailableMessage: string | null = null;
-
   if (hasRemoteOrderApi()) {
     try {
       const remoteOrder = await uploadRemoteOrderSlip(
@@ -811,9 +809,11 @@ export async function attachSlipToOrder(orderId: string, file: File) {
         return normalizeOrder(remoteOrder);
       }
 
-      console.warn(`Remote order API returned no order while uploading slip for ${orderId}. Falling back to local storage.`);
-      remoteUploadUnavailableMessage =
-        "ไม่พบคำสั่งซื้อบนเซิร์ฟเวอร์รับสลิป หรือสิทธิ์เข้าถึงคำสั่งซื้อนี้หมดอายุแล้ว";
+      // API returned 404/401 — order not found or access denied. Never fall back
+      // to local storage since the admin panel would never see the slip.
+      throw new SlipUploadError(
+        "ไม่พบออเดอร์นี้ในระบบ หรือสิทธิ์เข้าถึงหมดอายุแล้ว กรุณาตรวจสอบหมายเลขออเดอร์และลองใหม่อีกครั้ง"
+      );
     } catch (error) {
       // Remote API is configured — the order lives in its database.
       // Falling back to local storage would succeed silently but the admin panel
@@ -834,9 +834,7 @@ export async function attachSlipToOrder(orderId: string, file: File) {
 
   const storageMode = getOrderStorageMode();
   if (storageMode === "cookie") {
-    throw new SlipUploadError(
-      remoteUploadUnavailableMessage ?? BLOB_STORAGE_DISABLED_MESSAGE
-    );
+    throw new SlipUploadError(BLOB_STORAGE_DISABLED_MESSAGE);
   }
 
   // Upload new slip FIRST so the old slip is never deleted without a replacement
