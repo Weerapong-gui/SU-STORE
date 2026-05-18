@@ -51,7 +51,7 @@ export const translations = {
     },
     product: {
       outOfStock: "Out of Stock / Unavailable",
-      selectSchool: "Select school...",
+
       surchargeNote: (amount: number, size: string) => `+฿${amount} for size ${size}`,
     },
     products: {
@@ -118,7 +118,7 @@ export const translations = {
     },
     product: {
       outOfStock: "หมดแล้ว / ไม่พร้อมจำหน่าย",
-      selectSchool: "เลือกสำนักวิชา...",
+
       surchargeNote: (amount: number, size: string) => `+${amount} บาท สำหรับไซซ์ ${size}`,
     },
     products: {

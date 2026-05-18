@@ -369,7 +369,7 @@ export function CheckoutPaymentForm({
           <div>
             <p className="text-xs font-semibold tracking-[0.12em] text-zinc-500">PERSONAL DETAILS</p>
 
-            <div className="mt-4 grid gap-4 md:grid-cols-2">
+            <div className="mt-4 grid gap-4 md:grid-cols-2" translate="no">
               <label className="space-y-1">
                 <span className="text-xs font-semibold tracking-[0.08em] text-zinc-600">STUDENT CODE</span>
                 <input
@@ -434,6 +434,7 @@ export function CheckoutPaymentForm({
                   required
                   defaultValue={existingOrder?.customer.school ?? ""}
                   className={SELECT_FIELD_CLASSES}
+                  translate="no"
                 >
                   <option value="" disabled>
                     Select school

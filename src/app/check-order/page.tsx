@@ -101,7 +101,7 @@ function OrderCard({ order }: { order: PublicOrder }) {
               <p className="text-sm font-semibold text-zinc-800">{item.product.name}</p>
               <p className="text-xs text-zinc-400">Size {item.size} × {item.quantity}</p>
               {item.school && (
-                <p className="text-xs text-zinc-400">
+                <p className="text-xs text-zinc-400" translate="no">
                   {item.product.category === "headband" ? "Print on Headband" : "School"}: {item.school}
                 </p>
               )}
@@ -113,7 +113,7 @@ function OrderCard({ order }: { order: PublicOrder }) {
 
       {/* Footer */}
       <div className="flex flex-wrap items-center justify-between gap-3 border-t border-black/[0.06] bg-zinc-50/60 px-6 py-4">
-        <div className="flex flex-wrap gap-4 text-sm text-zinc-500">
+        <div className="flex flex-wrap gap-4 text-sm text-zinc-500" translate="no">
           <span>{order.customer.fullName}</span>
           <span>{order.customer.studentCode}</span>
           <span>Enrolled at: {order.customer.school}</span>

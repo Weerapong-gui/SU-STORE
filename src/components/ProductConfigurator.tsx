@@ -227,8 +227,9 @@ export function ProductConfigurator({
               value={selectedSchool}
               onChange={(e) => setSelectedSchool(e.target.value)}
               className="h-11 w-full appearance-none rounded-2xl border border-zinc-300 bg-white px-4 text-sm text-zinc-800 shadow-sm outline-none ring-apple-blue focus:border-apple-blue focus:ring-1"
+              translate="no"
             >
-              <option value="" disabled>{t.product.selectSchool}</option>
+              <option value="" disabled>Select school...</option>
               {SCHOOL_OPTIONS.map((school) => (
                 <option key={school} value={school}>{school}</option>
               ))}
