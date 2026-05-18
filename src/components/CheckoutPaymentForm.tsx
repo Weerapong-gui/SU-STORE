@@ -1,14 +1,18 @@
 "use client";
 
+import Image from "next/image";
 import Link from "next/link";
-import { FormEvent, useMemo, useState } from "react";
+import { FormEvent, useRef, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useCart } from "@/components/CartProvider";
+import { BankAccountCopyField } from "@/components/BankAccountCopyField";
+import { BankName } from "@/components/BankName";
 import { products } from "@/data/products";
 import { SCHOOL_OPTIONS } from "@/lib/checkoutOptions";
 import { formatOrderNumber } from "@/lib/formatOrderNumber";
 import { formatPrice } from "@/lib/formatPrice";
 import { getOrderStatusLabel } from "@/lib/orderStatus";
+import { PAYMENT_ACCOUNT_COPY_VALUE, PAYMENT_ACCOUNT_NUMBER } from "@/lib/paymentDetails";
 import { formatStoredProductSize } from "@/lib/productSizing";
 import { CartItem } from "@/types/cart";
 import { Order, OrderItem } from "@/types/order";
@@ -24,7 +28,7 @@ type CheckoutPaymentFormProps = {
   cartMode?: boolean;
 };
 
-type SubmitState = "idle" | "loading";
+type SubmitState = "idle" | "creating" | "uploading";
 
 const TEXT_FIELD_CLASSES =
   "h-11 w-full rounded-2xl border border-zinc-300 bg-white px-4 text-sm text-zinc-900 outline-none transition focus:border-apple-blue focus:ring-4 focus:ring-apple-blue/10";
@@ -103,7 +107,7 @@ export function CheckoutPaymentForm({
   const [customerEmail, setCustomerEmail] = useState(existingOrder?.customer.email ?? "");
   const [submitState, setSubmitState] = useState<SubmitState>("idle");
   const [submitError, setSubmitError] = useState("");
-  const [activeOrderId, setActiveOrderId] = useState(existingOrder?.id ?? "");
+  const slipFileRef = useRef<HTMLInputElement>(null);
 
   const storedSize = defaultSize ?? existingOrder?.size ?? "";
   const defaultSingleQuantity = useMemo(() => {
@@ -142,12 +146,16 @@ export function CheckoutPaymentForm({
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    setSubmitState("loading");
     setSubmitError("");
 
     if (selectedItems.length === 0) {
       setSubmitError("Please add at least one product before confirming your order.");
-      setSubmitState("idle");
+      return;
+    }
+
+    const slipFile = slipFileRef.current?.files?.[0];
+    if (!slipFile) {
+      setSubmitError("Please attach your payment slip before confirming.");
       return;
     }
 
@@ -171,32 +179,42 @@ export function CheckoutPaymentForm({
       parentPhone: String(formData.get("parentPhone") ?? "").trim()
     };
 
-    const endpoint = activeOrderId ? `/api/order/${activeOrderId}` : "/api/order";
-    const method = activeOrderId ? "PUT" : "POST";
-
     try {
-      const response = await fetch(endpoint, {
-        method,
-        headers: {
-          "Content-Type": "application/json"
-        },
-        body: JSON.stringify(payload)
+      // Step 1 — create order
+      setSubmitState("creating");
+      const orderRes = await fetch("/api/order", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+        signal: AbortSignal.timeout(15000)
       });
-
-      const result = (await response.json().catch(() => null)) as
-        | {
-            message?: string;
-            orderId?: string;
-          }
-        | null;
-
-      if (!response.ok || !result?.orderId) {
-        setSubmitError(result?.message ?? "Unable to save your order right now.");
+      const orderResult = (await orderRes.json().catch(() => null)) as { message?: string; orderId?: string } | null;
+      if (!orderRes.ok || !orderResult?.orderId) {
+        setSubmitError(orderResult?.message ?? "Unable to save your order right now.");
         setSubmitState("idle");
         return;
       }
 
-      setActiveOrderId(result.orderId);
+      const orderId = orderResult.orderId;
+
+      // Step 2 — upload slip
+      setSubmitState("uploading");
+      const slipData = new FormData();
+      slipData.append("slip", slipFile);
+      const slipRes = await fetch(`/api/order/${orderId}/payment`, {
+        method: "POST",
+        body: slipData,
+        signal: AbortSignal.timeout(30000)
+      });
+      if (!slipRes.ok) {
+        const slipResult = (await slipRes.json().catch(() => null)) as { message?: string } | null;
+        setSubmitError(
+          (slipResult?.message ?? "Slip upload failed.") +
+          ` Your order ${orderId} was created — go to Check Order to upload your slip.`
+        );
+        setSubmitState("idle");
+        return;
+      }
 
       if (cartMode) {
         clearCart();
@@ -204,7 +222,7 @@ export function CheckoutPaymentForm({
         removeItem(cartItemId);
       }
 
-      router.push(`/checkout/payment/${result.orderId}`);
+      router.push(`/checkout/complete/${orderId}`);
     } catch {
       setSubmitError("Unable to connect to the ordering service right now.");
       setSubmitState("idle");
@@ -253,7 +271,7 @@ export function CheckoutPaymentForm({
               Confirm your order
             </h1>
             <p className="mt-3 text-sm text-zinc-600">
-              Review the selected product, complete your personal details, and create the order number before payment.
+              Review your order, fill in your details, transfer payment, then attach your slip — all in one step.
             </p>
             {existingOrder ? (
               <div className="mt-4 space-y-2 text-sm text-zinc-600">
@@ -325,13 +343,33 @@ export function CheckoutPaymentForm({
         </div>
 
         <div className="space-y-5">
+          <div className="rounded-3xl border border-zinc-200 bg-[#f5f5f7] p-5">
+            <p className="text-xs font-semibold tracking-[0.12em] text-zinc-500">BANK ACCOUNT</p>
+            <h2 className="mt-2 text-lg font-semibold text-zinc-900"><BankName /></h2>
+            <div className="mt-3 flex items-center justify-center rounded-[1.5rem] border border-zinc-200 bg-white px-4 py-3">
+              <Image
+                src="/images/logoBank.png"
+                alt="Bangkok Bank"
+                width={600}
+                height={300}
+                className="w-full max-w-xs object-contain"
+              />
+            </div>
+            <BankAccountCopyField
+              formattedAccountNumber={PAYMENT_ACCOUNT_NUMBER}
+              copyValue={PAYMENT_ACCOUNT_COPY_VALUE}
+            />
+            <div className="mt-3 rounded-2xl border border-zinc-200 bg-white px-4 py-3">
+              <p className="text-xs font-semibold tracking-[0.08em] text-zinc-500">TOTAL AMOUNT</p>
+              <p className="mt-1 text-2xl font-semibold tracking-tight text-apple-blue">{formatPrice(totalAmount)}</p>
+              <p className="mt-1 text-xs text-zinc-500">Transfer this exact amount, then attach your slip below.</p>
+            </div>
+          </div>
+
           <div>
             <p className="text-xs font-semibold tracking-[0.12em] text-zinc-500">PERSONAL DETAILS</p>
-            <p className="mt-3 text-sm text-zinc-600">
-              Once you confirm this order, the system will generate an order number and move you to the payment step.
-            </p>
 
-            <div className="mt-5 grid gap-4 md:grid-cols-2">
+            <div className="mt-4 grid gap-4 md:grid-cols-2">
               <label className="space-y-1">
                 <span className="text-xs font-semibold tracking-[0.08em] text-zinc-600">STUDENT CODE</span>
                 <input
@@ -410,6 +448,21 @@ export function CheckoutPaymentForm({
             </div>
           </div>
 
+          <div>
+            <p className="text-xs font-semibold tracking-[0.12em] text-zinc-500">PAYMENT SLIP</p>
+            <p className="mt-2 text-sm text-zinc-600">Attach your transfer slip to complete the order.</p>
+            <label className="mt-3 block">
+              <input
+                ref={slipFileRef}
+                type="file"
+                accept=".jpg,.jpeg,.png,.webp,.pdf"
+                required
+                className="block w-full rounded-2xl border border-zinc-300 bg-white px-4 py-3 text-sm text-zinc-700 file:mr-4 file:rounded-full file:border-0 file:bg-apple-blue file:px-4 file:py-2 file:text-sm file:font-medium file:text-white hover:file:bg-apple-blue-dark"
+              />
+            </label>
+            <p className="mt-2 text-xs text-zinc-500">JPG, PNG, WebP or PDF — max 10 MB</p>
+          </div>
+
           {submitError ? (
             <div className="rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">
               <p>{submitError}</p>
@@ -420,10 +473,14 @@ export function CheckoutPaymentForm({
           <div className="border-t border-zinc-200 pt-5">
             <button
               type="submit"
-              disabled={submitState === "loading"}
+              disabled={submitState !== "idle"}
               className={`${PRIMARY_BUTTON_CLASSES} w-full`}
             >
-              {submitState === "loading" ? "CONFIRMING..." : "CONFIRM ORDER"}
+              {submitState === "creating"
+                ? "CREATING ORDER..."
+                : submitState === "uploading"
+                  ? "UPLOADING SLIP..."
+                  : "CONFIRM ORDER & UPLOAD SLIP"}
             </button>
           </div>
         </div>

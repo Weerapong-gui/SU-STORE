@@ -235,6 +235,7 @@ ADMIN_HTML = r"""<!doctype html>
     .bar-count { font-size: 12px; color: var(--muted); width: 32px; text-align: right; }
     .settings-card { background: #fff; border: 1px solid var(--line); border-radius: 12px; padding: 20px; margin-bottom: 16px; }
     .settings-card h3 { font-size: 14px; font-weight: 700; margin-bottom: 14px; }
+    tr.editing-row td { background: #fef9c3 !important; }
     @media (max-width: 720px) {
       .analytics-grid { grid-template-columns: 1fr; }
       .toolbar input, .toolbar select { max-width: 100%; }
@@ -592,6 +593,90 @@ ADMIN_HTML = r"""<!doctype html>
     </div>
   </div>
 
+  <!-- EDIT ORDER MODAL -->
+  <div class="modal-backdrop" id="orderEditModal">
+    <div class="modal" style="width:min(640px,100%);max-height:90vh;overflow-y:auto">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px;position:sticky;top:0;background:#fff;padding-bottom:12px;border-bottom:1px solid var(--line)">
+        <h2 style="margin:0" id="orderEditTitle">Edit Order</h2>
+        <button class="ghost" id="closeOrderEditBtn" style="font-size:20px;line-height:1;padding:4px 10px;min-height:0;border-radius:8px">×</button>
+      </div>
+
+      <p style="font-size:11px;font-weight:700;color:var(--muted);letter-spacing:.1em;text-transform:uppercase;margin:0 0 10px">Customer Info</p>
+      <div class="field-row">
+        <div class="field">
+          <label>Full Name</label>
+          <input id="oe_fullName" type="text" />
+        </div>
+        <div class="field">
+          <label>Student Code</label>
+          <input id="oe_studentCode" type="text" />
+        </div>
+      </div>
+      <div class="field-row">
+        <div class="field">
+          <label>Phone</label>
+          <input id="oe_phone" type="text" />
+        </div>
+        <div class="field">
+          <label>Parent Phone</label>
+          <input id="oe_parentPhone" type="text" />
+        </div>
+      </div>
+      <div class="field-row">
+        <div class="field">
+          <label>School (Enrolled)</label>
+          <select id="oe_school"></select>
+        </div>
+        <div class="field">
+          <label>Email</label>
+          <input id="oe_email" type="email" />
+        </div>
+      </div>
+
+      <p style="font-size:11px;font-weight:700;color:var(--muted);letter-spacing:.1em;text-transform:uppercase;margin:18px 0 10px">Items</p>
+      <div id="oe_itemsContainer"></div>
+
+      <p style="font-size:11px;font-weight:700;color:var(--muted);letter-spacing:.1em;text-transform:uppercase;margin:18px 0 10px">Khantok Ticket</p>
+      <div style="display:flex;gap:24px;align-items:center;flex-wrap:wrap">
+        <div style="display:flex;gap:10px;align-items:center">
+          <label style="font-size:14px;font-weight:600;color:var(--text)">Has ticket</label>
+          <label class="toggle">
+            <input type="checkbox" id="oe_khantokTicket" />
+            <span class="toggle-track"></span>
+            <span class="toggle-thumb"></span>
+          </label>
+        </div>
+        <div style="display:flex;gap:10px;align-items:center">
+          <label style="font-size:14px;font-weight:600;color:var(--text)">Already claimed</label>
+          <label class="toggle">
+            <input type="checkbox" id="oe_khantokClaimed" />
+            <span class="toggle-track"></span>
+            <span class="toggle-thumb"></span>
+          </label>
+        </div>
+        <div class="field" style="margin:0;flex:1;min-width:100px">
+          <label>Ticket Value (฿)</label>
+          <input id="oe_khantokValue" type="number" min="0" placeholder="100" />
+        </div>
+      </div>
+
+      <hr style="border:none;border-top:1px solid var(--line);margin:20px 0" />
+      <p style="font-size:11px;font-weight:700;color:var(--muted);letter-spacing:.1em;text-transform:uppercase;margin:0 0 10px">Slip</p>
+      <div id="oe_slipPreview" style="margin-bottom:10px"></div>
+      <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+        <input id="oe_slipFile" type="file" accept="image/jpeg,image/png,image/webp,application/pdf" style="min-height:0;border:0;padding:0;flex:1" />
+        <button class="ghost" id="oe_uploadSlipBtn" style="white-space:nowrap">Upload Slip</button>
+      </div>
+      <p class="notice err" id="oe_slipNotice" style="margin-top:6px"></p>
+
+      <p class="notice err" id="orderEditNotice" style="margin-top:14px"></p>
+      <div style="display:flex;gap:10px;justify-content:flex-end;margin-top:16px;position:sticky;bottom:0;background:#fff;padding-top:12px;border-top:1px solid var(--line)">
+        <button class="ghost" id="cancelOrderEditBtn">Cancel</button>
+        <button class="primary" id="saveOrderEditBtn">Save Changes</button>
+      </div>
+    </div>
+  </div>
+
   <div class="modal-backdrop" id="breakdownModal">
     <div class="modal" style="width:min(480px,100%)">
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px">
@@ -712,10 +797,144 @@ ADMIN_HTML = r"""<!doctype html>
         '<div class="stats" style="margin-bottom:0">' + row2 + '</div>';
     }
 
+    var SCHOOL_OPTIONS = [
+      "School of Agro-Industry","School of Cosmetic Science","School of Dentistry",
+      "School of Health Science","School of Applied Digital Technology","School of Integrative Medicine",
+      "School of Law","School of Liberal Arts","School of Management","School of Medicine",
+      "School of Nursing","School of Science","School of Sinology","School of Social Innovation"
+    ];
+    var SIZE_OPTIONS = ["3S","2S","S","M","L","XL","2XL","3XL","4XL","5XL","6XL","7XL"];
+    var JACKET_COLORS = ["Blue","Red","White"];
+    var SURCHARGE_SIZES = ["2XL","3XL","4XL","5XL","6XL","7XL"];
+    var SURCHARGE_PRODUCTS = ["single-shirt","fresh-jacket"];
+    var SURCHARGE_AMOUNT = 20;
+
+    (function populateSchoolSelect() {
+      var sel = document.querySelector("#oe_school");
+      sel.innerHTML = SCHOOL_OPTIONS.map(function(s) { return '<option value="' + esc(s) + '">' + esc(s) + '</option>'; }).join('');
+    })();
+
+    function sizeOptions(current) {
+      return SIZE_OPTIONS.map(function(s) {
+        return '<option value="' + esc(s) + '"' + (s === current ? ' selected' : '') + '>' + esc(s) + '</option>';
+      }).join('');
+    }
+    function schoolOptions(current) {
+      return '<option value="">-- Select --</option>' + SCHOOL_OPTIONS.map(function(s) {
+        return '<option value="' + esc(s) + '"' + (s === current ? ' selected' : '') + '>' + esc(s) + '</option>';
+      }).join('');
+    }
+    function colorOptions(current) {
+      return JACKET_COLORS.map(function(c) {
+        return '<option value="' + esc(c) + '"' + (c === current ? ' selected' : '') + '>' + esc(c) + '</option>';
+      }).join('');
+    }
+
+    function renderItemEditors(items) {
+      var container = document.querySelector("#oe_itemsContainer");
+      container.innerHTML = items.map(function(item, idx) {
+        var p = item.product || {};
+        var cat = p.category || "";
+        var slug = p.slug || "";
+        var price = p.price || 0;
+        var surcharge = (SURCHARGE_PRODUCTS.indexOf(slug) >= 0 && SURCHARGE_SIZES.indexOf((item.size||"").split(" / ")[0]) >= 0) ? SURCHARGE_AMOUNT : 0;
+        var unitPrice = price + surcharge;
+        var totalAmt = unitPrice * (item.quantity || 1);
+
+        var sizeColorHtml = "";
+        if (cat === "jacket") {
+          var parts = (item.size || "").split(" / ");
+          var sz = parts[0] || SIZE_OPTIONS[4];
+          var cl = parts[1] || "Blue";
+          sizeColorHtml = '<div class="field-row"><div class="field"><label>Size</label><select class="oe_iSize">' + sizeOptions(sz) + '</select></div>' +
+            '<div class="field"><label>Color</label><select class="oe_iColor">' + colorOptions(cl) + '</select></div></div>';
+        } else if (cat === "headband") {
+          sizeColorHtml = '<div class="field"><label>Print on Headband (School)</label><select class="oe_iSchool">' + schoolOptions(item.school || "") + '</select></div>';
+        } else {
+          sizeColorHtml = '<div class="field"><label>Size</label><select class="oe_iSize">' + sizeOptions(item.size || "") + '</select></div>';
+        }
+
+        return '<div class="item-editor" data-idx="' + idx + '" data-cat="' + esc(cat) + '" data-slug="' + esc(slug) + '" data-price="' + price + '" data-id="' + esc(item.id||"") + '" style="border:1px solid var(--line);border-radius:8px;padding:12px;margin-bottom:10px">' +
+          '<p style="font-size:13px;font-weight:700;margin-bottom:10px">' + esc(p.name || "Item " + (idx+1)) + '</p>' +
+          '<div class="field-row">' +
+            '<div>' + sizeColorHtml + '</div>' +
+            '<div class="field"><label>Quantity</label><input type="number" class="oe_iQty" value="' + (item.quantity||1) + '" min="1" style="max-width:80px" /></div>' +
+          '</div>' +
+          '<p class="oe_iTotal muted" style="font-size:12px;margin-top:4px">Total: <strong>' + baht(totalAmt) + '</strong></p>' +
+        '</div>';
+      }).join('');
+
+      container.querySelectorAll(".oe_iSize, .oe_iColor, .oe_iQty").forEach(function(el) {
+        el.addEventListener("change", updateItemTotals);
+        el.addEventListener("input", updateItemTotals);
+      });
+    }
+
+    function updateItemTotals() {
+      document.querySelectorAll("#oe_itemsContainer .item-editor").forEach(function(el) {
+        var cat = el.dataset.cat;
+        var slug = el.dataset.slug;
+        var basePrice = parseInt(el.dataset.price, 10) || 0;
+        var qty = parseInt(el.querySelector(".oe_iQty").value, 10) || 1;
+        var sizeEl = el.querySelector(".oe_iSize");
+        var sz = sizeEl ? sizeEl.value : "";
+        if (cat === "jacket") {
+          sz = sizeEl ? sizeEl.value : "";
+        }
+        var surcharge = (SURCHARGE_PRODUCTS.indexOf(slug) >= 0 && SURCHARGE_SIZES.indexOf(sz.split(" / ")[0]) >= 0) ? SURCHARGE_AMOUNT : 0;
+        var unitPrice = basePrice + surcharge;
+        var total = unitPrice * qty;
+        var totalEl = el.querySelector(".oe_iTotal");
+        if (totalEl) totalEl.innerHTML = 'Unit: ฿' + unitPrice + ' × ' + qty + ' = <strong>' + baht(total) + '</strong>';
+      });
+    }
+
+    function collectItems(originalItems) {
+      var items = [];
+      document.querySelectorAll("#oe_itemsContainer .item-editor").forEach(function(el, idx) {
+        var original = originalItems[idx] || originalItems[0];
+        var cat = el.dataset.cat;
+        var slug = el.dataset.slug;
+        var basePrice = parseInt(el.dataset.price, 10) || 0;
+        var qty = Math.max(1, parseInt(el.querySelector(".oe_iQty").value, 10) || 1);
+        var size = "", school = null;
+
+        if (cat === "jacket") {
+          var sz = el.querySelector(".oe_iSize").value;
+          var cl = el.querySelector(".oe_iColor").value;
+          size = sz + " / " + cl;
+        } else if (cat === "headband") {
+          size = "ONE SIZE";
+          school = el.querySelector(".oe_iSchool").value || null;
+        } else {
+          size = el.querySelector(".oe_iSize").value;
+        }
+
+        var sizeForSurcharge = size.split(" / ")[0];
+        var surcharge = (SURCHARGE_PRODUCTS.indexOf(slug) >= 0 && SURCHARGE_SIZES.indexOf(sizeForSurcharge) >= 0) ? SURCHARGE_AMOUNT : 0;
+        var unitPrice = basePrice + surcharge;
+
+        items.push({
+          id: el.dataset.id || (slug + "-" + (idx+1)),
+          product: original.product,
+          size: size,
+          school: school,
+          quantity: qty,
+          unitPrice: unitPrice,
+          totalAmount: unitPrice * qty,
+        });
+      });
+      return items;
+    }
+
+    var editingOrderId = null;
+    var editingOrderItems = [];
+
     function renderOrders() {
       document.querySelector("#ordersBody").innerHTML = allOrders.map(function(order) {
         var c = order.customer || {};
         var p = order.product || {};
+        var isEditing = editingOrderId === order.id;
         var statusBtns = statuses.map(function(s) {
           var label = s === 'shipped' ? 'Ready to Receive' : s.replace(/_/g, ' ');
           var isActive = order.status === s;
@@ -733,7 +952,7 @@ ADMIN_HTML = r"""<!doctype html>
           return sep + '<strong>' + esc(ip.name||"-") + '</strong><br/><span class="muted">Size: ' + esc(item.size||"-") + ' / Qty: ' + esc(item.quantity||0) + '</span>' + schoolLine;
         }).join('');
         var schoolHtml = c.school ? '<br/><span class="muted">' + esc(c.school) + '</span>' : '';
-        return '<tr>' +
+        return '<tr class="' + (isEditing ? 'editing-row' : '') + '">' +
           '<td><input type="checkbox" class="orderCheckbox" data-oid="' + esc(order.id) + '" /></td>' +
           '<td><strong>' + esc(order.id) + '</strong><br/><span class="muted">' + esc(order.createdAt||"") + '</span></td>' +
           '<td><strong>' + esc(c.fullName||"-") + '</strong><br/><span class="muted">' + esc(c.studentCode||"-") + '</span><br/><span class="muted">' + esc(c.phone||"") + '</span></td>' +
@@ -744,6 +963,7 @@ ADMIN_HTML = r"""<!doctype html>
             '<div style="display:flex;gap:4px">' +
               '<button class="ghost slipBtn" data-oid="' + esc(order.id) + '" data-total="' + esc(order.totalAmount||0) + '" style="font-size:12px;min-height:28px;flex:1"' + (order.slip ? "" : " disabled") + '>View Slip</button>' +
               (order.status === 'waiting_confirm' ? '<button class="ok-btn confirmPayBtn" data-oid="' + esc(order.id) + '" style="font-size:12px;min-height:28px;flex:1">Confirm</button>' : '') +
+              '<button class="ghost editOrderBtn" data-oid="' + esc(order.id) + '" style="font-size:12px;min-height:28px;background:' + (isEditing ? '#fef9c3' : '') + ';border-color:' + (isEditing ? '#ca8a04' : '') + '">Edit</button>' +
             '</div>' +
           '</td>' +
         '</tr>';
@@ -751,6 +971,120 @@ ADMIN_HTML = r"""<!doctype html>
       updateBulkBar();
       renderPagination();
     }
+
+    function openOrderEdit(order) {
+      var c = order.customer || {};
+      editingOrderId = order.id;
+      var items = (order.items && order.items.length > 0)
+        ? order.items
+        : [{product: order.product || {}, size: order.size, quantity: order.quantity, school: null, unitPrice: (order.product||{}).price||0, totalAmount: order.totalAmount}];
+      editingOrderItems = items;
+      document.querySelector("#orderEditTitle").textContent = "Edit Order — " + order.id;
+      document.querySelector("#oe_fullName").value = c.fullName || "";
+      document.querySelector("#oe_studentCode").value = c.studentCode || "";
+      document.querySelector("#oe_phone").value = c.phone || "";
+      document.querySelector("#oe_parentPhone").value = c.parentPhone || "";
+      var schoolSel = document.querySelector("#oe_school");
+      schoolSel.value = c.school || "";
+      if (!schoolSel.value && c.school) {
+        var opt = document.createElement("option");
+        opt.value = c.school; opt.textContent = c.school;
+        schoolSel.insertBefore(opt, schoolSel.firstChild);
+        schoolSel.value = c.school;
+      }
+      document.querySelector("#oe_email").value = c.email || "";
+      document.querySelector("#oe_khantokTicket").checked = !!order.khantokTicket;
+      document.querySelector("#oe_khantokClaimed").checked = !!order.khantokTicketAlreadyClaimed;
+      document.querySelector("#oe_khantokValue").value = order.khantokTicketValue != null ? order.khantokTicketValue : "";
+      renderItemEditors(items);
+      var slipPreview = document.querySelector("#oe_slipPreview");
+      slipPreview.innerHTML = order.slip
+        ? '<p style="font-size:12px;color:var(--ok)">✓ Slip uploaded at ' + esc(order.slip.uploadedAt||"") + '</p>'
+        : '<p style="font-size:12px;color:var(--muted)">No slip uploaded</p>';
+      document.querySelector("#oe_slipFile").value = "";
+      document.querySelector("#oe_slipNotice").textContent = "";
+      document.querySelector("#orderEditNotice").textContent = "";
+      document.querySelector("#orderEditModal").classList.add("open");
+      renderOrders();
+    }
+
+    function closeOrderEdit() {
+      editingOrderId = null;
+      editingOrderItems = [];
+      document.querySelector("#orderEditModal").classList.remove("open");
+      renderOrders();
+    }
+
+    document.querySelector("#closeOrderEditBtn").addEventListener("click", closeOrderEdit);
+    document.querySelector("#cancelOrderEditBtn").addEventListener("click", closeOrderEdit);
+    document.querySelector("#orderEditModal").addEventListener("click", function(e) {
+      if (e.target === document.querySelector("#orderEditModal")) closeOrderEdit();
+    });
+
+    document.querySelector("#oe_uploadSlipBtn").addEventListener("click", async function() {
+      var fileInput = document.querySelector("#oe_slipFile");
+      var notice = document.querySelector("#oe_slipNotice");
+      if (!editingOrderId || !fileInput.files || !fileInput.files[0]) {
+        notice.textContent = "Please select a file first";
+        return;
+      }
+      notice.textContent = "Uploading...";
+      var formData = new FormData();
+      formData.append("slip", fileInput.files[0]);
+      try {
+        var res = await fetch("/admin/orders/" + encodeURIComponent(editingOrderId) + "/slip", {
+          method: "POST",
+          headers: { "Authorization": "Bearer " + tokenInput.value.trim() },
+          body: formData,
+        });
+        if (!res.ok) throw new Error(await res.text());
+        var updated = await res.json();
+        notice.style.color = "var(--ok)";
+        notice.textContent = "✓ Slip uploaded successfully";
+        document.querySelector("#oe_slipPreview").innerHTML = updated.slip
+          ? '<p style="font-size:12px;color:var(--ok)">✓ Slip uploaded at ' + esc(updated.slip.uploadedAt||"") + '</p>'
+          : '';
+        fileInput.value = "";
+        var orderIdx = allOrders.findIndex(function(o) { return o.id === editingOrderId; });
+        if (orderIdx >= 0) allOrders[orderIdx] = updated;
+        renderOrders();
+      } catch(e) {
+        notice.style.color = "var(--danger)";
+        notice.textContent = e.message;
+      }
+    });
+
+    document.querySelector("#saveOrderEditBtn").addEventListener("click", async function() {
+      if (!editingOrderId) return;
+      var notice = document.querySelector("#orderEditNotice");
+      notice.textContent = "Saving...";
+      var khantokVal = document.querySelector("#oe_khantokValue").value;
+      var items = collectItems(editingOrderItems);
+      var payload = {
+        fullName: document.querySelector("#oe_fullName").value,
+        studentCode: document.querySelector("#oe_studentCode").value,
+        phone: document.querySelector("#oe_phone").value,
+        parentPhone: document.querySelector("#oe_parentPhone").value,
+        school: document.querySelector("#oe_school").value,
+        email: document.querySelector("#oe_email").value,
+        khantokTicket: document.querySelector("#oe_khantokTicket").checked,
+        khantokTicketAlreadyClaimed: document.querySelector("#oe_khantokClaimed").checked,
+        khantokTicketValue: khantokVal !== "" ? parseInt(khantokVal, 10) : null,
+        items: items,
+      };
+      try {
+        var res = await fetch("/admin/orders/" + encodeURIComponent(editingOrderId), {
+          method: "PATCH", headers: authHeaders(), body: JSON.stringify(payload)
+        });
+        if (!res.ok) throw new Error(await res.text());
+        notice.textContent = "";
+        closeOrderEdit();
+        await loadOrders();
+        setOrdersNotice("Saved — " + editingOrderId);
+      } catch(e) {
+        notice.textContent = e.message;
+      }
+    });
 
     function renderPagination() {
       var el = document.querySelector("#paginationBar");
@@ -861,6 +1195,15 @@ ADMIN_HTML = r"""<!doctype html>
         catch(err) { setOrdersNotice(err.message, true); }
         return;
       }
+      var editOrderBtn = e.target.closest(".editOrderBtn");
+      if (editOrderBtn) {
+        var oid = editOrderBtn.dataset.oid;
+        if (editingOrderId === oid) { closeOrderEdit(); return; }
+        var order = allOrders.find(function(o) { return o.id === oid; });
+        if (order) openOrderEdit(order);
+        return;
+      }
+
       var slipBtn = e.target.closest(".slipBtn");
       if (slipBtn) { viewSlip(slipBtn.dataset.oid, slipBtn.dataset.total).catch(function(err) { setOrdersNotice(err.message, true); }); return; }
 
@@ -2783,6 +3126,76 @@ def update_order_status(
     return serialize_order(row)
 
 
+def update_order_fields(
+    connection: sqlite3.Connection,
+    order_code: str,
+    fields: dict[str, Any],
+) -> dict[str, Any] | None:
+    existing = fetch_order_by_code(connection, order_code)
+    if existing is None:
+        return None
+
+    allowed: dict[str, Any] = {}
+    str_fields = {
+        "fullName": "full_name",
+        "studentCode": "student_code",
+        "phone": "phone",
+        "parentPhone": "parent_phone",
+        "school": "school",
+        "email": "email",
+        "nickname": "nickname",
+    }
+    for key, col in str_fields.items():
+        if key in fields and isinstance(fields[key], str):
+            allowed[col] = fields[key].strip()
+
+    if "khantokTicket" in fields and isinstance(fields["khantokTicket"], bool):
+        allowed["khantok_ticket"] = 1 if fields["khantokTicket"] else 0
+    if "khantokTicketValue" in fields:
+        v = fields["khantokTicketValue"]
+        allowed["khantok_ticket_value"] = int(v) if isinstance(v, (int, float)) and v is not None else None
+    if "khantokTicketAlreadyClaimed" in fields and isinstance(fields["khantokTicketAlreadyClaimed"], bool):
+        allowed["khantok_ticket_already_claimed"] = 1 if fields["khantokTicketAlreadyClaimed"] else 0
+
+    if "items" in fields and isinstance(fields["items"], list) and fields["items"]:
+        raw_items = fields["items"]
+        new_items: list[dict[str, Any]] = []
+        for item in raw_items:
+            if not isinstance(item, dict):
+                continue
+            school = item.get("school")
+            new_items.append({
+                "id": str(item.get("id") or "item"),
+                "product": item.get("product", {}),
+                "size": str(item.get("size") or "").strip(),
+                "school": school if isinstance(school, str) and school.strip() else None,
+                "quantity": max(1, int(item.get("quantity") or 1)),
+                "unitPrice": int(item.get("unitPrice") or 0),
+                "totalAmount": int(item.get("totalAmount") or 0),
+            })
+        if new_items:
+            allowed["items_json"] = json.dumps(new_items, ensure_ascii=False)
+            total = sum(it["totalAmount"] for it in new_items)
+            allowed["total_amount"] = total
+            first = new_items[0]
+            allowed["size"] = first["size"]
+            allowed["quantity"] = first["quantity"]
+
+    if not allowed:
+        return serialize_order(existing)
+
+    allowed["updated_at"] = now_iso()
+    set_clause = ", ".join(f"{col} = ?" for col in allowed)
+    values = list(allowed.values()) + [order_code]
+    connection.execute(f"UPDATE orders SET {set_clause} WHERE order_code = ?", values)
+
+    changed = ", ".join(f"{k}={v!r}" for k, v in fields.items())
+    log_audit(connection, order_code, "order_fields_updated", changed)
+    row = fetch_order_by_code(connection, order_code)
+    assert row is not None
+    return serialize_order(row)
+
+
 def reserve_khantok_ticket(
     connection: sqlite3.Connection, order_id: int, student_code: str
 ) -> tuple[bool, str | None, bool, int | None]:
@@ -3739,6 +4152,40 @@ class OrderRequestHandler(BaseHTTPRequestHandler):
         global _test_warning_until
         path = urlparse(self.path).path
 
+        admin_slip_match = re.fullmatch(r"/admin/orders/([A-Z0-9-]+)/slip", path)
+        if admin_slip_match:
+            if not self._require_admin_authorization():
+                return
+            order_code = admin_slip_match.group(1)
+            with open_db() as connection:
+                existing_order = fetch_order_by_code(connection, order_code)
+                if existing_order is None:
+                    self._send_json(HTTPStatus.NOT_FOUND, {"message": "order not found"})
+                    return
+                previous_slip_stored_name = existing_order["slip_stored_name"]
+                previous_slip_storage_path = existing_order["slip_storage_path"]
+                materialized_slip, error_message = self._read_multipart_slip(order_code)
+                if error_message:
+                    self._send_json(HTTPStatus.BAD_REQUEST, {"message": error_message})
+                    return
+                connection.execute(
+                    """UPDATE orders SET slip_original_name=?, slip_stored_name=?, slip_storage_path=?,
+                       slip_mime_type=?, slip_size=?, slip_uploaded_at=?, updated_at=? WHERE order_code=?""",
+                    (
+                        materialized_slip["originalName"], materialized_slip["storedName"],
+                        materialized_slip["storedPath"], materialized_slip["mimeType"],
+                        int(materialized_slip["size"]), materialized_slip["uploadedAt"],
+                        now_iso(), order_code,
+                    ),
+                )
+                log_audit(connection, order_code, "admin_slip_uploaded", "admin replaced slip")
+                connection.commit()
+                if previous_slip_stored_name and previous_slip_stored_name != materialized_slip["storedName"]:
+                    delete_local_slip_file(previous_slip_stored_name, previous_slip_storage_path)
+                row = fetch_order_by_code(connection, order_code)
+            self._send_json(HTTPStatus.OK, serialize_order(row))
+            return
+
         if path == "/admin/test-warning":
             if not self._require_admin_authorization():
                 return
@@ -3925,6 +4372,27 @@ class OrderRequestHandler(BaseHTTPRequestHandler):
                     return
                 connection.commit()
             sync_order_to_google_sheets(order, "admin_status_updated")
+            self._send_json(HTTPStatus.OK, order)
+            return
+
+        order_edit_match = re.fullmatch(r"/admin/orders/([A-Z0-9-]+)", path)
+        if order_edit_match:
+            if not self._require_admin_authorization():
+                return
+            try:
+                payload = self._read_json()
+            except json.JSONDecodeError:
+                self._send_json(HTTPStatus.BAD_REQUEST, {"message": "invalid json"})
+                return
+            if not isinstance(payload, dict):
+                self._send_json(HTTPStatus.BAD_REQUEST, {"message": "invalid payload"})
+                return
+            with open_db() as connection:
+                order = update_order_fields(connection, order_edit_match.group(1), payload)
+                if order is None:
+                    self._send_json(HTTPStatus.NOT_FOUND, {"message": "order not found"})
+                    return
+                connection.commit()
             self._send_json(HTTPStatus.OK, order)
             return
 
