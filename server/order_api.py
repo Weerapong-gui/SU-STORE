@@ -34,6 +34,7 @@ MAX_PRODUCT_IMAGE_SIZE_BYTES = 10 * 1024 * 1024
 ORDER_PREFIX = os.environ.get("ORDER_PREFIX", "FP28")
 ORDER_ROUND = int(os.environ.get("ORDER_ROUND", "1"))
 ORDER_API_TOKEN = os.environ.get("ORDER_API_TOKEN", "")
+BYPASS_TOKEN = os.environ.get("BYPASS_TOKEN", "")
 GOOGLE_SHEETS_WEBHOOK_URL = os.environ.get("GOOGLE_SHEETS_WEBHOOK_URL", "").strip()
 GOOGLE_SHEETS_WEBHOOK_TOKEN = os.environ.get("GOOGLE_SHEETS_WEBHOOK_TOKEN", "").strip()
 KHANTOK_QUOTA_100 = int(os.environ.get("KHANTOK_QUOTA_100", "2000"))
@@ -416,6 +417,20 @@ ADMIN_HTML = r"""<!doctype html>
           <button id="deactivateBeRightBackBtn" class="secondary" style="min-width:140px;display:none">Deactivate</button>
           <span id="beRightBackStatus" style="font-size:13px;font-weight:600;color:var(--danger);display:none">⚠ Be Right Back is active</span>
           <span id="beRightBackNotice" style="color:var(--muted);font-size:13px"></span>
+        </div>
+      </div>
+      <div class="settings-card" id="previewAccessCard" style="display:none">
+        <h3>Preview Access</h3>
+        <p style="color:var(--muted);font-size:13px;margin:0 0 14px">ลิงก์สำหรับเข้าเว็บได้แม้ตอน maintenance — คลิกเพื่อเปิดหรือ copy ไปแชร์</p>
+        <div style="display:flex;flex-direction:column;gap:10px">
+          <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+            <a id="previewLinkMain" href="#" target="_blank" style="font-size:13px;font-weight:600;color:var(--primary);text-decoration:none;padding:8px 14px;background:var(--surface);border:1px solid var(--border);border-radius:10px;white-space:nowrap">sumfu.store</a>
+            <button onclick="navigator.clipboard.writeText(document.getElementById('previewLinkMain').href).then(()=>this.textContent='Copied!').catch(()=>{}); setTimeout(()=>this.textContent='Copy',1500)" class="secondary" style="padding:8px 14px;font-size:13px">Copy</button>
+          </div>
+          <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+            <a id="previewLinkPreview" href="#" target="_blank" style="font-size:13px;font-weight:600;color:var(--primary);text-decoration:none;padding:8px 14px;background:var(--surface);border:1px solid var(--border);border-radius:10px;white-space:nowrap">store.sumfu.xyz</a>
+            <button onclick="navigator.clipboard.writeText(document.getElementById('previewLinkPreview').href).then(()=>this.textContent='Copied!').catch(()=>{}); setTimeout(()=>this.textContent='Copy',1500)" class="secondary" style="padding:8px 14px;font-size:13px">Copy</button>
+          </div>
         </div>
       </div>
       <div class="settings-card">
@@ -1633,7 +1648,7 @@ ADMIN_HTML = r"""<!doctype html>
 
     async function loadSettings() {
       try {
-        var res = await fetch("/site-settings", { cache: "no-store" });
+        var res = await fetch("/admin/site-settings", { headers: authHeaders(), cache: "no-store" });
         if (!res.ok) throw new Error(await res.text());
         var s = await res.json();
         document.querySelector("#bannerText").value = s.announcementBanner || "";
@@ -1649,6 +1664,12 @@ ADMIN_HTML = r"""<!doctype html>
         renderScheduleStatus(s.scheduleEnabled === true);
         if (s.beRightBackDates != null) document.querySelector("#beRightBackDates").value = s.beRightBackDates || "";
         renderBeRightBack(s.beRightBackActive === true);
+        if (s.bypassToken) {
+          var card = document.querySelector("#previewAccessCard");
+          card.style.display = "";
+          document.querySelector("#previewLinkMain").href = "https://sumfu.store/?token=" + s.bypassToken;
+          document.querySelector("#previewLinkPreview").href = "https://store.sumfu.xyz/?token=" + s.bypassToken;
+        }
         setSettingsNotice("Settings loaded");
         refreshActiveVisitors();
       } catch(e) { setSettingsNotice(e.message, true); }
@@ -3149,13 +3170,49 @@ def update_order_fields(
         if key in fields and isinstance(fields[key], str):
             allowed[col] = fields[key].strip()
 
-    if "khantokTicket" in fields and isinstance(fields["khantokTicket"], bool):
-        allowed["khantok_ticket"] = 1 if fields["khantokTicket"] else 0
-    if "khantokTicketValue" in fields:
-        v = fields["khantokTicketValue"]
-        allowed["khantok_ticket_value"] = int(v) if isinstance(v, (int, float)) and v is not None else None
-    if "khantokTicketAlreadyClaimed" in fields and isinstance(fields["khantokTicketAlreadyClaimed"], bool):
-        allowed["khantok_ticket_already_claimed"] = 1 if fields["khantokTicketAlreadyClaimed"] else 0
+    # Khantok ticket — always sync khantok_ticket_claims together with orders fields
+    khantok_changed = "khantokTicket" in fields and isinstance(fields["khantokTicket"], bool)
+    value_changed = "khantokTicketValue" in fields
+    claimed_changed = "khantokTicketAlreadyClaimed" in fields and isinstance(fields["khantokTicketAlreadyClaimed"], bool)
+
+    if khantok_changed or value_changed or claimed_changed:
+        order_id = existing["internal_id"]
+        old_has_ticket = bool(existing["khantok_ticket"])
+        new_has_ticket = fields["khantokTicket"] if khantok_changed else old_has_ticket
+
+        if khantok_changed:
+            allowed["khantok_ticket"] = 1 if new_has_ticket else 0
+        if claimed_changed:
+            allowed["khantok_ticket_already_claimed"] = 1 if fields["khantokTicketAlreadyClaimed"] else 0
+
+        if not old_has_ticket and new_has_ticket:
+            # Adding ticket: insert claim record so quota is consumed
+            raw_val = fields.get("khantokTicketValue")
+            new_value = int(raw_val) if isinstance(raw_val, (int, float)) and raw_val is not None else 100
+            claimed_at = now_iso()
+            connection.execute(
+                "INSERT OR REPLACE INTO khantok_ticket_claims (order_id, claimed_at, ticket_value) VALUES (?, ?, ?)",
+                (order_id, claimed_at, new_value),
+            )
+            allowed["khantok_ticket_value"] = new_value
+            allowed["khantok_ticket_claimed_at"] = claimed_at
+
+        elif old_has_ticket and not new_has_ticket:
+            # Removing ticket: delete claim record so quota is returned
+            connection.execute("DELETE FROM khantok_ticket_claims WHERE order_id = ?", (order_id,))
+            allowed["khantok_ticket_value"] = None
+            allowed["khantok_ticket_claimed_at"] = None
+
+        elif old_has_ticket and new_has_ticket and value_changed:
+            # Ticket stays but value changed: update the claim record's ticket_value
+            raw_val = fields["khantokTicketValue"]
+            new_value = int(raw_val) if isinstance(raw_val, (int, float)) and raw_val is not None else None
+            if new_value is not None:
+                connection.execute(
+                    "UPDATE khantok_ticket_claims SET ticket_value = ? WHERE order_id = ?",
+                    (new_value, order_id),
+                )
+            allowed["khantok_ticket_value"] = new_value
 
     if "items" in fields and isinstance(fields["items"], list) and fields["items"]:
         raw_items = fields["items"]
@@ -3532,6 +3589,7 @@ def get_site_settings(connection: sqlite3.Connection) -> dict[str, Any]:
         "khantokQuota50": int(settings.get("khantok_quota_50") or KHANTOK_QUOTA_50),
         "beRightBackDates": settings.get("be_right_back_dates", "2026-05-24,2026-05-31,2026-06-07"),
         "beRightBackActive": settings.get("be_right_back_active", "0") == "1",
+        "bypassToken": BYPASS_TOKEN,
     }
 
 
@@ -3985,7 +4043,9 @@ class OrderRequestHandler(BaseHTTPRequestHandler):
 
         if path == "/site-settings":
             with open_db() as connection:
-                self._send_json(HTTPStatus.OK, get_site_settings(connection))
+                data = get_site_settings(connection)
+                data.pop("bypassToken", None)
+                self._send_json(HTTPStatus.OK, data)
             return
 
         if path == "/site-status":
@@ -4085,6 +4145,13 @@ class OrderRequestHandler(BaseHTTPRequestHandler):
                     for row in rows
                 ]
             })
+            return
+
+        if path == "/admin/site-settings":
+            if not self._require_admin_authorization():
+                return
+            with open_db() as connection:
+                self._send_json(HTTPStatus.OK, get_site_settings(connection))
             return
 
         if path == "/admin/backups":

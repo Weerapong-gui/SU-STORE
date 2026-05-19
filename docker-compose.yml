@@ -49,6 +49,7 @@ services:
       ORDER_API_TOKEN: ${ORDER_API_TOKEN:-}
       GOOGLE_SHEETS_WEBHOOK_URL: ${GOOGLE_SHEETS_WEBHOOK_URL:-}
       GOOGLE_SHEETS_WEBHOOK_TOKEN: ${GOOGLE_SHEETS_WEBHOOK_TOKEN:-}
+      BYPASS_TOKEN: ${BYPASS_TOKEN:-}
     volumes:
       - /home/park/SU-STORE/data/order-api:/var/data
     healthcheck:
