@@ -5,8 +5,8 @@ import { useCallback, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useCart } from "@/components/CartProvider";
 import { MobileProductSlider } from "@/components/MobileProductSlider";
-import { SizeGuideModal } from "@/components/SizeGuideModal";
 import { SurchargeToast } from "@/components/SurchargeToast";
+import Image from "next/image";
 import { SCHOOL_OPTIONS, SIZE_OPTIONS } from "@/lib/checkoutOptions";
 import {
   clampCartQuantity,
@@ -74,7 +74,6 @@ export function ProductConfigurator({
   const [selectedSchool, setSelectedSchool] = useState(
     product.category === "headband" ? (defaultSchool ?? "") : ""
   );
-  const [sizeGuideOpen, setSizeGuideOpen] = useState(false);
   const [toastVisible, setToastVisible] = useState(false);
   const [toastKey, setToastKey] = useState(0);
   const surcharge = getSizeSurcharge(product, selectedSize);
@@ -187,6 +186,9 @@ export function ProductConfigurator({
             {product.name}
           </h1>
           <p className="mt-3 text-sm text-zinc-600">{t.products[product.slug]?.description ?? product.description}</p>
+          {product.fabricNote && (
+            <p className="mt-1 text-xs text-zinc-500" translate="no">{product.fabricNote}</p>
+          )}
           <p className="mt-4 text-2xl font-semibold text-apple-blue">{formatPrice(product.price)}</p>
         </div>
 
@@ -237,20 +239,30 @@ export function ProductConfigurator({
           </div>
         )}
 
+        {product.requiresSize && (
+          <div className="overflow-hidden rounded-2xl">
+            <Image
+              src="/images/size guide/Vertical.png"
+              alt="Size guide"
+              width={1350}
+              height={829}
+              className="hidden w-full object-contain md:block landscape:block"
+            />
+            <Image
+              src="/images/size guide/Horizontal.png"
+              alt="Size guide"
+              width={1080}
+              height={1566}
+              className="block w-full object-contain md:hidden landscape:hidden"
+            />
+          </div>
+        )}
+
         <div className="space-y-3">
           <div className="flex items-center justify-between gap-4">
             <p className="text-xs font-semibold tracking-[0.1em] text-zinc-700">
               {product.requiresSize ? "SELECT SIZE" : "SIZE"}
             </p>
-            {product.requiresSize ? (
-              <button
-                type="button"
-                onClick={() => setSizeGuideOpen(true)}
-                className="text-xs font-medium text-apple-blue transition hover:text-apple-blue-dark"
-              >
-                size guide
-              </button>
-            ) : null}
           </div>
 
           {product.requiresSize ? (
@@ -349,7 +361,6 @@ export function ProductConfigurator({
         </div>
       </div>
 
-      <SizeGuideModal open={sizeGuideOpen} onClose={() => setSizeGuideOpen(false)} />
       {product.sizeSurcharge && (
         <SurchargeToast
           visible={toastVisible}
