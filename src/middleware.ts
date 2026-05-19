@@ -12,8 +12,8 @@ const SITE_STATUS_TTL = 15_000; // 15 seconds
 
 const API_BASE = (process.env.ORDER_API_BASE_URL ?? "").replace(/\/$/, "");
 
-// Hosts that bypass the admin site-closed gate and stay open at all times.
-const ALWAYS_OPEN_HOSTS = new Set(["store.sumfu.xyz"]);
+// Set ALWAYS_OPEN=1 in the deployment environment to bypass the site-closed gate.
+const ALWAYS_OPEN = process.env.ALWAYS_OPEN === "1";
 
 function isPageRequest(request: NextRequest): boolean {
   const { pathname } = request.nextUrl;
@@ -61,8 +61,7 @@ export async function middleware(request: NextRequest) {
   }
 
   // ── Site-closed check for page navigations ──────────────────────────────────
-  const host = request.headers.get("host") ?? "";
-  if (request.method === "GET" && isPageRequest(request) && !ALWAYS_OPEN_HOSTS.has(host)) {
+  if (request.method === "GET" && isPageRequest(request) && !ALWAYS_OPEN) {
     // Allow maintenance page itself through
     if (pathname === "/maintenance") {
       return NextResponse.next();
