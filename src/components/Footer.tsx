@@ -9,8 +9,8 @@ export function Footer() {
   const { lang } = useLang();
 
   const contactNote = lang === "th"
-    ? "หากพบปัญหาขัดข้องเกี่ยวกับระบบให้ติดต่อผู้ดูแลระบบ โทร : 0838627000 ปาร์ค"
-    : "For system issues, please contact admin. Tel : 0838627000 Park";
+    ? "หากพบปัญหาขัดข้องเกี่ยวกับระบบให้ติดต่อผู้ดูแลระบบ โทร : 0838627000 ปาร์ค, 0908921420 เก็ต"
+    : "For system issues, please contact admin. Tel : 0838627000 Park, 0908921420 Geth";
 
   return (
     <footer className="bg-surface-dark py-12 md:py-16">

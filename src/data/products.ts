@@ -18,7 +18,8 @@ export const products: Product[] = [
     sizeSurcharge: { sizes: ["2XL", "3XL", "4XL", "5XL", "6XL", "7XL"], amount: 20 },
     category: "single",
     requiresSize: true,
-    requiresSchool: true
+    requiresSchool: true,
+    fabricNote: "ใช้เนื้อผ้า Micro Fresh Star หรือผ้าดาวกระจาย"
   },
   {
     slug: "fresh-jacket",
@@ -37,7 +38,8 @@ export const products: Product[] = [
     sizeSurcharge: { sizes: ["2XL", "3XL", "4XL", "5XL", "6XL", "7XL"], amount: 20 },
     category: "jacket",
     requiresSize: true,
-    requiresSchool: true
+    requiresSchool: true,
+    fabricNote: "ใช้ผ้าทัสลาน เบา กันลม กันละอองน้ำ"
   },
   {
     slug: "fresh-headband",

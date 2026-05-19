@@ -17,4 +17,5 @@ export type Product = {
   requiresSize: boolean;
   requiresSchool: boolean;
   available?: boolean;
+  fabricNote?: string;
 };

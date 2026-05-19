@@ -59,6 +59,9 @@ export function ProductCard({ product }: ProductCardProps) {
           </p>
           <h3 className="text-2xl font-semibold tracking-tight text-ink">{product.name}</h3>
           <p className="text-sm leading-relaxed text-ink-soft">{t.products[product.slug]?.description ?? product.description}</p>
+          {product.fabricNote && (
+            <p className="text-xs text-ink-soft" translate="no">{product.fabricNote}</p>
+          )}
           <p className="pt-2 text-base font-semibold text-apple-blue">
             {formatPrice(product.price)}
           </p>
