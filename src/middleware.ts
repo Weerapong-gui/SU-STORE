@@ -11,9 +11,7 @@ let siteClosedCache = { closed: false, reason: "", beRightBack: false, ts: 0 };
 const SITE_STATUS_TTL = 15_000; // 15 seconds
 
 const API_BASE = (process.env.ORDER_API_BASE_URL ?? "").replace(/\/$/, "");
-
-// Set ALWAYS_OPEN=1 in the deployment environment to bypass the site-closed gate.
-const ALWAYS_OPEN = process.env.ALWAYS_OPEN === "1";
+const BYPASS_TOKEN = process.env.BYPASS_TOKEN ?? "";
 
 function isPageRequest(request: NextRequest): boolean {
   const { pathname } = request.nextUrl;
@@ -60,8 +58,21 @@ export async function middleware(request: NextRequest) {
     return NextResponse.next();
   }
 
+  // ── Bypass token ────────────────────────────────────────────────────────────
+  if (BYPASS_TOKEN && request.method === "GET") {
+    const urlToken = request.nextUrl.searchParams.get("token");
+    if (urlToken === BYPASS_TOKEN) {
+      const url = request.nextUrl.clone();
+      url.searchParams.delete("token");
+      const res = NextResponse.redirect(url);
+      res.cookies.set("bypass_gate", "1", { httpOnly: true, sameSite: "lax", maxAge: 60 * 60 * 24 * 7 });
+      return res;
+    }
+  }
+
   // ── Site-closed check for page navigations ──────────────────────────────────
-  if (request.method === "GET" && isPageRequest(request) && !ALWAYS_OPEN) {
+  const hasBypass = BYPASS_TOKEN && request.cookies.get("bypass_gate")?.value === "1";
+  if (request.method === "GET" && isPageRequest(request) && !hasBypass) {
     // Allow maintenance page itself through
     if (pathname === "/maintenance") {
       return NextResponse.next();
