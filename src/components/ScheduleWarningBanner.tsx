@@ -10,6 +10,7 @@ type SiteStatus = {
   scheduleEnabled?: boolean;
   scheduleWarning?: boolean;
   scheduleWarningMessage?: string;
+  alwaysOpen?: boolean;
 };
 
 /** Bangkok time helpers (UTC+7, no DST) */
@@ -42,6 +43,7 @@ export function ScheduleWarningBanner() {
       if (!res.ok) return;
       const data = (await res.json()) as SiteStatus;
 
+      if (data.alwaysOpen) return;
       if (data.siteClosed) { router.replace("/maintenance?reason=manual"); return; }
       if (data.scheduleClosed) { router.replace("/maintenance?reason=schedule"); return; }
 
