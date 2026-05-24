@@ -3587,7 +3587,7 @@ def create_order(connection: sqlite3.Connection, payload: dict[str, Any]) -> dic
         ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """,
         (
-            ORDER_ROUND,
+            get_current_phase(connection),
             "pending_payment",
             "awaiting_payment",
             now,
