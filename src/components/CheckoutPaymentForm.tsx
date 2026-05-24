@@ -13,7 +13,7 @@ import { formatOrderNumber } from "@/lib/formatOrderNumber";
 import { formatPrice } from "@/lib/formatPrice";
 import { getOrderStatusLabel } from "@/lib/orderStatus";
 import { PAYMENT_ACCOUNT_COPY_VALUE, PAYMENT_ACCOUNT_NUMBER } from "@/lib/paymentDetails";
-import { formatStoredProductSize } from "@/lib/productSizing";
+import { formatStoredProductSize, getSizeSurcharge } from "@/lib/productSizing";
 import { CartItem } from "@/types/cart";
 import { Order, OrderItem } from "@/types/order";
 import { ProductCategory } from "@/types/product";
@@ -127,6 +127,8 @@ export function CheckoutPaymentForm({
       return cartItems.map(createDisplayItemFromCartItem);
     }
 
+    const surcharge = getSizeSurcharge(product, storedSize);
+    const unitPrice = product.price + surcharge;
     return [
       {
         key: product.slug,
@@ -137,8 +139,8 @@ export function CheckoutPaymentForm({
         size: storedSize,
         school: defaultSchool || undefined,
         quantity: defaultSingleQuantity,
-        unitPrice: product.price,
-        totalAmount: product.price * defaultSingleQuantity
+        unitPrice,
+        totalAmount: unitPrice * defaultSingleQuantity
       }
     ];
   }, [cartItems, cartMode, defaultSchool, defaultSingleQuantity, existingOrder, product, storedSize]);

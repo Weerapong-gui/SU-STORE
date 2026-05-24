@@ -16,6 +16,7 @@ import {
 } from "@/lib/remoteOrderApi";
 import { ValidatedOrderInput } from "@/lib/orderValidation";
 import { productToSnapshot } from "@/lib/orderPayload";
+import { getSizeSurcharge } from "@/lib/productSizing";
 import { Order, OrderItem, OrderSlip } from "@/types/order";
 
 const COOKIE_SECRET = process.env.COOKIE_SECRET ?? "";
@@ -125,8 +126,8 @@ function createOrderItems(input: ValidatedOrderInput): OrderItem[] {
       size: item.size,
       school: item.school,
       quantity: item.quantity,
-      unitPrice: item.product.price,
-      totalAmount: item.product.price * item.quantity
+      unitPrice: item.product.price + getSizeSurcharge(item.product, item.size),
+      totalAmount: (item.product.price + getSizeSurcharge(item.product, item.size)) * item.quantity
     };
 
     items.push(orderItem);

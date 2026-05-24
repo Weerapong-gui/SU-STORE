@@ -12,6 +12,7 @@ import os
 import re
 import secrets
 import sqlite3
+import threading
 import urllib.error
 import urllib.request
 from datetime import datetime, timezone, timedelta
@@ -68,6 +69,8 @@ _VISITOR_ACTIVE_SECONDS = 120  # 2 minutes
 
 # In-memory test-warning expiry (timestamp)
 _test_warning_until: float = 0
+
+_global_lock = threading.Lock()
 
 
 def get_schedule_status(schedule_enabled: bool, warning_message: str) -> dict[str, Any]:
@@ -178,6 +181,7 @@ ADMIN_HTML = r"""<!doctype html>
     button.danger-btn { border-color: var(--danger); background: var(--danger); color: #fff; }
     button.ok-btn { border-color: var(--ok); background: var(--ok); color: #fff; }
     button.ghost { background: #fff; }
+    button.active-phase { background: var(--accent); color: #fff; border-color: var(--accent); }
     button:disabled { cursor: not-allowed; opacity: .5; }
     .stats {
       display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
@@ -266,6 +270,13 @@ ADMIN_HTML = r"""<!doctype html>
   <div class="tab-pane active" id="tab-orders">
     <main>
       <div id="orderStats"></div>
+      <div style="display:flex;gap:6px;align-items:center;margin-bottom:12px;flex-wrap:wrap">
+        <span style="font-size:12px;font-weight:700;color:var(--muted);letter-spacing:.08em;text-transform:uppercase;margin-right:4px">Phase</span>
+        <button class="ghost phase-btn active-phase" data-round="0" style="min-height:30px;font-size:12px;padding:4px 12px">All</button>
+        <button class="ghost phase-btn" data-round="1" style="min-height:30px;font-size:12px;padding:4px 12px">Phase 1<span style="font-size:10px;color:var(--muted);margin-left:4px">18–23 พ.ค.</span></button>
+        <button class="ghost phase-btn" data-round="2" style="min-height:30px;font-size:12px;padding:4px 12px">Phase 2<span style="font-size:10px;color:var(--muted);margin-left:4px">25–30 พ.ค.</span></button>
+        <button class="ghost phase-btn" data-round="3" style="min-height:30px;font-size:12px;padding:4px 12px">Phase 3<span style="font-size:10px;color:var(--muted);margin-left:4px">1–7 มิ.ย.</span></button>
+      </div>
       <div class="toolbar">
         <input id="searchInput" type="search" placeholder="Search order, name, school..." />
         <select id="statusFilter">
@@ -596,7 +607,7 @@ ADMIN_HTML = r"""<!doctype html>
 
   <!-- SLIP MODAL -->
   <div class="modal-backdrop" id="slipModal">
-    <div class="modal" style="width:min(620px,100%)">
+    <div class="modal" style="width:min(900px,100%)">
       <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:16px">
         <div>
           <h2 style="margin:0 0 4px" id="slipModalTitle">Slip</h2>
@@ -678,11 +689,27 @@ ADMIN_HTML = r"""<!doctype html>
       <hr style="border:none;border-top:1px solid var(--line);margin:20px 0" />
       <p style="font-size:11px;font-weight:700;color:var(--muted);letter-spacing:.1em;text-transform:uppercase;margin:0 0 10px">Slip</p>
       <div id="oe_slipPreview" style="margin-bottom:10px"></div>
+      <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:10px">
+        <p style="font-size:11px;font-weight:600;color:var(--muted);margin:0;flex:1">Replace main slip</p>
+        <button class="ghost" id="oe_deleteSlipBtn" style="white-space:nowrap;font-size:12px;min-height:28px;color:var(--danger);border-color:var(--danger)">Delete Slip</button>
+      </div>
       <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
         <input id="oe_slipFile" type="file" accept="image/jpeg,image/png,image/webp,application/pdf" style="min-height:0;border:0;padding:0;flex:1" />
         <button class="ghost" id="oe_uploadSlipBtn" style="white-space:nowrap">Upload Slip</button>
       </div>
       <p class="notice err" id="oe_slipNotice" style="margin-top:6px"></p>
+
+      <p style="font-size:11px;font-weight:600;color:var(--muted);margin:14px 0 6px">Additional slips</p>
+      <div id="oe_extraSlipsList" style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:8px"></div>
+      <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+        <input id="oe_extraSlipFile" type="file" accept="image/jpeg,image/png,image/webp,application/pdf" style="min-height:0;border:0;padding:0;flex:1" />
+        <button class="ghost" id="oe_addExtraSlipBtn" style="white-space:nowrap">Add Slip</button>
+      </div>
+      <p class="notice err" id="oe_extraSlipNotice" style="margin-top:6px"></p>
+
+      <hr style="border:none;border-top:1px solid var(--line);margin:20px 0" />
+      <p style="font-size:11px;font-weight:700;color:var(--muted);letter-spacing:.1em;text-transform:uppercase;margin:0 0 10px">Note</p>
+      <textarea id="oe_adminNote" rows="3" placeholder="Admin note (ไม่แสดงให้ลูกค้าเห็น)" style="width:100%;box-sizing:border-box;border:1px solid var(--line);border-radius:8px;padding:8px 10px;font-size:13px;resize:vertical;font-family:inherit;outline:none"></textarea>
 
       <p class="notice err" id="orderEditNotice" style="margin-top:14px"></p>
       <div style="display:flex;gap:10px;justify-content:flex-end;margin-top:16px;position:sticky;bottom:0;background:#fff;padding-top:12px;border-top:1px solid var(--line)">
@@ -772,6 +799,7 @@ ADMIN_HTML = r"""<!doctype html>
     var currentPage = 1;
     var totalPages = 1;
     var totalOrders = 0;
+    var currentRound = 0;
     var searchTimer = null;
 
     function setOrdersNotice(msg, err) {
@@ -1013,12 +1041,41 @@ ADMIN_HTML = r"""<!doctype html>
       document.querySelector("#oe_khantokValue").value = order.khantokTicketValue != null ? order.khantokTicketValue : "";
       renderItemEditors(items);
       var slipPreview = document.querySelector("#oe_slipPreview");
-      slipPreview.innerHTML = order.slip
-        ? '<p style="font-size:12px;color:var(--ok)">✓ Slip uploaded at ' + esc(order.slip.uploadedAt||"") + '</p>'
-        : '<p style="font-size:12px;color:var(--muted)">No slip uploaded</p>';
+      if (order.slip) {
+        slipPreview.innerHTML = '<p style="font-size:12px;color:var(--ok);margin:0 0 6px">✓ Slip uploaded at ' + esc(order.slip.uploadedAt||"") + '</p>' +
+          '<div id="oe_mainSlipThumb" style="display:flex;align-items:flex-start;gap:8px">' +
+            '<img src="" alt="slip" style="max-width:120px;max-height:120px;border-radius:6px;border:1px solid var(--line);object-fit:contain;display:none" />' +
+            '<span style="font-size:12px;color:var(--muted)">Loading...</span>' +
+          '</div>';
+        (function(ordId) {
+          fetch("/admin/orders/" + encodeURIComponent(ordId) + "/slip", { headers: authHeaders() })
+            .then(function(r) { return r.blob(); })
+            .then(function(blob) {
+              var thumb = document.querySelector("#oe_mainSlipThumb");
+              if (!thumb) return;
+              if (blob.type === "application/pdf") {
+                thumb.innerHTML = '<span style="font-size:12px;color:var(--muted)">📄 PDF slip</span>';
+              } else {
+                var url = URL.createObjectURL(blob);
+                var img = thumb.querySelector("img");
+                var span = thumb.querySelector("span");
+                img.src = url; img.style.display = ""; if (span) span.remove();
+              }
+            }).catch(function() {
+              var thumb = document.querySelector("#oe_mainSlipThumb");
+              if (thumb) thumb.innerHTML = '<span style="font-size:12px;color:var(--muted)">Could not load preview</span>';
+            });
+        })(editingOrderId);
+      } else {
+        slipPreview.innerHTML = '<p style="font-size:12px;color:var(--muted)">No slip uploaded</p>';
+      }
       document.querySelector("#oe_slipFile").value = "";
       document.querySelector("#oe_slipNotice").textContent = "";
+      document.querySelector("#oe_extraSlipFile").value = "";
+      document.querySelector("#oe_extraSlipNotice").textContent = "";
+      document.querySelector("#oe_adminNote").value = order.adminNote || "";
       document.querySelector("#orderEditNotice").textContent = "";
+      loadExtraSlips(editingOrderId);
       document.querySelector("#orderEditModal").classList.add("open");
       renderOrders();
     }
@@ -1056,9 +1113,19 @@ ADMIN_HTML = r"""<!doctype html>
         var updated = await res.json();
         notice.style.color = "var(--ok)";
         notice.textContent = "✓ Slip uploaded successfully";
-        document.querySelector("#oe_slipPreview").innerHTML = updated.slip
-          ? '<p style="font-size:12px;color:var(--ok)">✓ Slip uploaded at ' + esc(updated.slip.uploadedAt||"") + '</p>'
-          : '';
+        var slipPreview = document.querySelector("#oe_slipPreview");
+        if (updated.slip) {
+          slipPreview.innerHTML = '<p style="font-size:12px;color:var(--ok);margin:0 0 6px">✓ Slip uploaded at ' + esc(updated.slip.uploadedAt||"") + '</p>' +
+            '<div id="oe_mainSlipThumb"><span style="font-size:12px;color:var(--muted)">Loading...</span></div>';
+          fetch("/admin/orders/" + encodeURIComponent(editingOrderId) + "/slip", { headers: authHeaders() })
+            .then(function(r2) { return r2.blob(); })
+            .then(function(blob) {
+              var thumb = document.querySelector("#oe_mainSlipThumb");
+              if (!thumb) return;
+              if (blob.type === "application/pdf") { thumb.innerHTML = '<span style="font-size:12px;color:var(--muted)">📄 PDF slip</span>'; }
+              else { var u = URL.createObjectURL(blob); thumb.innerHTML = '<img src="' + u + '" style="max-width:120px;max-height:120px;border-radius:6px;border:1px solid var(--line);object-fit:contain" />'; }
+            }).catch(function(){});
+        } else { slipPreview.innerHTML = ''; }
         fileInput.value = "";
         var orderIdx = allOrders.findIndex(function(o) { return o.id === editingOrderId; });
         if (orderIdx >= 0) allOrders[orderIdx] = updated;
@@ -1066,6 +1133,112 @@ ADMIN_HTML = r"""<!doctype html>
       } catch(e) {
         notice.style.color = "var(--danger)";
         notice.textContent = e.message;
+      }
+    });
+
+    document.querySelector("#oe_deleteSlipBtn").addEventListener("click", async function() {
+      if (!editingOrderId) return;
+      if (!confirm("ลบ slip หลักของออเดอร์นี้?")) return;
+      var notice = document.querySelector("#oe_slipNotice");
+      notice.style.color = "var(--muted)"; notice.textContent = "Deleting...";
+      try {
+        var res = await fetch("/admin/orders/" + encodeURIComponent(editingOrderId) + "/slip", {
+          method: "DELETE", headers: authHeaders()
+        });
+        if (!res.ok) throw new Error(await res.text());
+        var updated = await res.json();
+        notice.style.color = "var(--ok)"; notice.textContent = "✓ Slip deleted";
+        document.querySelector("#oe_slipPreview").innerHTML = '<p style="font-size:12px;color:var(--muted)">No slip uploaded</p>';
+        var orderIdx = allOrders.findIndex(function(o) { return o.id === editingOrderId; });
+        if (orderIdx >= 0) allOrders[orderIdx] = updated;
+        renderOrders();
+      } catch(e) {
+        notice.style.color = "var(--danger)"; notice.textContent = e.message;
+      }
+    });
+
+    function renderExtraSlip(slip, container) {
+      var div = document.createElement("div");
+      div.style.cssText = "position:relative;display:inline-flex;flex-direction:column;align-items:center;gap:4px";
+      div.dataset.slipId = slip.id;
+      var isPdf = (slip.mimeType || "").includes("pdf");
+      if (isPdf) {
+        var pd = document.createElement("div");
+        pd.style.cssText = "width:80px;height:80px;border-radius:6px;border:1px solid var(--line);display:flex;align-items:center;justify-content:center;font-size:24px;background:#f7f7f9";
+        pd.textContent = "📄"; div.appendChild(pd);
+      } else {
+        var img = document.createElement("img");
+        img.src = slip.url + "?t=" + Date.now();
+        img.style.cssText = "width:80px;height:80px;border-radius:6px;border:1px solid var(--line);object-fit:cover";
+        img.setAttribute("data-auth-needed", "1");
+        div.appendChild(img);
+        fetch(slip.url, { headers: authHeaders() }).then(function(r) { return r.blob(); }).then(function(b) {
+          img.src = URL.createObjectURL(b);
+        }).catch(function(){});
+      }
+      var label = document.createElement("span");
+      label.style.cssText = "font-size:10px;color:var(--muted);max-width:80px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;text-align:center";
+      label.textContent = slip.originalName || ("slip " + slip.id);
+      div.appendChild(label);
+      var delBtn = document.createElement("button");
+      delBtn.style.cssText = "position:absolute;top:-6px;right:-6px;width:20px;height:20px;border-radius:50%;border:none;background:#ef4444;color:#fff;font-size:12px;line-height:1;cursor:pointer;padding:0;display:flex;align-items:center;justify-content:center";
+      delBtn.textContent = "×";
+      delBtn.addEventListener("click", async function() {
+        if (!confirm("Delete this extra slip?")) return;
+        try {
+          var r = await fetch("/admin/orders/" + encodeURIComponent(editingOrderId) + "/extra-slips/" + slip.id, {
+            method: "DELETE", headers: authHeaders()
+          });
+          if (!r.ok) throw new Error(await r.text());
+          div.remove();
+        } catch(e) { alert("Delete failed: " + e.message); }
+      });
+      div.appendChild(delBtn);
+      container.appendChild(div);
+    }
+
+    async function loadExtraSlips(orderId) {
+      var container = document.querySelector("#oe_extraSlipsList");
+      if (!container) return;
+      container.innerHTML = '<span style="font-size:12px;color:var(--muted)">Loading...</span>';
+      try {
+        var r = await fetch("/admin/orders/" + encodeURIComponent(orderId) + "/extra-slips", { headers: authHeaders() });
+        if (!r.ok) throw new Error(await r.text());
+        var slips = await r.json();
+        container.innerHTML = "";
+        if (!slips.length) {
+          container.innerHTML = '<span style="font-size:12px;color:var(--muted)">No additional slips</span>';
+        } else {
+          slips.forEach(function(s) { renderExtraSlip(s, container); });
+        }
+      } catch(e) {
+        container.innerHTML = '<span style="font-size:12px;color:var(--danger)">' + esc(e.message) + '</span>';
+      }
+    }
+
+    document.querySelector("#oe_addExtraSlipBtn").addEventListener("click", async function() {
+      var fileInput = document.querySelector("#oe_extraSlipFile");
+      var notice = document.querySelector("#oe_extraSlipNotice");
+      if (!editingOrderId || !fileInput.files || !fileInput.files[0]) {
+        notice.textContent = "Please select a file first"; return;
+      }
+      notice.style.color = "var(--muted)"; notice.textContent = "Uploading...";
+      var formData = new FormData();
+      formData.append("slip", fileInput.files[0]);
+      try {
+        var res = await fetch("/admin/orders/" + encodeURIComponent(editingOrderId) + "/extra-slips", {
+          method: "POST", headers: { "Authorization": "Bearer " + tokenInput.value.trim() }, body: formData
+        });
+        if (!res.ok) throw new Error(await res.text());
+        var slip = await res.json();
+        var container = document.querySelector("#oe_extraSlipsList");
+        var emptyMsg = container.querySelector("span");
+        if (emptyMsg) emptyMsg.remove();
+        renderExtraSlip(slip, container);
+        notice.style.color = "var(--ok)"; notice.textContent = "✓ Slip added";
+        fileInput.value = "";
+      } catch(e) {
+        notice.style.color = "var(--danger)"; notice.textContent = e.message;
       }
     });
 
@@ -1086,6 +1259,7 @@ ADMIN_HTML = r"""<!doctype html>
         khantokTicketAlreadyClaimed: document.querySelector("#oe_khantokClaimed").checked,
         khantokTicketValue: khantokVal !== "" ? parseInt(khantokVal, 10) : null,
         items: items,
+        adminNote: document.querySelector("#oe_adminNote").value,
       };
       try {
         var res = await fetch("/admin/orders/" + encodeURIComponent(editingOrderId), {
@@ -1132,6 +1306,7 @@ ADMIN_HTML = r"""<!doctype html>
       var url = "/admin/orders?page=" + currentPage + "&per_page=50";
       if (search) url += "&search=" + encodeURIComponent(search);
       if (statusF) url += "&status=" + encodeURIComponent(statusF);
+      if (currentRound > 0) url += "&round=" + currentRound;
       try {
         var res = await fetch(url, { headers: authHeaders(), cache: "no-store" });
         if (!res.ok) throw new Error(await res.text());
@@ -1161,30 +1336,83 @@ ADMIN_HTML = r"""<!doctype html>
       content.innerHTML = '<p style="color:var(--muted);text-align:center;padding:24px">Loading...</p>';
       modal.classList.add("open");
       try {
-        var res = await fetch("/admin/orders/" + encodeURIComponent(orderId) + "/slip", {
-          headers: { "Authorization": "Bearer " + tokenInput.value.trim() }
-        });
-        if (!res.ok) throw new Error(await res.text());
-        var blob = await res.blob();
+        var authHeaders = { "Authorization": "Bearer " + tokenInput.value.trim() };
+        var results = await Promise.all([
+          fetch("/admin/orders/" + encodeURIComponent(orderId) + "/slip", { headers: authHeaders }),
+          fetch("/admin/orders/" + encodeURIComponent(orderId) + "/slip-check", { headers: authHeaders }).catch(function() { return null; })
+        ]);
+        var slipRes = results[0], ocrRes = results[1];
+        if (!slipRes.ok) throw new Error(await slipRes.text());
+        var blob = await slipRes.blob();
         var url = URL.createObjectURL(blob);
-        if (blob.type === "application/pdf") {
-          content.innerHTML = '<iframe src="' + url + '" style="width:100%;height:500px;border:0;border-radius:8px"></iframe>';
-        } else {
-          content.innerHTML = '<img src="' + url + '" style="max-width:100%;border-radius:8px" />';
-        }
+        var slipHtml = blob.type === "application/pdf"
+          ? '<iframe src="' + url + '" style="width:100%;height:500px;border:0;border-radius:8px"></iframe>'
+          : '<img src="' + url + '" style="max-width:100%;border-radius:8px" />';
         setTimeout(function() { URL.revokeObjectURL(url); }, 120000);
+
+        var ocrHtml = '';
+        if (ocrRes && ocrRes.ok) {
+          var ocr = await ocrRes.json();
+          var statusColors = { approved: 'var(--ok)', duplicate: 'var(--warn)', rejected: 'var(--danger)', amount_mismatch: 'var(--warn)', error: 'var(--danger)', pending: 'var(--muted)', skipped: 'var(--muted)' };
+          var statusLabels = { approved: '✓ ผ่าน', duplicate: '⚠ สลิปซ้ำ', rejected: '✗ ไม่ใช่สลิป', amount_mismatch: '⚠ เงินไม่ตรง', error: '! OCR Error', pending: '⏳ กำลังตรวจ...', skipped: '— ข้าม (PDF)' };
+          var sc = statusColors[ocr.status] || 'var(--muted)';
+          var sl = statusLabels[ocr.status] || ocr.status;
+          ocrHtml = '<div style="border:1px solid var(--line);border-radius:10px;padding:16px;font-size:13px">'
+            + '<div style="font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.08em;margin-bottom:10px">OCR Result</div>'
+            + '<div style="font-weight:700;color:' + sc + ';font-size:15px;margin-bottom:12px">' + sl + '</div>';
+          if (ocr.ref_number) ocrHtml += '<div style="margin-bottom:8px"><div style="color:var(--muted);font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.06em">Ref No.</div><div style="word-break:break-all;font-weight:600;margin-top:2px">' + esc(ocr.ref_number) + '</div></div>';
+          if (ocr.amount != null) ocrHtml += '<div style="margin-bottom:8px"><div style="color:var(--muted);font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.06em">Amount</div><div style="font-weight:700;color:var(--accent);margin-top:2px">' + baht(ocr.amount) + '</div></div>';
+          if (ocr.bank) ocrHtml += '<div style="margin-bottom:8px"><div style="color:var(--muted);font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.06em">Bank</div><div style="font-weight:600;margin-top:2px">' + esc(ocr.bank) + '</div></div>';
+          if (ocr.sender) ocrHtml += '<div style="margin-bottom:8px"><div style="color:var(--muted);font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.06em">Sender</div><div style="margin-top:2px">' + esc(ocr.sender) + '</div></div>';
+          if (ocr.date) ocrHtml += '<div style="margin-bottom:8px"><div style="color:var(--muted);font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.06em">Date</div><div style="margin-top:2px">' + esc(ocr.date) + '</div></div>';
+          if (ocr.duplicate_of) {
+            ocrHtml += '<div style="margin-top:12px;padding:12px;background:#fff7ed;border-radius:8px;border:1px solid #fed7aa">'
+              + '<div style="font-weight:700;color:var(--warn);margin-bottom:4px">⚠ ซ้ำกับออเดอร์ ' + esc(ocr.duplicate_of) + '</div>'
+              + '<div style="font-size:12px;color:var(--muted)">ref number นี้เคยใช้ในออเดอร์อื่นแล้ว กรุณาตรวจสอบก่อนอนุมัติ</div>'
+              + '</div>';
+          }
+          if (ocr.raw_reason && ocr.status !== 'approved') ocrHtml += '<div style="margin-top:8px;font-size:12px;color:var(--muted)">' + esc(ocr.raw_reason) + '</div>';
+          if (ocr.checked_at) ocrHtml += '<div style="margin-top:12px;padding-top:10px;border-top:1px solid var(--line);font-size:11px;color:var(--muted)">ตรวจเมื่อ ' + esc(ocr.checked_at.slice(0,16).replace("T"," ")) + '</div>';
+          ocrHtml += '</div>';
+        } else {
+          ocrHtml = '<div style="border:1px solid var(--line);border-radius:10px;padding:16px;font-size:13px;color:var(--muted);text-align:center">ยังไม่มีข้อมูล OCR</div>';
+        }
+
+        content.innerHTML = '<div style="display:grid;grid-template-columns:1fr 280px;gap:16px;align-items:start">'
+          + '<div>' + slipHtml + '</div>'
+          + '<div>' + ocrHtml + '</div>'
+          + '</div>';
       } catch(e) {
         content.innerHTML = '<p style="color:var(--danger);text-align:center">' + esc(e.message) + '</p>';
       }
     }
 
     document.querySelector("#refreshOrdersBtn").addEventListener("click", function() { currentPage = 1; loadOrders().catch(function(e) { setOrdersNotice(e.message, true); }); });
-    document.querySelector("#exportCsvBtn").addEventListener("click", function() {
-      var url = "/admin/orders/export.csv";
-      var a = document.createElement("a");
-      a.href = url;
-      a.download = "orders-" + new Date().toISOString().slice(0,10) + ".csv";
-      a.click();
+
+    document.querySelectorAll(".phase-btn").forEach(function(btn) {
+      btn.addEventListener("click", function() {
+        currentRound = parseInt(this.dataset.round, 10) || 0;
+        document.querySelectorAll(".phase-btn").forEach(function(b) { b.classList.remove("active-phase"); });
+        this.classList.add("active-phase");
+        currentPage = 1;
+        loadOrders().catch(function(e) { setOrdersNotice(e.message, true); });
+      });
+    });
+    document.querySelector("#exportCsvBtn").addEventListener("click", async function() {
+      try {
+        var res = await fetch("/admin/orders/export.csv", { headers: { "Authorization": "Bearer " + tokenInput.value.trim() } });
+        if (!res.ok) { alert("Export failed: " + res.status); return; }
+        var arrayBuf = await res.arrayBuffer();
+        var blob = new Blob([arrayBuf], { type: "text/csv;charset=utf-8" });
+        var blobUrl = URL.createObjectURL(blob);
+        var a = document.createElement("a");
+        a.href = blobUrl;
+        a.download = "orders-" + new Date().toISOString().slice(0,10) + ".csv";
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        setTimeout(function() { URL.revokeObjectURL(blobUrl); }, 5000);
+      } catch(e) { alert("Export error: " + e.message); }
     });
     document.querySelector("#searchInput").addEventListener("input", function() {
       clearTimeout(searchTimer);
@@ -1276,7 +1504,8 @@ ADMIN_HTML = r"""<!doctype html>
       content.innerHTML = '<p style="color:var(--muted);text-align:center;padding:24px">Loading...</p>';
       modal.classList.add("open");
       try {
-        var res = await fetch("/admin/product-breakdown?category=" + encodeURIComponent(category), { headers: authHeaders(), cache: "no-store" });
+        var breakdownUrl = "/admin/product-breakdown?category=" + encodeURIComponent(category) + (currentRound > 0 ? "&round=" + currentRound : "");
+        var res = await fetch(breakdownUrl, { headers: authHeaders(), cache: "no-store" });
         if (!res.ok) throw new Error(await res.text());
         var data = await res.json();
 
@@ -2473,6 +2702,8 @@ def ensure_db() -> None:
           connection.execute("ALTER TABLE orders ADD COLUMN parent_phone TEXT NOT NULL DEFAULT ''")
       if "items_json" not in columns:
           connection.execute("ALTER TABLE orders ADD COLUMN items_json TEXT NOT NULL DEFAULT '[]'")
+      if "admin_note" not in columns:
+          connection.execute("ALTER TABLE orders ADD COLUMN admin_note TEXT")
       existing_rows = connection.execute(
           "SELECT internal_id FROM orders WHERE access_token IS NULL OR access_token = ''"
       ).fetchall()
@@ -2553,6 +2784,39 @@ def ensure_db() -> None:
       )
       connection.execute("CREATE INDEX IF NOT EXISTS idx_audit_order_code ON order_audit_log(order_code)")
       connection.execute("CREATE INDEX IF NOT EXISTS idx_audit_created_at ON order_audit_log(created_at)")
+      connection.execute(
+          """
+          CREATE TABLE IF NOT EXISTS slip_ocr_results (
+              id           INTEGER PRIMARY KEY AUTOINCREMENT,
+              order_code   TEXT UNIQUE NOT NULL,
+              status       TEXT NOT NULL DEFAULT 'pending',
+              ref_number   TEXT,
+              amount       REAL,
+              date         TEXT,
+              sender       TEXT,
+              bank         TEXT,
+              duplicate_of TEXT,
+              raw_reason   TEXT,
+              checked_at   TEXT
+          )
+          """
+      )
+      connection.execute("CREATE INDEX IF NOT EXISTS idx_ocr_ref ON slip_ocr_results(ref_number)")
+      connection.execute(
+          """
+          CREATE TABLE IF NOT EXISTS order_extra_slips (
+              id           INTEGER PRIMARY KEY AUTOINCREMENT,
+              order_code   TEXT NOT NULL,
+              original_name TEXT,
+              stored_name  TEXT NOT NULL,
+              storage_path TEXT,
+              mime_type    TEXT,
+              file_size    INTEGER,
+              uploaded_at  TEXT NOT NULL
+          )
+          """
+      )
+      connection.execute("CREATE INDEX IF NOT EXISTS idx_extra_slips_order_code ON order_extra_slips(order_code)")
       connection.execute(
           """
           CREATE TABLE IF NOT EXISTS order_backups (
@@ -2822,6 +3086,7 @@ def serialize_order(row: sqlite3.Row, include_access_token: bool = False) -> dic
             "parentPhone": row["parent_phone"] or "",
         },
         "slip": slip,
+        "adminNote": row["admin_note"] if "admin_note" in row_keys else None,
     }
     if include_access_token:
         payload["accessToken"] = row["access_token"]
@@ -3040,9 +3305,13 @@ def list_orders(
     per_page: int = 50,
     search: str = "",
     status_filter: str = "",
+    round_filter: int = 0,
 ) -> tuple[list[dict[str, Any]], int]:
     conditions: list[str] = []
     params: list[Any] = []
+    if round_filter > 0:
+        conditions.append("round_number = ?")
+        params.append(round_filter)
     if status_filter:
         conditions.append("status = ?")
         params.append(status_filter)
@@ -3063,11 +3332,13 @@ def list_orders(
     return [serialize_order(row) for row in rows], total
 
 
-def create_orders_summary(connection: sqlite3.Connection) -> dict[str, int]:
+def create_orders_summary(connection: sqlite3.Connection, round_filter: int = 0) -> dict[str, int]:
     settings_rows = connection.execute("SELECT key, value FROM site_settings WHERE key IN ('khantok_quota_100','khantok_quota_50')").fetchall()
     settings_map = {row["key"]: row["value"] for row in settings_rows}
     quota_100 = int(settings_map.get("khantok_quota_100") or KHANTOK_QUOTA_100)
     quota_50 = int(settings_map.get("khantok_quota_50") or KHANTOK_QUOTA_50)
+    round_where = "AND round_number = ?" if round_filter > 0 else ""
+    round_params: list[Any] = [round_filter] if round_filter > 0 else []
     used_100 = int(connection.execute(
         "SELECT COUNT(*) AS c FROM khantok_ticket_claims WHERE ticket_value = 100"
     ).fetchone()["c"])
@@ -3077,15 +3348,17 @@ def create_orders_summary(connection: sqlite3.Connection) -> dict[str, int]:
     counts = {
         row["status"]: row["cnt"]
         for row in connection.execute(
-            "SELECT status, COUNT(*) AS cnt FROM orders GROUP BY status"
+            f"SELECT status, COUNT(*) AS cnt FROM orders WHERE 1=1 {round_where} GROUP BY status",
+            round_params,
         ).fetchall()
     }
-    total_row = connection.execute("SELECT COUNT(*) AS cnt FROM orders").fetchone()
+    total_row = connection.execute(f"SELECT COUNT(*) AS cnt FROM orders WHERE 1=1 {round_where}", round_params).fetchone()
     # Count per-category qty from items_json so multi-item orders are fully counted
     # Exclude rejected and cancelled orders from product quantity totals
     category_counts: dict[str, int] = {}
     for row in connection.execute(
-        "SELECT items_json, product_category, quantity FROM orders WHERE status NOT IN ('rejected', 'cancelled')"
+        f"SELECT items_json, product_category, quantity FROM orders WHERE status NOT IN ('rejected', 'cancelled') {round_where}",
+        round_params,
     ).fetchall():
         counted = False
         if row["items_json"]:
@@ -3169,6 +3442,10 @@ def update_order_fields(
     for key, col in str_fields.items():
         if key in fields and isinstance(fields[key], str):
             allowed[col] = fields[key].strip()
+
+    if "adminNote" in fields:
+        note = fields["adminNote"]
+        allowed["admin_note"] = note.strip() if isinstance(note, str) else None
 
     # Khantok ticket — always sync khantok_ticket_claims together with orders fields
     khantok_changed = "khantokTicket" in fields and isinstance(fields["khantokTicket"], bool)
@@ -3476,6 +3753,89 @@ def update_order_slip(connection: sqlite3.Connection, order_code: str, slip: dic
     return serialize_order(row)
 
 
+# ── Slip OCR ──────────────────────────────────────────────────────────────────
+
+def _run_ocr_for_slip(order_code: str, slip_path: str, expected_amount: float | None) -> None:
+    try:
+        with open_db() as conn:
+            conn.execute(
+                "INSERT OR REPLACE INTO slip_ocr_results (order_code, status, checked_at) VALUES (?, 'pending', ?)",
+                (order_code, now_iso()),
+            )
+            conn.commit()
+
+        if slip_path.lower().endswith(".pdf"):
+            with open_db() as conn:
+                conn.execute(
+                    "UPDATE slip_ocr_results SET status='skipped', raw_reason='PDF ไม่รองรับ OCR', checked_at=? WHERE order_code=?",
+                    (now_iso(), order_code),
+                )
+                conn.commit()
+            return
+
+        import ocr as _ocr
+        data = _ocr.extract_slip_data(slip_path)
+
+        status = "rejected"
+        raw_reason: str | None = None
+        duplicate_of: str | None = None
+        ref = data.get("ref_number")
+        amount = data.get("amount")
+
+        if not data.get("is_slip"):
+            raw_reason = "ไม่พบข้อมูลสลิปในรูปภาพ"
+        elif not ref:
+            raw_reason = "ไม่พบเลขที่รายการในสลิป"
+        else:
+            with open_db() as conn:
+                dup_row = conn.execute(
+                    "SELECT order_code FROM slip_ocr_results WHERE ref_number = ? AND order_code != ? AND status NOT IN ('rejected','error','skipped','pending')",
+                    (ref, order_code),
+                ).fetchone()
+            if dup_row:
+                status = "duplicate"
+                duplicate_of = dup_row["order_code"]
+                raw_reason = f"ref ซ้ำกับออเดอร์ {duplicate_of}"
+            elif expected_amount is not None and amount is not None and abs(amount - expected_amount) > 0.5:
+                status = "amount_mismatch"
+                raw_reason = f"จำนวนเงินไม่ตรง (สลิป: {amount:.2f}, ออเดอร์: {expected_amount:.2f})"
+            else:
+                status = "approved"
+
+        with open_db() as conn:
+            conn.execute(
+                """UPDATE slip_ocr_results
+                   SET status=?, ref_number=?, amount=?, date=?, sender=?, bank=?,
+                       duplicate_of=?, raw_reason=?, checked_at=?
+                   WHERE order_code=?""",
+                (status, ref, amount, data.get("date"), data.get("sender"), data.get("bank"),
+                 duplicate_of, raw_reason, now_iso(), order_code),
+            )
+            log_audit(conn, order_code, "slip_ocr_checked",
+                      f"status={status}" + (f" ref={ref}" if ref else ""))
+            conn.commit()
+    except Exception as exc:
+        try:
+            with open_db() as conn:
+                conn.execute(
+                    "UPDATE slip_ocr_results SET status='error', raw_reason=?, checked_at=? WHERE order_code=?",
+                    (str(exc)[:300], now_iso(), order_code),
+                )
+                conn.commit()
+        except Exception:
+            pass
+
+
+def trigger_ocr_async(order_code: str, slip_path: str | None, expected_amount: float | None = None) -> None:
+    if not slip_path:
+        return
+    threading.Thread(
+        target=_run_ocr_for_slip,
+        args=(order_code, slip_path, expected_amount),
+        daemon=True,
+    ).start()
+
+
 # ── Product management ────────────────────────────────────────────────────────
 
 def serialize_product(row: sqlite3.Row) -> dict[str, Any]:
@@ -3605,17 +3965,19 @@ def upsert_site_setting(connection: sqlite3.Connection, key: str, value: str) ->
 
 # ── CSV export ────────────────────────────────────────────────────────────────
 
-def export_orders_csv(orders: list[dict[str, Any]]) -> str:
+def export_orders_csv(orders: list[dict[str, Any]], ocr_map: dict[str, dict] | None = None) -> str:
     output = io.StringIO()
     writer = csv.writer(output)
     writer.writerow([
         "order_id", "status", "payment_status", "total_amount", "size", "quantity",
         "created_at", "full_name", "student_code", "phone", "email", "school", "parent_phone",
         "product_name", "product_category", "khantok_ticket",
+        "ocr_status", "ocr_ref",
     ])
     for order in orders:
         c = order.get("customer") or {}
         p = order.get("product") or {}
+        ocr = (ocr_map or {}).get(order.get("id", ""), {})
         writer.writerow([
             order.get("id", ""),
             order.get("status", ""),
@@ -3633,6 +3995,8 @@ def export_orders_csv(orders: list[dict[str, Any]]) -> str:
             p.get("name", ""),
             p.get("category", ""),
             "yes" if order.get("khantokTicket") else "no",
+            ocr.get("status", ""),
+            ocr.get("ref_number", ""),
         ])
     return output.getvalue()
 
@@ -3683,15 +4047,17 @@ def delete_backup(connection: sqlite3.Connection, backup_id: int) -> bool:
     return result.rowcount > 0
 
 
-def get_product_breakdown(connection: sqlite3.Connection, category: str) -> dict[str, Any]:
+def get_product_breakdown(connection: sqlite3.Connection, category: str, round_filter: int = 0) -> dict[str, Any]:
     SIZE_ORDER = ["XS", "S", "M", "L", "XL", "2XL", "3XL", "4XL", "5XL", "6XL", "7XL"]
     COLOR_ORDER = ["Blue", "Red", "White"]
     COLOR_THAI = {"Blue": "สีน้ำเงิน", "Red": "สีแดง", "White": "สีขาว"}
+    rw = "WHERE round_number = ?" if round_filter > 0 else ""
+    rp: list[Any] = [round_filter] if round_filter > 0 else []
 
     if category == "jacket":
         # color → size → count
         color_size: dict[str, dict[str, int]] = {}
-        for row in connection.execute("SELECT items_json, product_category, size, quantity FROM orders").fetchall():
+        for row in connection.execute(f"SELECT items_json, product_category, size, quantity FROM orders {rw}", rp).fetchall():
             items_processed = False
             if row["items_json"]:
                 try:
@@ -3736,7 +4102,7 @@ def get_product_breakdown(connection: sqlite3.Connection, category: str) -> dict
 
     # single / headband — flat rows
     counts: dict[str, int] = {}
-    for row in connection.execute("SELECT items_json, product_category, size, quantity FROM orders").fetchall():
+    for row in connection.execute(f"SELECT items_json, product_category, size, quantity FROM orders {rw}", rp).fetchall():
         items_processed = False
         if row["items_json"]:
             try:
@@ -4000,9 +4366,10 @@ class OrderRequestHandler(BaseHTTPRequestHandler):
             per_page = min(max(1, int((qs.get("per_page") or ["50"])[0])), 200)
             search = (qs.get("search") or [""])[0].strip()
             status_f = (qs.get("status") or [""])[0].strip()
+            round_f = int((qs.get("round") or ["0"])[0]) if (qs.get("round") or ["0"])[0].isdigit() else 0
             with open_db() as connection:
-                orders, total = list_orders(connection, page=page, per_page=per_page, search=search, status_filter=status_f)
-                summary = create_orders_summary(connection)
+                orders, total = list_orders(connection, page=page, per_page=per_page, search=search, status_filter=status_f, round_filter=round_f)
+                summary = create_orders_summary(connection, round_filter=round_f)
             self._send_json(
                 HTTPStatus.OK,
                 {
@@ -4014,6 +4381,70 @@ class OrderRequestHandler(BaseHTTPRequestHandler):
                     "pages": max(1, (total + per_page - 1) // per_page),
                 },
             )
+            return
+
+        extra_slip_file_match = re.fullmatch(r"/admin/orders/([A-Z0-9-]+)/extra-slips/(\d+)", path)
+        if extra_slip_file_match:
+            if not self._require_admin_authorization():
+                return
+            order_code = extra_slip_file_match.group(1)
+            slip_id = int(extra_slip_file_match.group(2))
+            with open_db() as connection:
+                row = connection.execute(
+                    "SELECT * FROM order_extra_slips WHERE id = ? AND order_code = ?",
+                    (slip_id, order_code),
+                ).fetchone()
+            if row is None:
+                self._send_json(HTTPStatus.NOT_FOUND, {"message": "extra slip not found"})
+                return
+            slip_path = resolve_stored_slip_path(row["stored_name"], row["storage_path"])
+            if slip_path is None:
+                self._send_json(HTTPStatus.NOT_FOUND, {"message": "file not found"})
+                return
+            self._send_file(
+                slip_path,
+                row["mime_type"] or "application/octet-stream",
+                row["original_name"] or row["stored_name"] or "slip",
+            )
+            return
+
+        extra_slips_list_match = re.fullmatch(r"/admin/orders/([A-Z0-9-]+)/extra-slips", path)
+        if extra_slips_list_match:
+            if not self._require_admin_authorization():
+                return
+            order_code = extra_slips_list_match.group(1)
+            with open_db() as connection:
+                rows = connection.execute(
+                    "SELECT * FROM order_extra_slips WHERE order_code = ? ORDER BY id",
+                    (order_code,),
+                ).fetchall()
+            slips = [
+                {
+                    "id": r["id"],
+                    "originalName": r["original_name"],
+                    "mimeType": r["mime_type"],
+                    "fileSize": r["file_size"],
+                    "uploadedAt": r["uploaded_at"],
+                    "url": f"/admin/orders/{order_code}/extra-slips/{r['id']}",
+                }
+                for r in rows
+            ]
+            self._send_json(HTTPStatus.OK, slips)
+            return
+
+        slip_check_match = re.fullmatch(r"/admin/orders/([A-Z0-9-]+)/slip-check", path)
+        if slip_check_match:
+            if not self._require_admin_authorization():
+                return
+            with open_db() as connection:
+                row = connection.execute(
+                    "SELECT * FROM slip_ocr_results WHERE order_code = ?",
+                    (slip_check_match.group(1),),
+                ).fetchone()
+            if row is None:
+                self._send_json(HTTPStatus.NOT_FOUND, {"message": "no OCR data"})
+                return
+            self._send_json(HTTPStatus.OK, dict(row))
             return
 
         slip_match = re.fullmatch(r"/admin/orders/([A-Z0-9-]+)/slip", path)
@@ -4053,9 +4484,11 @@ class OrderRequestHandler(BaseHTTPRequestHandler):
             qs_ss = _parse_qs_ss(urlparse(self.path).query)
             visitor_ip = (qs_ss.get("ip") or [""])[0].strip()
             if visitor_ip:
-                _visitor_registry[visitor_ip] = time.time()
+                with _global_lock:
+                    _visitor_registry[visitor_ip] = time.time()
             cutoff = time.time() - _VISITOR_ACTIVE_SECONDS
-            active_count = sum(1 for t in list(_visitor_registry.values()) if t >= cutoff)
+            with _global_lock:
+                active_count = sum(1 for t in list(_visitor_registry.values()) if t >= cutoff)
             with open_db() as connection:
                 rows = connection.execute(
                     "SELECT key, value FROM site_settings WHERE key IN ('site_closed','schedule_enabled','schedule_warning_message','be_right_back_dates','be_right_back_active')"
@@ -4071,7 +4504,8 @@ class OrderRequestHandler(BaseHTTPRequestHandler):
                 today_bkk = datetime.now(_TZ_BKK).strftime("%Y-%m-%d")
                 be_right_back = be_right_back_active or (today_bkk in be_right_back_dates)
             sched = get_schedule_status(schedule_enabled, warning_message)
-            test_warn = time.time() < _test_warning_until
+            with _global_lock:
+                test_warn = time.time() < _test_warning_until
             self._send_json(HTTPStatus.OK, {
                 "siteClosed": site_closed,
                 "scheduleEnabled": schedule_enabled,
@@ -4088,12 +4522,18 @@ class OrderRequestHandler(BaseHTTPRequestHandler):
                 return
             with open_db() as connection:
                 orders, _ = list_orders(connection, page=1, per_page=999999)
-            csv_content = export_orders_csv(orders)
+                ocr_rows = connection.execute(
+                    "SELECT order_code, status, ref_number FROM slip_ocr_results"
+                ).fetchall()
+            ocr_map = {r["order_code"]: {"status": r["status"], "ref_number": r["ref_number"]} for r in ocr_rows}
+            csv_content = export_orders_csv(orders, ocr_map)
+            from datetime import date
+            filename = f"orders-{date.today().isoformat()}.csv"
             response_body = ("﻿" + csv_content).encode("utf-8")
             self.send_response(HTTPStatus.OK)
             self.send_header("Content-Type", "text/csv; charset=utf-8")
             self.send_header("Content-Length", str(len(response_body)))
-            self.send_header("Content-Disposition", 'attachment; filename="orders.csv"')
+            self.send_header("Content-Disposition", f'attachment; filename="{filename}"')
             self.end_headers()
             self.wfile.write(response_body)
             return
@@ -4107,8 +4547,9 @@ class OrderRequestHandler(BaseHTTPRequestHandler):
             if category not in ("single", "jacket", "headband"):
                 self._send_json(HTTPStatus.BAD_REQUEST, {"message": "invalid category"})
                 return
+            breakdown_round = int((qs.get("round") or ["0"])[0]) if (qs.get("round") or ["0"])[0].isdigit() else 0
             with open_db() as connection:
-                result = get_product_breakdown(connection, category)
+                result = get_product_breakdown(connection, category, round_filter=breakdown_round)
             self._send_json(HTTPStatus.OK, result)
             return
 
@@ -4250,20 +4691,65 @@ class OrderRequestHandler(BaseHTTPRequestHandler):
                 if previous_slip_stored_name and previous_slip_stored_name != materialized_slip["storedName"]:
                     delete_local_slip_file(previous_slip_stored_name, previous_slip_storage_path)
                 row = fetch_order_by_code(connection, order_code)
-            self._send_json(HTTPStatus.OK, serialize_order(row))
+            serialized = serialize_order(row)
+            trigger_ocr_async(order_code, materialized_slip.get("storedPath"), serialized.get("totalAmount"))
+            self._send_json(HTTPStatus.OK, serialized)
+            return
+
+        extra_slips_post_match = re.fullmatch(r"/admin/orders/([A-Z0-9-]+)/extra-slips", path)
+        if extra_slips_post_match:
+            if not self._require_admin_authorization():
+                return
+            order_code = extra_slips_post_match.group(1)
+            with open_db() as connection:
+                if fetch_order_by_code(connection, order_code) is None:
+                    self._send_json(HTTPStatus.NOT_FOUND, {"message": "order not found"})
+                    return
+                materialized_slip, error_message = self._read_multipart_slip(order_code)
+                if error_message:
+                    self._send_json(HTTPStatus.BAD_REQUEST, {"message": error_message})
+                    return
+                uploaded_at = now_iso()
+                connection.execute(
+                    """INSERT INTO order_extra_slips
+                       (order_code, original_name, stored_name, storage_path, mime_type, file_size, uploaded_at)
+                       VALUES (?, ?, ?, ?, ?, ?, ?)""",
+                    (
+                        order_code,
+                        materialized_slip["originalName"],
+                        materialized_slip["storedName"],
+                        materialized_slip["storedPath"],
+                        materialized_slip["mimeType"],
+                        int(materialized_slip["size"]),
+                        uploaded_at,
+                    ),
+                )
+                new_id = connection.execute("SELECT last_insert_rowid()").fetchone()[0]
+                log_audit(connection, order_code, "admin_extra_slip_uploaded", f"extra slip {new_id} uploaded")
+                connection.commit()
+            self._send_json(HTTPStatus.OK, {
+                "id": new_id,
+                "originalName": materialized_slip["originalName"],
+                "mimeType": materialized_slip["mimeType"],
+                "fileSize": int(materialized_slip["size"]),
+                "uploadedAt": uploaded_at,
+                "url": f"/admin/orders/{order_code}/extra-slips/{new_id}",
+            })
             return
 
         if path == "/admin/test-warning":
             if not self._require_admin_authorization():
                 return
-            _test_warning_until = time.time() + 60
+            with _global_lock:
+                _test_warning_until = time.time() + 60
             self._send_json(HTTPStatus.OK, {"ok": True})
             return
 
         if path == "/admin/stop-test-warning":
             if not self._require_admin_authorization():
                 return
-            _test_warning_until = 0
+            with _global_lock:
+                _test_warning_until = 0
             self._send_json(HTTPStatus.OK, {"ok": True})
             return
 
@@ -4611,11 +5097,62 @@ class OrderRequestHandler(BaseHTTPRequestHandler):
                 and materialized_slip.get("storedName") != previous_slip_stored_name
             ):
                 delete_local_slip_file(previous_slip_stored_name, previous_slip_storage_path)
+            trigger_ocr_async(order_match.group(1), materialized_slip.get("storedPath") if materialized_slip else None, order.get("totalAmount"))
             sync_order_to_google_sheets(order, "payment_slip_uploaded")
             self._send_json(HTTPStatus.OK, order)
 
     def do_DELETE(self) -> None:
         path = urlparse(self.path).path
+
+        main_slip_del_match = re.fullmatch(r"/admin/orders/([A-Z0-9-]+)/slip", path)
+        if main_slip_del_match:
+            if not self._require_admin_authorization():
+                return
+            order_code = main_slip_del_match.group(1)
+            with open_db() as connection:
+                row = fetch_order_by_code(connection, order_code)
+                if row is None:
+                    self._send_json(HTTPStatus.NOT_FOUND, {"message": "order not found"})
+                    return
+                stored_name = row["slip_stored_name"]
+                stored_path = row["slip_storage_path"]
+                if not stored_name:
+                    self._send_json(HTTPStatus.NOT_FOUND, {"message": "no slip to delete"})
+                    return
+                connection.execute(
+                    """UPDATE orders SET slip_original_name=NULL, slip_stored_name=NULL,
+                       slip_storage_path=NULL, slip_mime_type=NULL, slip_size=NULL,
+                       slip_uploaded_at=NULL, updated_at=? WHERE order_code=?""",
+                    (now_iso(), order_code),
+                )
+                log_audit(connection, order_code, "admin_slip_deleted", "admin deleted slip")
+                connection.commit()
+                updated_row = fetch_order_by_code(connection, order_code)
+            delete_local_slip_file(stored_name, stored_path)
+            self._send_json(HTTPStatus.OK, serialize_order(updated_row))
+            return
+
+        extra_slip_del_match = re.fullmatch(r"/admin/orders/([A-Z0-9-]+)/extra-slips/(\d+)", path)
+        if extra_slip_del_match:
+            if not self._require_admin_authorization():
+                return
+            order_code = extra_slip_del_match.group(1)
+            slip_id = int(extra_slip_del_match.group(2))
+            with open_db() as connection:
+                row = connection.execute(
+                    "SELECT * FROM order_extra_slips WHERE id = ? AND order_code = ?",
+                    (slip_id, order_code),
+                ).fetchone()
+                if row is None:
+                    self._send_json(HTTPStatus.NOT_FOUND, {"message": "extra slip not found"})
+                    return
+                connection.execute("DELETE FROM order_extra_slips WHERE id = ?", (slip_id,))
+                log_audit(connection, order_code, "admin_extra_slip_deleted", f"extra slip {slip_id} deleted")
+                connection.commit()
+            delete_local_slip_file(row["stored_name"], row["storage_path"])
+            self._send_json(HTTPStatus.OK, {"ok": True})
+            return
+
         backup_del_match = re.fullmatch(r"/admin/backups/(\d+)", path)
         if backup_del_match:
             if not self._require_admin_authorization():
