@@ -155,6 +155,10 @@ ADMIN_HTML = r"""<!doctype html>
     }
     header h1 { font-size: 18px; font-weight: 700; letter-spacing: -.02em; }
     .hdr-right { display: flex; gap: 8px; align-items: center; }
+    .srv-dot { display:inline-block; width:7px; height:7px; border-radius:50%; background:var(--muted); vertical-align:middle; margin-right:3px; transition:background .4s; }
+    .srv-dot.ok   { background:#16a34a; }
+    .srv-dot.warn { background:#d97706; }
+    .srv-dot.err  { background:var(--danger); }
     nav.tab-bar {
       display: flex; overflow-x: auto;
       border-bottom: 1px solid var(--line); background: #fff;
@@ -249,7 +253,7 @@ ADMIN_HTML = r"""<!doctype html>
 </head>
 <body>
   <header>
-    <h1>SU STORE Admin <span id="adminClock" style="font-size:14px;font-weight:600;color:var(--muted);margin-left:10px;font-variant-numeric:tabular-nums;letter-spacing:0.03em"></span></h1>
+    <h1>SU STORE Admin <span id="adminClock" style="font-size:14px;font-weight:600;color:var(--muted);margin-left:10px;font-variant-numeric:tabular-nums;letter-spacing:0.03em"></span><span id="srvStatus" style="display:inline-flex;align-items:center;gap:12px;margin-left:18px;font-size:12px;font-weight:600;color:var(--muted);letter-spacing:.02em"><span title="sumfu.store — frontend"><span class="srv-dot" id="dotStore"></span>Store <span id="msStore" style="font-variant-numeric:tabular-nums">…</span></span><span title="order-api — backend"><span class="srv-dot" id="dotApi"></span>API <span id="msApi" style="font-variant-numeric:tabular-nums">…</span></span></span></h1>
     <div class="hdr-right">
       <input id="tokenInput" type="password" autocomplete="current-password" placeholder="API Token" style="max-width:200px" />
       <button class="primary" id="saveTokenBtn">บันทึก</button>
@@ -780,6 +784,35 @@ ADMIN_HTML = r"""<!doctype html>
       }
       tick();
       setInterval(tick, 1000);
+    })();
+
+    // ── Server Status ──────────────────────────────────────────────────────────
+    (function() {
+      async function checkServer(url, dotId, msId) {
+        var dot = document.getElementById(dotId);
+        var ms  = document.getElementById(msId);
+        try {
+          var t0 = performance.now();
+          var r  = await fetch(url, { cache: "no-store", signal: AbortSignal.timeout(5000) });
+          var elapsed = Math.round(performance.now() - t0);
+          if (r.ok) {
+            dot.className = "srv-dot " + (elapsed > 500 ? "warn" : "ok");
+            ms.textContent = elapsed + "ms";
+          } else {
+            dot.className = "srv-dot err";
+            ms.textContent = r.status;
+          }
+        } catch(e) {
+          dot.className = "srv-dot err";
+          ms.textContent = "offline";
+        }
+      }
+      function pollAll() {
+        checkServer("https://sumfu.store/api/health", "dotStore", "msStore");
+        checkServer("/health", "dotApi", "msApi");
+      }
+      pollAll();
+      setInterval(pollAll, 30000);
     })();
 
     // ── Helpers ────────────────────────────────────────────────────────────────
