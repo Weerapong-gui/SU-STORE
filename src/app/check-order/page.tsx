@@ -174,7 +174,8 @@ function CheckOrderContent() {
       if (res.status === 404) { setOrders([]); setLoading(false); return; }
       if (!res.ok) throw new Error(await res.text());
       const data = await res.json();
-      setOrders(data.order ? [data.order] : (data.orders ?? []));
+      const allOrders = data.order ? [data.order] : (data.orders ?? []);
+      setOrders(allOrders.filter((o: PublicOrder) => o.status !== "cancelled" && o.status !== "rejected"));
     } catch (e) {
       setError(e instanceof Error ? e.message : t.checkOrder.errorGeneric);
     } finally {

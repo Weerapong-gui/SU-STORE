@@ -4002,22 +4002,21 @@ def export_orders_csv(orders: list[dict[str, Any]], ocr_map: dict[str, dict] | N
     output = io.StringIO()
     writer = csv.writer(output)
     writer.writerow([
-        "order_id", "status", "payment_status", "total_amount", "size", "quantity",
+        "order_id", "status", "payment_status", "order_total_amount",
+        "item_product_name", "item_category", "item_size", "item_quantity", "item_unit_price", "item_total_amount",
         "created_at", "full_name", "student_code", "phone", "email", "school", "parent_phone",
-        "product_name", "product_category", "khantok_ticket",
-        "ocr_status", "ocr_ref",
+        "khantok_ticket", "ocr_status", "ocr_ref",
     ])
     for order in orders:
         c = order.get("customer") or {}
-        p = order.get("product") or {}
         ocr = (ocr_map or {}).get(order.get("id", ""), {})
-        writer.writerow([
+        common = [
             order.get("id", ""),
             order.get("status", ""),
             order.get("paymentStatus", ""),
             order.get("totalAmount", ""),
-            order.get("size", ""),
-            order.get("quantity", ""),
+        ]
+        common_tail = [
             order.get("createdAt", ""),
             c.get("fullName", ""),
             c.get("studentCode", ""),
@@ -4025,12 +4024,26 @@ def export_orders_csv(orders: list[dict[str, Any]], ocr_map: dict[str, dict] | N
             c.get("email", ""),
             c.get("school", ""),
             c.get("parentPhone", ""),
-            p.get("name", ""),
-            p.get("category", ""),
             "yes" if order.get("khantokTicket") else "no",
             ocr.get("status", ""),
             ocr.get("ref_number", ""),
-        ])
+        ]
+        items = order.get("items") or []
+        if not items:
+            p = order.get("product") or {}
+            writer.writerow(common + [
+                p.get("name", ""), p.get("category", ""),
+                order.get("size", ""), order.get("quantity", ""),
+                "", order.get("totalAmount", ""),
+            ] + common_tail)
+        else:
+            for item in items:
+                ip = item.get("product") or {}
+                writer.writerow(common + [
+                    ip.get("name", ""), ip.get("category", ""),
+                    item.get("size", ""), item.get("quantity", ""),
+                    item.get("unitPrice", ""), item.get("totalAmount", ""),
+                ] + common_tail)
     return output.getvalue()
 
 
