@@ -352,12 +352,13 @@ ADMIN_HTML = r"""<!doctype html>
           <thead>
             <tr>
               <th style="width:3%"><input type="checkbox" id="selectAllOrders" /></th>
-              <th style="width:11%">Order</th>
-              <th style="width:17%">Customer</th>
-              <th style="width:19%">Product</th>
+              <th style="width:10%">Order</th>
+              <th style="width:15%">Customer</th>
+              <th style="width:17%">Product</th>
               <th style="width:10%">Payment</th>
-              <th style="width:13%">Status</th>
-              <th style="width:30%">Actions</th>
+              <th style="width:10%">Status</th>
+              <th style="width:10%">Note</th>
+              <th style="width:25%">Actions</th>
             </tr>
           </thead>
           <tbody id="ordersBody"></tbody>
@@ -1098,8 +1099,9 @@ ADMIN_HTML = r"""<!doctype html>
           '<td><strong>' + esc(order.id) + '</strong><br/><span class="muted">' + fmtDate(order.createdAt) + '</span></td>' +
           '<td><strong>' + esc(c.fullName||"-") + '</strong><br/><span class="muted">' + esc(c.studentCode||"-") + '</span><br/><span class="muted">' + esc(c.phone||"") + '</span></td>' +
           '<td>' + itemsHtml + '<br/><span class="money">' + esc(baht(order.totalAmount)) + '</span>' + schoolHtml + '</td>' +
-          '<td><span class="muted">' + (order.slip ? '<span style="color:var(--ok)">✓ Slip uploaded</span>' : 'ไม่มีสลิป') + '</span><br/>' + (order.khantokTicket ? '<span style="font-size:11px;font-weight:700;color:var(--ok)">🎟 บัตรขันโตก ฿' + (order.khantokTicketValue || 100) + '</span>' : '<span style="font-size:11px;color:var(--muted)">ไม่ได้บัตร</span>') + '</td>' +
+          '<td><span class="muted">' + (order.slip ? '<span style="color:var(--ok)">✓ Slip uploaded</span>' : 'ไม่มีสลิป') + '</span><br/>' + (order.khantokTicket ? '<span style="font-size:11px;font-weight:700;color:var(--ok)">🎟 บัตรขันโตก ฿' + (order.khantokTicketValue || 100) + '</span>' : order.khantokTicketAlreadyClaimed ? '<span style="font-size:11px;font-weight:700;color:var(--warn)">🎟 ได้ไปแล้ว</span>' : '<span style="font-size:11px;color:var(--muted)">ไม่ได้บัตร</span>') + '</td>' +
           '<td><span class="badge ' + esc(order.status) + '">' + esc(STATUS_TH[order.status] || order.status) + '</span>' + (needsAction ? '<br/><span style="font-size:10px;color:var(--warn);font-weight:700">⚠ รอยืนยัน</span>' : '') + '</td>' +
+          '<td style="font-size:12px;color:var(--muted);white-space:pre-wrap">' + (order.adminNote ? esc(order.adminNote) : '') + '</td>' +
           '<td>' + statusSelect +
             '<div style="display:flex;gap:4px">' +
               '<button class="ghost slipBtn" data-oid="' + esc(order.id) + '" data-total="' + esc(order.totalAmount||0) + '" style="font-size:12px;min-height:28px;flex:1"' + (order.slip ? "" : " disabled") + '>Slip</button>' +
