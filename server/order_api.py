@@ -141,17 +141,43 @@ ADMIN_HTML = r"""<!doctype html>
   <title>SU STORE Admin</title>
   <style>
     :root {
-      color-scheme: light;
-      --bg: #f4f4f5; --panel: #fff; --line: #d8d8dd; --text: #111114;
+      color-scheme: light dark;
+      --bg: #f4f4f5; --surface: #fff; --surface2: #f9f9fa; --header-bg: rgba(255,255,255,.9);
+      --line: #d8d8dd; --text: #111114;
       --muted: #666a73; --accent: #0071e3; --danger: #b42318; --ok: #027a48; --warn: #b45309;
+      --badge-default: #eef2ff; --badge-warn: #fff7ed; --badge-ok: #ecfdf3; --badge-danger: #fef3f2;
+      --editing-row: #fef9c3; --toggle-track: #d0d0d5; --bar-track: #eef2ff; --img-bg: #f0f0f0;
     }
+    @media (prefers-color-scheme: dark) {
+      :root:not([data-theme="light"]) {
+        --bg: #111113; --surface: #1c1c1e; --surface2: #2c2c2e; --header-bg: rgba(28,28,30,.9);
+        --line: #38383a; --text: #f5f5f7;
+        --muted: #8e8e93; --accent: #0a84ff; --danger: #ff453a; --ok: #30d158; --warn: #ff9f0a;
+        --badge-default: #1e2640; --badge-warn: #2d1f00; --badge-ok: #0d2b1a; --badge-danger: #2d0c08;
+        --editing-row: #2d2a00; --toggle-track: #48484a; --bar-track: #2c2c2e; --img-bg: #2c2c2e;
+      }
+    }
+    :root[data-theme="dark"] {
+      --bg: #111113; --surface: #1c1c1e; --surface2: #2c2c2e; --header-bg: rgba(28,28,30,.9);
+      --line: #38383a; --text: #f5f5f7;
+      --muted: #8e8e93; --accent: #0a84ff; --danger: #ff453a; --ok: #30d158; --warn: #ff9f0a;
+      --badge-default: #1e2640; --badge-warn: #2d1f00; --badge-ok: #0d2b1a; --badge-danger: #2d0c08;
+      --editing-row: #2d2a00; --toggle-track: #48484a; --bar-track: #2c2c2e; --img-bg: #2c2c2e;
+      color-scheme: dark;
+    }
+    :root[data-theme="light"] { color-scheme: light; }
+    .theme-btn { display:inline-flex; align-items:center; gap:7px; background:none; border:none; cursor:pointer; padding:0; min-height:unset; font-size:13px; color:var(--muted); font-weight:600; }
+    .theme-btn-track { position:relative; width:44px; height:26px; background:var(--toggle-track); border-radius:999px; transition:background .25s; flex-shrink:0; }
+    .theme-btn-thumb { position:absolute; top:3px; left:3px; width:20px; height:20px; background:#fff; border-radius:50%; transition:transform .25s; box-shadow:0 1px 4px rgba(0,0,0,.3); }
+    [data-theme="dark"] .theme-btn-track, :root:not([data-theme="light"]) .theme-btn-track.sys-dark { background:#636366; }
+    [data-theme="dark"] .theme-btn-thumb, :root:not([data-theme="light"]) .theme-btn-thumb.sys-dark { transform:translateX(18px); }
     * { box-sizing: border-box; margin: 0; }
     body { background: var(--bg); color: var(--text); font-family: ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
     header {
       position: sticky; top: 0; z-index: 10;
       display: flex; align-items: center; justify-content: space-between; gap: 16px;
       padding: 14px clamp(16px,4vw,44px); border-bottom: 1px solid var(--line);
-      background: rgba(255,255,255,.9); backdrop-filter: blur(18px);
+      background: var(--header-bg); backdrop-filter: blur(18px);
     }
     header h1 { font-size: 18px; font-weight: 700; letter-spacing: -.02em; }
     .hdr-right { display: flex; gap: 8px; align-items: center; }
@@ -161,7 +187,7 @@ ADMIN_HTML = r"""<!doctype html>
     .srv-dot.err  { background:var(--danger); }
     nav.tab-bar {
       display: flex; overflow-x: auto;
-      border-bottom: 1px solid var(--line); background: #fff;
+      border-bottom: 1px solid var(--line); background: var(--surface);
       padding: 0 clamp(16px,4vw,44px);
     }
     .tab-btn {
@@ -176,7 +202,7 @@ ADMIN_HTML = r"""<!doctype html>
     main { width: min(1280px, calc(100% - 32px)); margin: 24px auto 56px; }
     input, select, textarea, button {
       border: 1px solid var(--line); border-radius: 8px;
-      background: #fff; color: var(--text); font: inherit; min-height: 40px;
+      background: var(--surface); color: var(--text); font: inherit; min-height: 40px;
     }
     input, select { padding: 0 12px; width: 100%; }
     textarea { padding: 8px 12px; width: 100%; resize: vertical; }
@@ -184,7 +210,7 @@ ADMIN_HTML = r"""<!doctype html>
     button.primary { border-color: var(--accent); background: var(--accent); color: #fff; }
     button.danger-btn { border-color: var(--danger); background: var(--danger); color: #fff; }
     button.ok-btn { border-color: var(--ok); background: var(--ok); color: #fff; }
-    button.ghost { background: #fff; }
+    button.ghost { background: var(--surface); }
     button.active-phase { background: var(--accent); color: #fff; border-color: var(--accent); }
     button:disabled { cursor: not-allowed; opacity: .5; }
     .stats {
@@ -192,28 +218,31 @@ ADMIN_HTML = r"""<!doctype html>
       gap: 1px; background: var(--line); border: 1px solid var(--line);
       border-radius: 8px; overflow: hidden; margin-bottom: 16px;
     }
-    .stat { background: #fff; padding: 14px 16px; }
+    .stat { background: var(--surface); padding: 14px 16px; }
     .stat span { display: block; color: var(--muted); font-size: 11px; font-weight: 700; letter-spacing: .1em; text-transform: uppercase; }
     .stat strong { display: block; margin-top: 6px; font-size: 24px; letter-spacing: -.04em; word-break: break-all; }
     .stat.compact strong { font-size: 14px; letter-spacing: 0; }
+    .stat.stat-ring { display: flex; align-items: center; gap: 12px; padding: 12px 14px; }
+    .stat.stat-ring span { font-size: 11px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); }
+    .stat.stat-ring strong { font-size: 13px; margin-top: 3px; letter-spacing: 0; font-weight: 600; }
     .toolbar { display: flex; flex-wrap: wrap; gap: 10px; margin-bottom: 14px; align-items: center; }
     .toolbar input, .toolbar select { max-width: 220px; }
-    .table-card { border: 1px solid var(--line); border-radius: 8px; background: #fff; overflow: hidden; }
+    .table-card { border: 1px solid var(--line); border-radius: 8px; background: var(--surface); overflow: hidden; }
     table { width: 100%; border-collapse: collapse; }
     th, td { padding: 10px 12px; border-bottom: 1px solid var(--line); text-align: left; vertical-align: top; word-break: break-word; }
-    th { background: #f9f9fa; color: var(--muted); font-size: 11px; font-weight: 700; letter-spacing: .1em; text-transform: uppercase; }
+    th { background: var(--surface2); color: var(--muted); font-size: 11px; font-weight: 700; letter-spacing: .1em; text-transform: uppercase; }
     tr:last-child td { border-bottom: 0; }
     .muted { color: var(--muted); font-size: 12px; }
     .money { color: var(--accent); font-weight: 700; }
-    .badge { display: inline-flex; align-items: center; padding: 2px 9px; border-radius: 999px; background: #eef2ff; font-size: 12px; font-weight: 700; white-space: nowrap; }
-    .badge.waiting_confirm { background: #fff7ed; color: var(--warn); }
-    .badge.paid, .badge.preparing, .badge.shipped { background: #ecfdf3; color: var(--ok); }
-    .badge.rejected, .badge.cancelled { background: #fef3f2; color: var(--danger); }
+    .badge { display: inline-flex; align-items: center; padding: 2px 9px; border-radius: 999px; background: var(--badge-default); font-size: 12px; font-weight: 700; white-space: nowrap; }
+    .badge.waiting_confirm { background: var(--badge-warn); color: var(--warn); }
+    .badge.paid, .badge.preparing, .badge.shipped { background: var(--badge-ok); color: var(--ok); }
+    .badge.rejected, .badge.cancelled { background: var(--badge-danger); color: var(--danger); }
     .products-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px,1fr)); gap: 16px; }
-    .product-card { background: #fff; border: 1px solid var(--line); border-radius: 12px; overflow: hidden; transition: box-shadow .2s; }
+    .product-card { background: var(--surface); border: 1px solid var(--line); border-radius: 12px; overflow: hidden; transition: box-shadow .2s; }
     .product-card:hover { box-shadow: 0 4px 20px rgba(0,0,0,.08); }
     .product-card.unavailable { opacity: .5; filter: grayscale(.7); }
-    .product-img { width: 100%; aspect-ratio: 4/3; object-fit: cover; background: #f0f0f0; display: block; }
+    .product-img { width: 100%; aspect-ratio: 4/3; object-fit: cover; background: var(--img-bg); display: block; }
     .product-body { padding: 14px; }
     .product-name { font-size: 15px; font-weight: 700; }
     .product-meta { color: var(--muted); font-size: 12px; margin-top: 2px; }
@@ -221,13 +250,13 @@ ADMIN_HTML = r"""<!doctype html>
     .product-actions { display: flex; gap: 8px; margin-top: 12px; align-items: center; }
     .toggle { position: relative; display: inline-block; width: 44px; height: 24px; cursor: pointer; }
     .toggle input { opacity: 0; width: 0; height: 0; }
-    .toggle-track { position: absolute; inset: 0; background: #d0d0d5; border-radius: 999px; transition: background .2s; }
+    .toggle-track { position: absolute; inset: 0; background: var(--toggle-track); border-radius: 999px; transition: background .2s; }
     .toggle input:checked + .toggle-track { background: var(--ok); }
     .toggle-thumb { position: absolute; top: 3px; left: 3px; width: 18px; height: 18px; background: #fff; border-radius: 50%; transition: transform .2s; box-shadow: 0 1px 4px rgba(0,0,0,.2); pointer-events: none; }
     .toggle input:checked ~ .toggle-thumb { transform: translateX(20px); }
     .modal-backdrop { display: none; position: fixed; inset: 0; background: rgba(0,0,0,.45); z-index: 100; overflow-y: auto; padding: 32px 16px; }
     .modal-backdrop.open { display: flex; align-items: flex-start; justify-content: center; }
-    .modal { background: #fff; border-radius: 16px; width: min(520px,100%); padding: 28px; }
+    .modal { background: var(--surface); border-radius: 16px; width: min(520px,100%); padding: 28px; }
     .modal h2 { font-size: 20px; font-weight: 700; margin-bottom: 20px; }
     .field { margin-bottom: 14px; }
     .field label { display: block; font-size: 12px; font-weight: 700; color: var(--muted); letter-spacing: .08em; text-transform: uppercase; margin-bottom: 5px; }
@@ -235,16 +264,19 @@ ADMIN_HTML = r"""<!doctype html>
     .notice { padding: 6px 0; color: var(--muted); font-size: 13px; min-height: 22px; }
     .notice.err { color: var(--danger); }
     .analytics-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
-    .analytics-card { background: #fff; border: 1px solid var(--line); border-radius: 12px; padding: 18px; }
+    .analytics-card { background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: 18px; }
     .analytics-card h3 { font-size: 12px; font-weight: 700; color: var(--muted); text-transform: uppercase; letter-spacing: .1em; margin-bottom: 12px; }
     .bar-row { display: flex; align-items: center; gap: 10px; margin-bottom: 8px; }
     .bar-label { font-size: 13px; width: 150px; flex-shrink: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-    .bar-track { flex: 1; height: 8px; background: #eef2ff; border-radius: 999px; overflow: hidden; }
+    .bar-track { flex: 1; height: 8px; background: var(--bar-track); border-radius: 999px; overflow: hidden; }
     .bar-fill { height: 100%; background: var(--accent); border-radius: 999px; }
     .bar-count { font-size: 12px; color: var(--muted); width: 32px; text-align: right; }
-    .settings-card { background: #fff; border: 1px solid var(--line); border-radius: 12px; padding: 20px; margin-bottom: 16px; }
+    .settings-card { background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: 20px; margin-bottom: 16px; }
     .settings-card h3 { font-size: 14px; font-weight: 700; margin-bottom: 14px; }
-    tr.editing-row td { background: #fef9c3 !important; }
+    tr.editing-row td { background: var(--editing-row) !important; }
+    tr.needs-action td { background: rgba(180,83,9,.05) !important; }
+    tr.needs-action td:first-child { box-shadow: inset 3px 0 0 var(--warn); }
+    select.statusSelect { font-size:12px; padding:4px 8px; border-radius:8px; border:1px solid var(--line); background:var(--surface2); color:var(--text); cursor:pointer; min-height:32px; width:100%; margin-bottom:6px; }
     @media (max-width: 720px) {
       .analytics-grid { grid-template-columns: 1fr; }
       .toolbar input, .toolbar select { max-width: 100%; }
@@ -255,6 +287,10 @@ ADMIN_HTML = r"""<!doctype html>
   <header>
     <h1>SU STORE Admin <span id="adminClock" style="font-size:14px;font-weight:600;color:var(--muted);margin-left:10px;font-variant-numeric:tabular-nums;letter-spacing:0.03em"></span><span id="srvStatus" style="display:inline-flex;align-items:center;gap:12px;margin-left:18px;font-size:12px;font-weight:600;color:var(--muted);letter-spacing:.02em"><span title="sumfu.store — frontend"><span class="srv-dot" id="dotStore"></span>Store <span id="msStore" style="font-variant-numeric:tabular-nums">…</span></span><span title="order-api — backend"><span class="srv-dot" id="dotApi"></span>API <span id="msApi" style="font-variant-numeric:tabular-nums">…</span></span></span></h1>
     <div class="hdr-right">
+      <button class="theme-btn" id="themeToggleBtn" title="สลับโหมด">
+        <span id="themeIcon" style="display:inline-flex;align-items:center;color:var(--muted)"></span>
+        <span class="theme-btn-track"><span class="theme-btn-thumb" id="themeThumb"></span></span>
+      </button>
       <input id="tokenInput" type="password" autocomplete="current-password" placeholder="API Token" style="max-width:200px" />
       <button class="primary" id="saveTokenBtn">บันทึก</button>
       <button class="ghost" id="clearTokenBtn">Clear</button>
@@ -827,6 +863,18 @@ ADMIN_HTML = r"""<!doctype html>
 
     // ── ORDERS ─────────────────────────────────────────────────────────────────
     var statuses = ["pending_payment","waiting_confirm","paid","preparing","shipped","cancelled","rejected"];
+    var STATUS_TH = {"pending_payment":"รอสลิป","waiting_confirm":"รอยืนยัน","paid":"ชำระแล้ว","preparing":"กำลังจัดเตรียม","shipped":"พร้อมรับ","cancelled":"ยกเลิก","rejected":"ปฏิเสธ"};
+    function fmtDate(iso) {
+      if (!iso) return "-";
+      var s = String(iso).replace(" ", "T");
+      if (!/Z$|[+-]\d{2}:\d{2}$/.test(s)) s += "Z";
+      var d = new Date(s);
+      if (isNaN(d.getTime())) return String(iso);
+      var u = new Date(d.getTime() + 7 * 3600000);
+      var M = ["ม.ค.","ก.พ.","มี.ค.","เม.ย.","พ.ค.","มิ.ย.","ก.ค.","ส.ค.","ก.ย.","ต.ค.","พ.ย.","ธ.ค."];
+      function pad(n) { return n < 10 ? "0" + n : "" + n; }
+      return u.getUTCDate() + " " + M[u.getUTCMonth()] + " " + pad(u.getUTCHours()) + ":" + pad(u.getUTCMinutes());
+    }
     var allOrders = [];
     var serverSummary = {};
     var currentPage = 1;
@@ -851,17 +899,34 @@ ADMIN_HTML = r"""<!doctype html>
       function statHtml(label, value, compact) {
         return '<div class="' + (compact ? "stat compact" : "stat") + '"><span>' + esc(label) + '</span><strong>' + esc(value) + '</strong></div>';
       }
+      function khantokStatHtml(label, used, quota) {
+        var pct = quota > 0 ? Math.min(100, Math.round(used / quota * 100)) : 0;
+        var r = 18, circ = 2 * Math.PI * r;
+        var arc = circ * pct / 100;
+        return '<div class="stat stat-ring">' +
+          '<svg width="52" height="52" viewBox="0 0 50 50" style="flex-shrink:0">' +
+          '<circle cx="25" cy="25" r="18" fill="none" stroke="#e8e8e8" stroke-width="5"/>' +
+          '<circle cx="25" cy="25" r="18" fill="none" stroke="var(--accent)" stroke-width="5" stroke-linecap="round"' +
+          ' stroke-dasharray="' + arc.toFixed(2) + ' ' + (circ - arc).toFixed(2) + '"' +
+          ' transform="rotate(-90 25 25)"/>' +
+          '<text x="25" y="29" text-anchor="middle" font-size="10" font-weight="700" fill="var(--text)">' + pct + '%</text>' +
+          '</svg>' +
+          '<div style="min-width:0">' +
+          '<span>' + esc(label) + '</span>' +
+          '<strong>' + esc(used + ' of ' + quota + ' used') + '</strong>' +
+          '</div></div>';
+      }
       function statClickHtml(label, value, category) {
         return '<div class="stat compact" style="cursor:pointer;border-bottom:2px solid var(--accent)" data-breakdown="' + esc(category) + '" title="คลิกดูรายละเอียด"><span>' + esc(label) + '</span><strong>' + esc(value) + '</strong></div>';
       }
       var row1 = [
-        statHtml("Total", summary.total || 0, false),
-        statHtml("Waiting Slip", summary.pendingPayment || 0, false),
-        statHtml("Waiting Confirm", summary.waitingConfirm || 0, false),
-        statHtml("Paid", summary.paid || 0, false),
-        statHtml("Rejected", summary.rejected || 0, false),
-        statHtml("บัตรขันโตก ฿100", k100Used + "/" + k100Quota + " (เหลือ " + k100Rem + ")", true),
-        statHtml("บัตรขันโตก ฿50", k50Used + "/" + k50Quota + " (เหลือ " + k50Rem + ")", true),
+        statHtml("ทั้งหมด", summary.total || 0, false),
+        statHtml("รอสลิป", summary.pendingPayment || 0, false),
+        statHtml("รอยืนยัน", summary.waitingConfirm || 0, false),
+        '<div class="stat"><span>ชำระแล้ว</span><strong style="color:var(--ok)">' + esc(summary.paid || 0) + '</strong></div>',
+        statHtml("ปฏิเสธ", summary.rejected || 0, false),
+        khantokStatHtml("บัตรขันโตก ฿100", k100Used, k100Quota),
+        khantokStatHtml("บัตรขันโตก ฿50", k50Used, k50Quota),
       ].join("");
       var row2 = [
         statClickHtml("โปโล", (summary.qtySingle || 0) + " ตัว", "single"),
@@ -1011,13 +1076,12 @@ ADMIN_HTML = r"""<!doctype html>
         var c = order.customer || {};
         var p = order.product || {};
         var isEditing = editingOrderId === order.id;
-        var statusBtns = statuses.map(function(s) {
-          var label = s === 'shipped' ? 'Ready to Receive' : s.replace(/_/g, ' ');
-          var isActive = order.status === s;
-          var isDanger = s === 'rejected' || s === 'cancelled';
-          var style = 'font-size:11px;padding:2px 7px;min-height:24px;border-radius:6px' + (isDanger && !isActive ? ';border-color:var(--danger);color:var(--danger)' : '');
-          return '<button class="' + (isActive ? 'primary' : 'ghost') + ' statusBtn" data-oid="' + esc(order.id) + '" data-status="' + esc(s) + '" style="' + style + '">' + esc(label) + '</button>';
-        }).join('');
+        var statusSelect = '<select class="statusSelect" data-oid="' + esc(order.id) + '">' +
+          '<option value="">เปลี่ยนสถานะ…</option>' +
+          statuses.map(function(s) {
+            return '<option value="' + esc(s) + '"' + (order.status === s ? ' selected' : '') + '>' + esc(STATUS_TH[s] || s) + '</option>';
+          }).join('') +
+          '</select>';
         var orderItems = (order.items && order.items.length > 0)
           ? order.items
           : [{product: order.product || {}, size: order.size, quantity: order.quantity, totalAmount: order.totalAmount}];
@@ -1028,16 +1092,17 @@ ADMIN_HTML = r"""<!doctype html>
           return sep + '<strong>' + esc(ip.name||"-") + '</strong><br/><span class="muted">Size: ' + esc(item.size||"-") + ' / Qty: ' + esc(item.quantity||0) + '</span>' + schoolLine;
         }).join('');
         var schoolHtml = c.school ? '<br/><span class="muted">' + esc(c.school) + '</span>' : '';
-        return '<tr class="' + (isEditing ? 'editing-row' : '') + '">' +
+        var needsAction = order.status === 'waiting_confirm' && order.slip;
+        return '<tr class="' + (isEditing ? 'editing-row' : needsAction ? 'needs-action' : '') + '">' +
           '<td><input type="checkbox" class="orderCheckbox" data-oid="' + esc(order.id) + '" /></td>' +
-          '<td><strong>' + esc(order.id) + '</strong><br/><span class="muted">' + esc(order.createdAt||"") + '</span></td>' +
+          '<td><strong>' + esc(order.id) + '</strong><br/><span class="muted">' + fmtDate(order.createdAt) + '</span></td>' +
           '<td><strong>' + esc(c.fullName||"-") + '</strong><br/><span class="muted">' + esc(c.studentCode||"-") + '</span><br/><span class="muted">' + esc(c.phone||"") + '</span></td>' +
           '<td>' + itemsHtml + '<br/><span class="money">' + esc(baht(order.totalAmount)) + '</span>' + schoolHtml + '</td>' +
-          '<td><span class="muted">' + esc(order.paymentStatus||"-") + '</span><br/><span class="muted">' + (order.slip ? "Slip uploaded" : "No slip") + '</span><br/>' + (order.khantokTicket ? '<span style="font-size:11px;font-weight:700;color:var(--ok)">🎟 บัตรขันโตก ฿' + (order.khantokTicketValue || 100) + '</span>' : '<span style="font-size:11px;color:var(--muted)">ไม่ได้บัตร</span>') + '</td>' +
-          '<td><span class="badge ' + esc(order.status) + '">' + (order.status === 'shipped' ? 'Ready to Receive' : esc(order.status)) + '</span></td>' +
-          '<td><div style="display:flex;flex-wrap:wrap;gap:3px;margin-bottom:6px">' + statusBtns + '</div>' +
+          '<td><span class="muted">' + (order.slip ? '<span style="color:var(--ok)">✓ Slip uploaded</span>' : 'ไม่มีสลิป') + '</span><br/>' + (order.khantokTicket ? '<span style="font-size:11px;font-weight:700;color:var(--ok)">🎟 บัตรขันโตก ฿' + (order.khantokTicketValue || 100) + '</span>' : '<span style="font-size:11px;color:var(--muted)">ไม่ได้บัตร</span>') + '</td>' +
+          '<td><span class="badge ' + esc(order.status) + '">' + esc(STATUS_TH[order.status] || order.status) + '</span>' + (needsAction ? '<br/><span style="font-size:10px;color:var(--warn);font-weight:700">⚠ รอยืนยัน</span>' : '') + '</td>' +
+          '<td>' + statusSelect +
             '<div style="display:flex;gap:4px">' +
-              '<button class="ghost slipBtn" data-oid="' + esc(order.id) + '" data-total="' + esc(order.totalAmount||0) + '" style="font-size:12px;min-height:28px;flex:1"' + (order.slip ? "" : " disabled") + '>View Slip</button>' +
+              '<button class="ghost slipBtn" data-oid="' + esc(order.id) + '" data-total="' + esc(order.totalAmount||0) + '" style="font-size:12px;min-height:28px;flex:1"' + (order.slip ? "" : " disabled") + '>Slip</button>' +
               (order.status === 'waiting_confirm' ? '<button class="ok-btn confirmPayBtn" data-oid="' + esc(order.id) + '" style="font-size:12px;min-height:28px;flex:1">Confirm</button>' : '') +
               '<button class="ghost editOrderBtn" data-oid="' + esc(order.id) + '" style="font-size:12px;min-height:28px;background:' + (isEditing ? '#fef9c3' : '') + ';border-color:' + (isEditing ? '#ca8a04' : '') + '">Edit</button>' +
             '</div>' +
@@ -1493,6 +1558,18 @@ ADMIN_HTML = r"""<!doctype html>
       }
     });
 
+    document.addEventListener("change", async function(e) {
+      var sel = e.target.closest(".statusSelect");
+      if (!sel) return;
+      var oid = sel.dataset.oid;
+      var newStatus = sel.value;
+      if (!newStatus) return;
+      if (newStatus === "rejected" && !confirm("ปฏิเสธออเดอร์ " + oid + "?")) { await loadOrders(); return; }
+      if (newStatus === "cancelled" && !confirm("ยกเลิกออเดอร์ " + oid + "?")) { await loadOrders(); return; }
+      try { await patchStatus(oid, newStatus); setOrdersNotice("Updated " + oid + " → " + newStatus); await loadOrders(); }
+      catch(err) { setOrdersNotice(err.message, true); await loadOrders(); }
+    });
+
     document.querySelector("#bulkApplyBtn").addEventListener("click", async function() {
       var ids = getSelectedOrderIds();
       var status = document.querySelector("#bulkStatusSelect").value;
@@ -1745,6 +1822,38 @@ ADMIN_HTML = r"""<!doctype html>
       var el = document.querySelector("#analyticsNotice");
       el.textContent = msg; el.style.color = err ? "var(--danger)" : "var(--muted)";
     }
+    function renderDailyChart(container, items) {
+      if (!container || !items.length) return;
+      var maxVal = Math.max.apply(null, items.map(function(i) { return i[1]; })) || 1;
+      var CHART_H = 110, LABEL_H = 28, GAP = 2;
+      var containerW = container.clientWidth || 800;
+      var BAR_W = Math.max(10, Math.floor((containerW - GAP * (items.length - 1)) / items.length));
+      var svgW = containerW;
+      var svgH = CHART_H + LABEL_H;
+      var skipLabel = BAR_W < 22 ? Math.ceil(22 / BAR_W) : 1;
+      var bars = items.map(function(item, idx) {
+        var parts = (item[0] || '').split('-');
+        var label = parts.length === 3 ? parts[2] + '/' + parts[1] : esc(item[0]);
+        var barH = Math.max(item[1] > 0 ? 2 : 0, Math.round(item[1] / maxVal * CHART_H));
+        var x = idx * (BAR_W + GAP);
+        var y = CHART_H - barH;
+        var countLabel = barH > 14
+          ? '<text x="' + (x + BAR_W / 2) + '" y="' + (y + 11) + '" text-anchor="middle" font-size="9" fill="#fff" font-weight="700">' + item[1] + '</text>'
+          : '<text x="' + (x + BAR_W / 2) + '" y="' + (y - 3) + '" text-anchor="middle" font-size="9" fill="#999">' + (barH > 0 ? item[1] : '') + '</text>';
+        var dateLabel = idx % skipLabel === 0
+          ? '<text x="' + (x + BAR_W / 2) + '" y="' + (svgH - 2) + '" text-anchor="middle" font-size="8" fill="#999">' + label + '</text>'
+          : '';
+        return '<g>' +
+          '<title>' + esc(item[0]) + ': ' + item[1] + ' ออเดอร์</title>' +
+          '<rect x="' + x + '" y="' + y + '" width="' + BAR_W + '" height="' + barH + '" fill="#4f6ef7" rx="3"/>' +
+          countLabel + dateLabel +
+        '</g>';
+      }).join('');
+      container.innerHTML = '<svg width="' + svgW + '" height="' + svgH + '" style="display:block">' +
+        '<line x1="0" y1="' + CHART_H + '" x2="' + svgW + '" y2="' + CHART_H + '" stroke="#e5e7eb" stroke-width="1"/>' +
+        bars +
+      '</svg>';
+    }
     function renderBarChart(container, items, maxVal) {
       if (!container) return;
       container.innerHTML = items.map(function(item) {
@@ -1764,12 +1873,13 @@ ADMIN_HTML = r"""<!doctype html>
         document.querySelector("#analyticsGrid").innerHTML =
           '<div class="analytics-card" style="grid-column:1/-1">' +
             '<div class="stats" style="margin:0">' +
-              '<div class="stat"><span>Total Orders</span><strong>' + d.total + '</strong></div>' +
-              '<div class="stat"><span>Confirmed Revenue</span><strong>' + baht(d.revenue) + '</strong></div>' +
-              '<div class="stat"><span>Schools</span><strong>' + d.schoolCount + '</strong></div>' +
-              '<div class="stat"><span>Avg Order</span><strong>' + baht(d.avgOrder) + '</strong></div>' +
+              '<div class="stat"><span>คำสั่งซื้อทั้งหมด</span><strong>' + d.total + '</strong></div>' +
+              '<div class="stat"><span>รายได้ที่ยืนยันแล้ว</span><strong>' + baht(d.revenue) + '</strong></div>' +
+              '<div class="stat"><span>คณะ</span><strong>' + d.schoolCount + '</strong></div>' +
+              '<div class="stat"><span style="color:var(--ok)">กำไรสุทธิ (~ประมาณ)</span><strong style="color:var(--ok)">' + baht(d.profit) + '</strong></div>' +
             '</div>' +
           '</div>' +
+          '<div class="analytics-card" style="grid-column:1/-1"><h3>ออเดอร์รายวัน</h3><div id="dailyChart"></div></div>' +
           '<div class="analytics-card"><h3>By School</h3><div id="schoolChart"></div></div>' +
           '<div class="analytics-card"><h3>By Product</h3><div id="productChart"></div></div>' +
           '<div class="analytics-card"><h3>By Status</h3><div id="statusChart"></div></div>' +
@@ -1778,6 +1888,7 @@ ADMIN_HTML = r"""<!doctype html>
         var maxP = d.byProduct[0] ? d.byProduct[0][1] : 1;
         var maxSt = d.byStatus[0] ? d.byStatus[0][1] : 1;
         var maxSz = d.bySize[0] ? d.bySize[0][1] : 1;
+        renderDailyChart(document.querySelector("#dailyChart"), d.byDay || []);
         renderBarChart(document.querySelector("#schoolChart"), d.bySchool, maxS);
         renderBarChart(document.querySelector("#productChart"), d.byProduct, maxP);
         renderBarChart(document.querySelector("#statusChart"), d.byStatus, maxSt);
@@ -2171,6 +2282,37 @@ ADMIN_HTML = r"""<!doctype html>
     } else {
       setOrdersNotice("Enter API Token to load orders");
     }
+
+    // ── DARK MODE TOGGLE ──────────────────────────────────────────────────────
+    (function initTheme() {
+      var SUN = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg>';
+      var MOON = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>';
+      var root = document.documentElement;
+      var btn = document.getElementById("themeToggleBtn");
+      var icon = document.getElementById("themeIcon");
+      var thumb = document.getElementById("themeThumb");
+      var saved = localStorage.getItem("suStoreTheme");
+      var sysDark = window.matchMedia("(prefers-color-scheme: dark)");
+      function isDark() {
+        if (saved === "dark") return true;
+        if (saved === "light") return false;
+        return sysDark.matches;
+      }
+      function applyTheme() {
+        var dark = isDark();
+        root.setAttribute("data-theme", dark ? "dark" : "light");
+        icon.innerHTML = dark ? MOON : SUN;
+        thumb.style.transform = dark ? "translateX(18px)" : "";
+        btn.querySelector(".theme-btn-track").style.background = dark ? "#636366" : "";
+      }
+      applyTheme();
+      btn.addEventListener("click", function() {
+        saved = isDark() ? "light" : "dark";
+        localStorage.setItem("suStoreTheme", saved);
+        applyTheme();
+      });
+      sysDark.addEventListener("change", function() { if (!saved) applyTheme(); });
+    })();
   </script>
 </body>
 </html>"""
@@ -4179,6 +4321,8 @@ def get_product_breakdown(connection: sqlite3.Connection, category: str, round_f
     return {"category": category, "rows": [{"label": k, "count": counts[k]} for k in sorted_keys]}
 
 
+PRODUCT_COST: dict[str, int] = {"single": 158, "jacket": 685, "headband": 20}
+
 def get_analytics(connection: sqlite3.Connection) -> dict[str, Any]:
     total_row = connection.execute("SELECT COUNT(*) AS cnt FROM orders").fetchone()
     total = int(total_row["cnt"] if total_row else 0)
@@ -4200,15 +4344,44 @@ def get_analytics(connection: sqlite3.Connection) -> dict[str, Any]:
     by_size = connection.execute(
         "SELECT size, COUNT(*) AS cnt FROM orders WHERE size != '' GROUP BY size ORDER BY cnt DESC LIMIT 20"
     ).fetchall()
+    by_day = connection.execute(
+        "SELECT DATE(created_at, '+7 hours') AS day, COUNT(*) AS cnt FROM orders WHERE DATE(created_at, '+7 hours') != '2026-05-17' GROUP BY day ORDER BY day"
+    ).fetchall()
+    # คำนวณต้นทุนจากออเดอร์ที่ confirmed เท่านั้น
+    confirmed_rows = connection.execute(
+        "SELECT items_json, product_category, quantity FROM orders WHERE status IN ('paid','preparing','shipped')"
+    ).fetchall()
+    cost_qty: dict[str, int] = {}
+    for row in confirmed_rows:
+        counted = False
+        if row["items_json"]:
+            try:
+                parsed = json.loads(row["items_json"])
+                if isinstance(parsed, list) and parsed:
+                    for item in parsed:
+                        cat = (item.get("product") or {}).get("category") or ""
+                        qty = int(item.get("quantity") or 0)
+                        if cat:
+                            cost_qty[cat] = cost_qty.get(cat, 0) + qty
+                    counted = True
+            except (json.JSONDecodeError, TypeError, ValueError):
+                pass
+        if not counted:
+            cat = row["product_category"] or ""
+            if cat:
+                cost_qty[cat] = cost_qty.get(cat, 0) + int(row["quantity"] or 0)
+    total_cost = sum(cost_qty.get(cat, 0) * price for cat, price in PRODUCT_COST.items())
+    profit = revenue - total_cost
     return {
         "total": total,
         "revenue": revenue,
         "schoolCount": school_count,
-        "avgOrder": round(revenue / total, 2) if total else 0,
+        "profit": profit,
         "bySchool": [[row["school"], row["cnt"]] for row in by_school],
         "byProduct": [[row["product_name"], row["cnt"]] for row in by_product],
         "byStatus": [[row["status"], row["cnt"]] for row in by_status],
         "bySize": [[row["size"], row["cnt"]] for row in by_size],
+        "byDay": [[row["day"], row["cnt"]] for row in by_day],
     }
 
 

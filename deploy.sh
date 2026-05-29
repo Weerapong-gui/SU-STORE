@@ -30,6 +30,9 @@ $SSH "
 echo "==> Rebuilding Docker (su-store + order-api)..."
 $SSH "sg docker -c 'cd $REMOTE_DIR && docker compose --env-file $REMOTE_DIR/.env up -d --build --no-deps su-store order-api'" 2>&1
 
+echo "==> Restarting cloudflared tunnel..."
+$SSH "echo 23007 | sudo -S systemctl restart cloudflared" || true  # connection drops briefly on tunnel restart — expected
+
 rm -f /tmp/su-store-deploy.tar.gz
 echo ""
 echo "✓ Done! https://sumfu.store"
