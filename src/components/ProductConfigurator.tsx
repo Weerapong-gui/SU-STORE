@@ -90,7 +90,7 @@ export function ProductConfigurator({
       ? `/images/1x/${selectedSchool}.png`
       : null;
   const displayImages = selectedColor
-    ? [selectedColor.image]
+    ? (selectedColor.images ?? [selectedColor.image])
     : headbandSchoolImage
       ? [headbandSchoolImage]
       : product.category === "headband"

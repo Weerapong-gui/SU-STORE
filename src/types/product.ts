@@ -1,6 +1,6 @@
 export type ProductCategory = "single" | "jacket" | "headband";
 
-export type ColorVariant = { name: string; hex: string; image: string };
+export type ColorVariant = { name: string; hex: string; image: string; images?: string[] };
 
 export type Product = {
   slug: string;
