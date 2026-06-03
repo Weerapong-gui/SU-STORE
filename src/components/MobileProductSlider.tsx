@@ -4,6 +4,7 @@ import { ChevronLeft, ChevronRight } from "lucide-react";
 import { useEffect, useState } from "react";
 import { SkeletonImage } from "@/components/SkeletonImage";
 import { cn } from "@/lib/utils";
+import { imageBlurMap } from "@/data/products";
 
 type MobileProductSliderProps = {
   images: string[];
@@ -105,21 +106,28 @@ export function MobileProductSlider({
           className="flex transition-transform duration-300 ease-out"
           style={{ transform: `translateX(-${activeIndex * 100}%)` }}
         >
-          {images.map((image, index) => (
-            <div
-              key={`${image}-${index}`}
-              className={cn("relative w-full shrink-0 overflow-hidden", slideClassName)}
-            >
-              <SkeletonImage
-                src={image}
-                alt={`${productName} image ${index + 1}`}
-                fill
-                priority={index === 0}
-                sizes="100vw"
-                className={imageClassName ?? "object-cover"}
-              />
-            </div>
-          ))}
+          {images.map((image, index) => {
+            const isNearby = Math.abs(index - activeIndex) <= 1;
+            return (
+              <div
+                key={`${image}-${index}`}
+                className={cn("relative w-full shrink-0 overflow-hidden", slideClassName)}
+              >
+                {isNearby && (
+                  <SkeletonImage
+                    src={image}
+                    alt={`${productName} image ${index + 1}`}
+                    fill
+                    priority={index === 0}
+                    sizes="100vw"
+                    className={imageClassName ?? "object-cover"}
+                    placeholder={imageBlurMap[image] ? "blur" : "empty"}
+                    blurDataURL={imageBlurMap[image]}
+                  />
+                )}
+              </div>
+            );
+          })}
         </div>
 
         {images.length > 1 ? (

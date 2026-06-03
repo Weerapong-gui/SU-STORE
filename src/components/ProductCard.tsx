@@ -7,12 +7,14 @@ import { createConfiguratorHref } from "@/lib/cart";
 import { formatPrice } from "@/lib/formatPrice";
 import { cn } from "@/lib/utils";
 import { useLang } from "@/lib/i18n";
+import { imageBlurMap } from "@/data/products";
 
 type ProductCardProps = {
   product: Product;
+  priority?: boolean;
 };
 
-export function ProductCard({ product }: ProductCardProps) {
+export function ProductCard({ product, priority }: ProductCardProps) {
   const { t } = useLang();
   const isUnavailable = product.available === false;
 
@@ -26,6 +28,8 @@ export function ProductCard({ product }: ProductCardProps) {
             fill
             sizes="(min-width: 768px) 50vw, 100vw"
             className="object-cover object-top"
+            placeholder={imageBlurMap[product.images[0]] ? "blur" : "empty"}
+            blurDataURL={imageBlurMap[product.images[0]]}
           />
         </div>
         <div className="space-y-1.5 p-6 pb-7">
@@ -49,8 +53,11 @@ export function ProductCard({ product }: ProductCardProps) {
             src={product.images[0]}
             alt={product.name}
             fill
+            priority={priority}
             sizes="(min-width: 768px) 50vw, 100vw"
             className="object-cover object-top transition duration-500 group-hover:scale-[1.03]"
+            placeholder={imageBlurMap[product.images[0]] ? "blur" : "empty"}
+            blurDataURL={imageBlurMap[product.images[0]]}
           />
         </div>
         <div className="space-y-1.5 p-6 pb-7">

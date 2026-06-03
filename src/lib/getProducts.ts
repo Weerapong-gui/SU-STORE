@@ -39,7 +39,7 @@ export async function getProducts(): Promise<Product[]> {
 
   try {
     const res = await fetch(`${baseUrl}/products`, {
-      next: { revalidate: 30 },
+      cache: "no-store",
     });
     if (!res.ok) return staticProducts;
     const data: ApiProduct[] = await res.json();

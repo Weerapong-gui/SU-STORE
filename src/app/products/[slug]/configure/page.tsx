@@ -1,7 +1,8 @@
-import { notFound } from "next/navigation";
+import { notFound, redirect } from "next/navigation";
 import { ProductConfigurator } from "@/components/ProductConfigurator";
 import { Container } from "@/components/ui/Container";
 import { getProductBySlug } from "@/data/products";
+import { getProducts } from "@/lib/getProducts";
 import { normalizeConfigureIntent } from "@/lib/cart";
 
 export const dynamic = "force-dynamic";
@@ -19,7 +20,7 @@ type ProductConfigurePageProps = {
   };
 };
 
-export default function ProductConfigurePage({
+export default async function ProductConfigurePage({
   params,
   searchParams
 }: ProductConfigurePageProps) {
@@ -27,6 +28,12 @@ export default function ProductConfigurePage({
 
   if (!product) {
     notFound();
+  }
+
+  const apiProducts = await getProducts();
+  const apiProduct = apiProducts.find((p) => p.slug === params.slug);
+  if (apiProduct && apiProduct.available === false) {
+    redirect("/products");
   }
 
   return (

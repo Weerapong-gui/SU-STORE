@@ -23,6 +23,7 @@ import {
 import { cn } from "@/lib/utils";
 import { ColorVariant, Product } from "@/types/product";
 import { useLang } from "@/lib/i18n";
+import { imageBlurMap } from "@/data/products";
 
 type ProductConfiguratorProps = {
   product: Product;
@@ -172,6 +173,8 @@ export function ProductConfigurator({
                   priority={index === 0}
                   sizes="(min-width: 1024px) 55vw, 100vw"
                   className="object-contain"
+                  placeholder={imageBlurMap[image] ? "blur" : "empty"}
+                  blurDataURL={imageBlurMap[image]}
                 />
               </div>
             );

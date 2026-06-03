@@ -1,9 +1,11 @@
 import { ProductCard } from "@/components/ProductCard";
 import { Container } from "@/components/ui/Container";
-import { getProducts } from "@/lib/getProducts";
+import { getAvailableProducts } from "@/lib/getProducts";
+
+export const dynamic = "force-dynamic";
 
 export default async function ProductsPage() {
-  const products = await getProducts();
+  const products = await getAvailableProducts();
 
   return (
     <section className="bg-mist py-20 md:py-28">
@@ -18,8 +20,8 @@ export default async function ProductsPage() {
         </div>
 
         <div className="grid gap-5 md:grid-cols-2">
-          {products.map((product) => (
-            <ProductCard key={product.slug} product={product} />
+          {products.map((product, index) => (
+            <ProductCard key={product.slug} product={product} priority={index === 0} />
           ))}
         </div>
       </Container>
