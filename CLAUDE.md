@@ -13,6 +13,9 @@ SU STORE เป็นระบบสั่งซื้อเสื้อรั�
 | `su-store` | Next.js 14 (App Router) | `https://sumfu.store` | หน้าร้านค้าสำหรับลูกค้า |
 | `su-order-api` | Python (raw HTTP, no framework) | `https://admin.sumfu.xyz` | API + Admin panel |
 
+> **Hosting:** รันบนเซิร์ฟเวอร์ตัวเอง (Arch Linux) ผ่าน Docker + Cloudflare Tunnel  
+> โดเมน `sumfu.store` จดทะเบียนที่ Vercel แต่ DNS จัดการที่ Cloudflare (nameserver ชี้มา Cloudflare)
+
 ---
 
 ## 2. โครงสร้างไฟล์ (File Structure)
@@ -65,9 +68,14 @@ SU-STORE/
 - `su-store` — port 3000, connects to order-api via `http://order-api:10000`
 - `su-order-api` — port 10000 (internal), 3010 (localhost only)
 
-**Cloudflare Tunnel:** (`cloudflared`) route traffic:
-- `sumfu.store` → `http://127.0.0.1:3000`
-- `admin.sumfu.xyz` → `http://127.0.0.1:3010`
+**Cloudflare Tunnels:** มี 2 tunnels แยกกัน (คนละ Cloudflare zone):
+
+| systemd service | tunnel ID | config file | hostnames |
+|-----------------|-----------|-------------|-----------|
+| `cloudflared` | `bc991342-...` | `/etc/cloudflared/config.yml` | `arch.sumfu.xyz`, `admin.sumfu.xyz`, `api.sumfu.xyz`, `store.sumfu.xyz` |
+| `cloudflared-store` | `39308774-...` | `/home/park/.cloudflared/config-store.yml` | `sumfu.store`, `www.sumfu.store` |
+
+ทั้งสองรัน auto-start เมื่อ reboot (systemd enabled)
 
 **ข้อมูล persistent บนเซิร์ฟเวอร์:**
 - Database: `/home/park/SU-STORE/data/order-api/su-order-api/orders.db` (SQLite)
@@ -241,7 +249,7 @@ round_number       INTEGER
 ### หลัง deploy ต้อง restart cloudflared ด้วยมั้ย?
 
 `deploy-api.sh` **ไม่** restart cloudflared → ไม่มี downtime ของ tunnel
-`deploy.sh` **restart** cloudflared → tunnel ดับ ~10-15 วินาที (คาดหวังได้)
+`deploy.sh` **restart** `cloudflared` (tunnel ของ `sumfu.xyz`) → tunnel ดับ ~10-15 วินาที แต่ **ไม่กระทบ `sumfu.store`** เพราะเป็นคนละ tunnel (`cloudflared-store`)
 
 ### SSH เข้าเซิร์ฟเวอร์โดยตรง
 

@@ -12,13 +12,16 @@ export function SkeletonImage({
   className,
   skeletonClassName,
   onLoad,
+  placeholder,
+  blurDataURL,
   ...props
 }: SkeletonImageProps) {
+  const hasBlur = placeholder === "blur" && !!blurDataURL;
   const [loaded, setLoaded] = useState(false);
 
   return (
     <>
-      {!loaded && (
+      {!hasBlur && !loaded && (
         <div
           className={cn(
             "absolute inset-0 animate-pulse bg-zinc-200",
@@ -28,10 +31,12 @@ export function SkeletonImage({
       )}
       <Image
         {...props}
+        placeholder={placeholder}
+        blurDataURL={blurDataURL}
         className={cn(
           className,
-          "transition-opacity duration-500",
-          loaded ? "opacity-100" : "opacity-0"
+          !hasBlur && "transition-opacity duration-500",
+          !hasBlur && (loaded ? "opacity-100" : "opacity-0")
         )}
         onLoad={(e) => {
           setLoaded(true);

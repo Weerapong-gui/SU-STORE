@@ -13,6 +13,7 @@ const SITE_STATUS_TTL = 15_000; // 15 seconds
 const API_BASE = (process.env.ORDER_API_BASE_URL ?? "").replace(/\/$/, "");
 const BYPASS_TOKEN = process.env.BYPASS_TOKEN ?? "";
 const ALWAYS_OPEN = process.env.ALWAYS_OPEN === "1";
+const STAGING_HOST = process.env.STAGING_HOST ?? "";
 
 function isPageRequest(request: NextRequest): boolean {
   const { pathname } = request.nextUrl;
@@ -60,7 +61,9 @@ export async function middleware(request: NextRequest) {
   }
 
   // ── Always-open deployments (store.sumfu.xyz / Docker) ─────────────────────
-  if (ALWAYS_OPEN) return NextResponse.next();
+  const host = request.headers.get("host") ?? "";
+  const isStaging = STAGING_HOST !== "" && host.startsWith(STAGING_HOST);
+  if (ALWAYS_OPEN || isStaging) return NextResponse.next();
 
   // ── Bypass token ────────────────────────────────────────────────────────────
   if (BYPASS_TOKEN && request.method === "GET") {

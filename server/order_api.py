@@ -1683,8 +1683,9 @@ ADMIN_HTML = r"""<!doctype html>
 
     function renderProducts() {
       document.querySelector("#productsGrid").innerHTML = allProducts.map(function(p) {
+        var imgSrc = p.image && p.image.startsWith("/") ? "https://sumfu.store" + p.image : (p.image || "");
         return '<div class="product-card' + (p.available ? "" : " unavailable") + '" data-slug="' + esc(p.slug) + '">' +
-          '<img class="product-img" src="' + esc(p.image) + '" alt="' + esc(p.name) + '" onerror="this.style.background=\'#eee\'" />' +
+          '<img class="product-img" src="' + esc(imgSrc) + '" alt="' + esc(p.name) + '" onerror="this.style.background=\'#eee\'" />' +
           '<div class="product-body">' +
             '<div class="product-name">' + esc(p.name) + '</div>' +
             '<div class="product-meta">' + esc(p.shortName) + ' · ' + esc(p.category) + '</div>' +
@@ -5051,6 +5052,13 @@ class OrderRequestHandler(BaseHTTPRequestHandler):
 
         with open_db() as connection:
             connection.execute("BEGIN IMMEDIATE")
+            slugs = {item["product"]["slug"] for item in validated_payload.get("items", []) if isinstance(item.get("product"), dict)}
+            slugs.add(validated_payload["product"]["slug"])
+            for slug in slugs:
+                row = connection.execute("SELECT available FROM products WHERE slug = ?", (slug,)).fetchone()
+                if row and not row["available"]:
+                    self._send_json(HTTPStatus.BAD_REQUEST, {"message": f"สินค้า {slug} ไม่เปิดจำหน่ายในขณะนี้"})
+                    return
             order = create_order(connection, validated_payload)
             connection.commit()
             sync_order_to_google_sheets(order, "order_created")

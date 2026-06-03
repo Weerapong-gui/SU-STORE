@@ -17,7 +17,8 @@ services:
       ORDER_API_TOKEN: ${ORDER_API_TOKEN:-}
       BLOB_READ_WRITE_TOKEN: ${BLOB_READ_WRITE_TOKEN:-}
       BYPASS_TOKEN: ${BYPASS_TOKEN:-}
-      ALWAYS_OPEN: "1"
+      ALWAYS_OPEN: "${ALWAYS_OPEN:-0}"
+      STAGING_HOST: "${STAGING_HOST:-store.sumfu.xyz}"
     volumes:
       - /home/park/SU-STORE/data/su-store:/app/data
     depends_on:
