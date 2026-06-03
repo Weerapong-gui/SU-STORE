@@ -21,6 +21,7 @@ services:
       STAGING_HOST: "${STAGING_HOST:-store.sumfu.xyz}"
     volumes:
       - /home/park/SU-STORE/data/su-store:/app/data
+      - /home/park/SU-STORE/data/next-image-cache:/app/.next/cache/images
     depends_on:
       order-api:
         condition: service_healthy

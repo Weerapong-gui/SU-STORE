@@ -110,7 +110,7 @@ export async function middleware(request: NextRequest) {
       }
 
       if (siteClosedCache.closed) {
-        return NextResponse.redirect(
+        return NextResponse.rewrite(
           new URL(`/maintenance?reason=${siteClosedCache.reason}`, request.url)
         );
       }
