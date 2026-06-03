@@ -1,6 +1,7 @@
 import { Suspense } from "react";
 import Image from "next/image";
 import { MaintenancePolling } from "./MaintenanceClient";
+import { imageBlurMap } from "@/data/products";
 
 function getImages(reason: string | undefined) {
   if (reason === "beRightBack") {
@@ -32,11 +33,17 @@ export default function MaintenancePage({
     <div className="fixed inset-0 z-50 bg-white">
       {/* Landscape */}
       <div className="relative hidden h-full w-full [@media(orientation:landscape)]:block">
-        <Image src={horizontal} alt="We'll be back" fill className="object-cover" priority sizes="100vw" />
+        <Image src={horizontal} alt="We'll be back" fill className="object-cover" priority sizes="100vw"
+          placeholder={imageBlurMap[horizontal] ? "blur" : "empty"}
+          blurDataURL={imageBlurMap[horizontal]}
+        />
       </div>
       {/* Portrait */}
       <div className="relative h-full w-full [@media(orientation:landscape)]:hidden">
-        <Image src={vertical} alt="We'll be back" fill className="object-cover" priority sizes="100vw" />
+        <Image src={vertical} alt="We'll be back" fill className="object-cover" priority sizes="100vw"
+          placeholder={imageBlurMap[vertical] ? "blur" : "empty"}
+          blurDataURL={imageBlurMap[vertical]}
+        />
       </div>
 
       <Suspense>
