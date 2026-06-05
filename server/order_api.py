@@ -1101,7 +1101,7 @@ ADMIN_HTML = r"""<!doctype html>
           '<td>' + itemsHtml + '<br/><span class="money">' + esc(baht(order.totalAmount)) + '</span>' + schoolHtml + '</td>' +
           '<td><span class="muted">' + (order.slip ? '<span style="color:var(--ok)">✓ Slip uploaded</span>' : 'ไม่มีสลิป') + '</span><br/>' + (order.khantokTicket ? '<span style="font-size:11px;font-weight:700;color:var(--ok)">🎟 บัตรขันโตก ฿' + (order.khantokTicketValue || 100) + '</span>' : order.khantokTicketAlreadyClaimed ? '<span style="font-size:11px;font-weight:700;color:var(--warn)">🎟 ได้ไปแล้ว</span>' : '<span style="font-size:11px;color:var(--muted)">ไม่ได้บัตร</span>') + '</td>' +
           '<td><span class="badge ' + esc(order.status) + '">' + esc(STATUS_TH[order.status] || order.status) + '</span>' + (needsAction ? '<br/><span style="font-size:10px;color:var(--warn);font-weight:700">⚠ รอยืนยัน</span>' : '') + '</td>' +
-          '<td style="font-size:12px;color:var(--muted);white-space:pre-wrap">' + (order.adminNote ? esc(order.adminNote) : '') + '</td>' +
+          '<td style="font-size:12px;white-space:pre-wrap">' + (order.adminNote ? '<span style="color:' + (order.adminNote.includes('ได้รับผ้าคาดฟรีโควต้า500') ? 'var(--ok)' : 'var(--muted)') + '">' + esc(order.adminNote) + '</span>' : '') + '</td>' +
           '<td>' + statusSelect +
             '<div style="display:flex;gap:4px">' +
               '<button class="ghost slipBtn" data-oid="' + esc(order.id) + '" data-total="' + esc(order.totalAmount||0) + '" style="font-size:12px;min-height:28px;flex:1"' + (order.slip ? "" : " disabled") + '>Slip</button>' +
