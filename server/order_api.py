@@ -899,31 +899,17 @@ ADMIN_HTML = r"""<!doctype html>
         if (p < 1) requestAnimationFrame(tick);
       })(s);
     }
-    var ytLiveTimer = null;
-    async function fetchYtViewers() {
-      var id = localStorage.getItem('ytVideoId') || '';
-      var key = localStorage.getItem('ytApiKey') || '';
-      var el = document.querySelector('#ytViewCount');
+    var webVisitorTimer = null;
+    async function fetchWebVisitors() {
+      var el = document.querySelector('#webVisitorCount');
       if (!el) return;
-      if (!id || !key) { el.textContent = 'ตั้งค่า'; return; }
       try {
-        var res = await fetch('https://www.googleapis.com/youtube/v3/videos?part=liveStreamingDetails&id=' + encodeURIComponent(id) + '&key=' + encodeURIComponent(key));
-        var data = await res.json();
-        var item = data.items && data.items[0];
-        var v = item && item.liveStreamingDetails && item.liveStreamingDetails.concurrentViewers;
-        el.textContent = v ? Number(v).toLocaleString() : 'ไม่ได้ live';
-      } catch(e) { el.textContent = 'Error'; }
-    }
-    function setupYtLive() {
-      var id = prompt('YouTube Video ID (เช่น dQw4w9WgXcQ):', localStorage.getItem('ytVideoId') || '');
-      if (id === null) return;
-      var key = prompt('YouTube Data API Key:', localStorage.getItem('ytApiKey') || '');
-      if (key === null) return;
-      localStorage.setItem('ytVideoId', id.trim());
-      localStorage.setItem('ytApiKey', key.trim());
-      fetchYtViewers();
-      clearInterval(ytLiveTimer);
-      ytLiveTimer = setInterval(fetchYtViewers, 30000);
+        var res = await fetch('/site-status', { cache: 'no-store' });
+        if (!res.ok) return;
+        var d = await res.json();
+        var v = Number(d.activeVisitors || 0);
+        el.textContent = v.toLocaleString();
+      } catch(e) {}
     }
     function renderOrderStats(summary) {
       var k100Used = Number(summary.khantokTicket100Used || 0);
@@ -965,9 +951,9 @@ ADMIN_HTML = r"""<!doctype html>
         statHtml("ปฏิเสธ", summary.rejected || 0, false),
         khantokStatHtml("บัตรขันโตก ฿100", k100Used, k100Quota),
         khantokStatHtml("บัตรขันโตก ฿50", k50Used, k50Quota),
-        '<div class="stat" style="cursor:pointer;min-width:90px" onclick="setupYtLive()" title="คลิกเพื่อตั้งค่า YouTube">' +
-          '<span>📺 YouTube Live</span>' +
-          '<strong id="ytViewCount" style="font-size:20px">...</strong>' +
+        '<div class="stat" style="min-width:90px">' +
+          '<span>คนเข้าชมเว็บ</span>' +
+          '<strong id="webVisitorCount" style="font-size:20px">--</strong>' +
         '</div>',
       ].join("");
       var row2 = [
@@ -986,10 +972,10 @@ ADMIN_HTML = r"""<!doctype html>
           if (target > 0) countUp(el, target, 900);
         }
       });
-      // Start YouTube live counter
-      fetchYtViewers();
-      clearInterval(ytLiveTimer);
-      ytLiveTimer = setInterval(fetchYtViewers, 30000);
+      // Start web visitor counter
+      fetchWebVisitors();
+      clearInterval(webVisitorTimer);
+      webVisitorTimer = setInterval(fetchWebVisitors, 30000);
     }
 
     var SCHOOL_OPTIONS = [
