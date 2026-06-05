@@ -269,7 +269,7 @@ ADMIN_HTML = r"""<!doctype html>
     .bar-row { display: flex; align-items: center; gap: 10px; margin-bottom: 8px; }
     .bar-label { font-size: 13px; width: 150px; flex-shrink: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
     .bar-track { flex: 1; height: 8px; background: var(--bar-track); border-radius: 999px; overflow: hidden; }
-    .bar-fill { height: 100%; background: var(--accent); border-radius: 999px; }
+    .bar-fill { height: 100%; background: var(--accent); border-radius: 999px; transition: width 0.7s cubic-bezier(.22,1,.36,1); }
     .bar-count { font-size: 12px; color: var(--muted); width: 32px; text-align: right; }
     .settings-card { background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: 20px; margin-bottom: 16px; }
     .settings-card h3 { font-size: 14px; font-weight: 700; margin-bottom: 14px; }
@@ -890,6 +890,41 @@ ADMIN_HTML = r"""<!doctype html>
       el.className = "notice" + (err ? " err" : "");
     }
 
+    function countUp(el, target, ms) {
+      var s = performance.now();
+      (function tick(now) {
+        var p = Math.min((now - s) / ms, 1);
+        var e = 1 - Math.pow(1 - p, 3);
+        el.textContent = Math.round(e * target).toLocaleString();
+        if (p < 1) requestAnimationFrame(tick);
+      })(s);
+    }
+    var ytLiveTimer = null;
+    async function fetchYtViewers() {
+      var id = localStorage.getItem('ytVideoId') || '';
+      var key = localStorage.getItem('ytApiKey') || '';
+      var el = document.querySelector('#ytViewCount');
+      if (!el) return;
+      if (!id || !key) { el.textContent = 'ตั้งค่า'; return; }
+      try {
+        var res = await fetch('https://www.googleapis.com/youtube/v3/videos?part=liveStreamingDetails&id=' + encodeURIComponent(id) + '&key=' + encodeURIComponent(key));
+        var data = await res.json();
+        var item = data.items && data.items[0];
+        var v = item && item.liveStreamingDetails && item.liveStreamingDetails.concurrentViewers;
+        el.textContent = v ? Number(v).toLocaleString() : 'ไม่ได้ live';
+      } catch(e) { el.textContent = 'Error'; }
+    }
+    function setupYtLive() {
+      var id = prompt('YouTube Video ID (เช่น dQw4w9WgXcQ):', localStorage.getItem('ytVideoId') || '');
+      if (id === null) return;
+      var key = prompt('YouTube Data API Key:', localStorage.getItem('ytApiKey') || '');
+      if (key === null) return;
+      localStorage.setItem('ytVideoId', id.trim());
+      localStorage.setItem('ytApiKey', key.trim());
+      fetchYtViewers();
+      clearInterval(ytLiveTimer);
+      ytLiveTimer = setInterval(fetchYtViewers, 30000);
+    }
     function renderOrderStats(summary) {
       var k100Used = Number(summary.khantokTicket100Used || 0);
       var k100Quota = Number(summary.khantokTicket100Quota || 0);
@@ -908,8 +943,10 @@ ADMIN_HTML = r"""<!doctype html>
           '<svg width="52" height="52" viewBox="0 0 50 50" style="flex-shrink:0">' +
           '<circle cx="25" cy="25" r="18" fill="none" stroke="#e8e8e8" stroke-width="5"/>' +
           '<circle cx="25" cy="25" r="18" fill="none" stroke="var(--accent)" stroke-width="5" stroke-linecap="round"' +
-          ' stroke-dasharray="' + arc.toFixed(2) + ' ' + (circ - arc).toFixed(2) + '"' +
-          ' transform="rotate(-90 25 25)"/>' +
+          ' stroke-dasharray="0 ' + circ.toFixed(2) + '" transform="rotate(-90 25 25)">' +
+          '<animate attributeName="stroke-dasharray" from="0 ' + circ.toFixed(2) + '" to="' + arc.toFixed(2) + ' ' + (circ - arc).toFixed(2) + '"' +
+          ' dur="1s" fill="freeze" calcMode="spline" keySplines="0.22 1 0.36 1" keyTimes="0;1"/>' +
+          '</circle>' +
           '<text x="25" y="29" text-anchor="middle" font-size="10" font-weight="700" fill="var(--text)">' + pct + '%</text>' +
           '</svg>' +
           '<div style="min-width:0">' +
@@ -928,6 +965,10 @@ ADMIN_HTML = r"""<!doctype html>
         statHtml("ปฏิเสธ", summary.rejected || 0, false),
         khantokStatHtml("บัตรขันโตก ฿100", k100Used, k100Quota),
         khantokStatHtml("บัตรขันโตก ฿50", k50Used, k50Quota),
+        '<div class="stat" style="cursor:pointer;min-width:90px" onclick="setupYtLive()" title="คลิกเพื่อตั้งค่า YouTube">' +
+          '<span>📺 YouTube Live</span>' +
+          '<strong id="ytViewCount" style="font-size:20px">...</strong>' +
+        '</div>',
       ].join("");
       var row2 = [
         statClickHtml("โปโล", (summary.qtySingle || 0) + " ตัว", "single"),
@@ -937,6 +978,18 @@ ADMIN_HTML = r"""<!doctype html>
       document.querySelector("#orderStats").innerHTML =
         '<div class="stats" style="margin-bottom:8px">' + row1 + '</div>' +
         '<div class="stats" style="margin-bottom:0">' + row2 + '</div>';
+      // Count-up animation on numeric stat cards
+      document.querySelectorAll('#orderStats .stat strong').forEach(function(el) {
+        var txt = el.textContent.trim();
+        if (/^\d+$/.test(txt)) {
+          var target = parseInt(txt, 10);
+          if (target > 0) countUp(el, target, 900);
+        }
+      });
+      // Start YouTube live counter
+      fetchYtViewers();
+      clearInterval(ytLiveTimer);
+      ytLiveTimer = setInterval(fetchYtViewers, 30000);
     }
 
     var SCHOOL_OPTIONS = [
@@ -1846,9 +1899,13 @@ ADMIN_HTML = r"""<!doctype html>
         var dateLabel = idx % skipLabel === 0
           ? '<text x="' + (x + BAR_W / 2) + '" y="' + (svgH - 2) + '" text-anchor="middle" font-size="8" fill="#999">' + label + '</text>'
           : '';
+        var delay = (idx * 0.015).toFixed(3);
         return '<g>' +
           '<title>' + esc(item[0]) + ': ' + item[1] + ' ออเดอร์</title>' +
-          '<rect x="' + x + '" y="' + y + '" width="' + BAR_W + '" height="' + barH + '" fill="#4f6ef7" rx="3"/>' +
+          '<rect x="' + x + '" y="' + CHART_H + '" width="' + BAR_W + '" height="0" fill="#4f6ef7" rx="3">' +
+          '<animate attributeName="height" from="0" to="' + barH + '" dur="0.5s" begin="' + delay + 's" fill="freeze" calcMode="spline" keySplines="0.22 1 0.36 1" keyTimes="0;1"/>' +
+          '<animate attributeName="y" from="' + CHART_H + '" to="' + y + '" dur="0.5s" begin="' + delay + 's" fill="freeze" calcMode="spline" keySplines="0.22 1 0.36 1" keyTimes="0;1"/>' +
+          '</rect>' +
           countLabel + dateLabel +
         '</g>';
       }).join('');
@@ -1863,9 +1920,14 @@ ADMIN_HTML = r"""<!doctype html>
         var pct = maxVal ? Math.round(item[1] / maxVal * 100) : 0;
         return '<div class="bar-row">' +
           '<div class="bar-label" title="' + esc(item[0]) + '">' + esc(item[0]) + '</div>' +
-          '<div class="bar-track"><div class="bar-fill" style="width:' + pct + '%"></div></div>' +
+          '<div class="bar-track"><div class="bar-fill" style="width:0%" data-pct="' + pct + '"></div></div>' +
           '<div class="bar-count">' + item[1] + '</div></div>';
       }).join("");
+      requestAnimationFrame(function() {
+        container.querySelectorAll('.bar-fill').forEach(function(el) {
+          el.style.width = el.getAttribute('data-pct') + '%';
+        });
+      });
     }
     async function loadAnalytics() {
       setAnalyticsNotice("Loading...");
