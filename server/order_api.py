@@ -899,13 +899,13 @@ ADMIN_HTML = r"""<!doctype html>
         if (p < 1) requestAnimationFrame(tick);
       })(s);
     }
-    var _webVisitorCtrl = null;
-    async function startWebVisitorStream() {
-      if (_webVisitorCtrl) { _webVisitorCtrl.abort(); _webVisitorCtrl = null; }
+    var _statsStreamCtrl = null;
+    async function startStatsStream() {
+      if (_statsStreamCtrl) { _statsStreamCtrl.abort(); _statsStreamCtrl = null; }
       var ctrl = new AbortController();
-      _webVisitorCtrl = ctrl;
+      _statsStreamCtrl = ctrl;
       try {
-        var res = await fetch('/admin/visitor-stream', {
+        var res = await fetch('/admin/stats-stream', {
           headers: { 'Authorization': 'Bearer ' + tokenInput.value.trim() },
           signal: ctrl.signal
         });
@@ -920,17 +920,35 @@ ADMIN_HTML = r"""<!doctype html>
           var lines = buf.split('\n');
           buf = lines.pop();
           lines.forEach(function(line) {
-            if (line.indexOf('data: ') === 0) {
-              var v = parseInt(line.slice(6), 10);
-              if (!isNaN(v)) {
-                var el = document.querySelector('#webVisitorCount');
-                if (el) el.textContent = v.toLocaleString();
+            if (line.indexOf('data: ') !== 0) return;
+            try {
+              var d = JSON.parse(line.slice(6));
+              // visitor count
+              var ve = document.querySelector('#webVisitorCount');
+              if (ve && d.visitors != null) ve.textContent = Number(d.visitors).toLocaleString();
+              // orders summary
+              if (d.summary) {
+                serverSummary = d.summary;
+                renderOrderStats(d.summary);
               }
-            }
+              // analytics summary (only update if tab has been loaded)
+              if (d.analytics) {
+                var ae = document.querySelector('#anTotal');
+                if (ae) {
+                  ae.textContent = d.analytics.total;
+                  var ar = document.querySelector('#anRevenue');
+                  if (ar) ar.textContent = baht(d.analytics.revenue);
+                  var as = document.querySelector('#anSchool');
+                  if (as) as.textContent = d.analytics.schoolCount;
+                  var ap = document.querySelector('#anProfit');
+                  if (ap) ap.textContent = baht(d.analytics.profit);
+                }
+              }
+            } catch(e) {}
           });
         }
       } catch(e) {
-        if (e.name !== 'AbortError') setTimeout(startWebVisitorStream, 5000);
+        if (e.name !== 'AbortError') setTimeout(startStatsStream, 5000);
       }
     }
     function renderOrderStats(summary) {
@@ -994,8 +1012,8 @@ ADMIN_HTML = r"""<!doctype html>
           if (target > 0) countUp(el, target, 900);
         }
       });
-      // Start real-time web visitor stream
-      startWebVisitorStream();
+      // Start real-time stats + visitor stream
+      startStatsStream();
     }
 
     var SCHOOL_OPTIONS = [
@@ -1944,10 +1962,10 @@ ADMIN_HTML = r"""<!doctype html>
         document.querySelector("#analyticsGrid").innerHTML =
           '<div class="analytics-card" style="grid-column:1/-1">' +
             '<div class="stats" style="margin:0">' +
-              '<div class="stat"><span>คำสั่งซื้อทั้งหมด</span><strong>' + d.total + '</strong></div>' +
-              '<div class="stat"><span>รายได้ที่ยืนยันแล้ว</span><strong>' + baht(d.revenue) + '</strong></div>' +
-              '<div class="stat"><span>คณะ</span><strong>' + d.schoolCount + '</strong></div>' +
-              '<div class="stat"><span style="color:var(--ok)">กำไรสุทธิ (~ประมาณ)</span><strong style="color:var(--ok)">' + baht(d.profit) + '</strong></div>' +
+              '<div class="stat"><span>คำสั่งซื้อทั้งหมด</span><strong id="anTotal">' + d.total + '</strong></div>' +
+              '<div class="stat"><span>รายได้ที่ยืนยันแล้ว</span><strong id="anRevenue">' + baht(d.revenue) + '</strong></div>' +
+              '<div class="stat"><span>คณะ</span><strong id="anSchool">' + d.schoolCount + '</strong></div>' +
+              '<div class="stat"><span style="color:var(--ok)">กำไรสุทธิ (~ประมาณ)</span><strong id="anProfit" style="color:var(--ok)">' + baht(d.profit) + '</strong></div>' +
             '</div>' +
           '</div>' +
           '<div class="analytics-card" style="grid-column:1/-1"><h3>ออเดอร์รายวัน</h3><div id="dailyChart"></div></div>' +
@@ -4647,7 +4665,7 @@ class OrderRequestHandler(BaseHTTPRequestHandler):
                 self._send_json(HTTPStatus.OK, {"orders": [public_order(o) for o in rows]})
             return
 
-        if path == "/admin/visitor-stream":
+        if path == "/admin/stats-stream":
             if not self._require_admin_authorization():
                 return
             self.send_response(200)
@@ -4656,17 +4674,54 @@ class OrderRequestHandler(BaseHTTPRequestHandler):
             self.send_header("Connection", "keep-alive")
             self.send_header("X-Accel-Buffering", "no")
             self.end_headers()
-            last_count = -1
+            last_hash = None
+            tick = 0
             try:
                 while True:
                     cutoff = time.time() - _VISITOR_ACTIVE_SECONDS
                     with _global_lock:
-                        count = sum(1 for t in list(_visitor_registry.values()) if t >= cutoff)
-                    if count != last_count:
-                        self.wfile.write(f"data: {count}\n\n".encode())
+                        visitors = sum(1 for t in list(_visitor_registry.values()) if t >= cutoff)
+                    with open_db() as conn:
+                        summary = create_orders_summary(conn)
+                        rev_row = conn.execute(
+                            "SELECT COALESCE(SUM(total_amount),0) AS r FROM orders WHERE status IN ('paid','preparing','shipped')"
+                        ).fetchone()
+                        revenue = int(rev_row["r"] if rev_row else 0)
+                        school_cnt = conn.execute(
+                            "SELECT COUNT(DISTINCT school) AS c FROM orders"
+                        ).fetchone()["c"]
+                        cost_rows = conn.execute(
+                            "SELECT items_json, product_category, quantity FROM orders WHERE status IN ('paid','preparing','shipped')"
+                        ).fetchall()
+                    cq: dict[str, int] = {}
+                    for row in cost_rows:
+                        ok = False
+                        if row["items_json"]:
+                            try:
+                                for itm in json.loads(row["items_json"]):
+                                    cat = (itm.get("product") or {}).get("category") or ""
+                                    if cat:
+                                        cq[cat] = cq.get(cat, 0) + int(itm.get("quantity") or 0)
+                                ok = True
+                            except Exception:
+                                pass
+                        if not ok:
+                            cat = row["product_category"] or ""
+                            if cat:
+                                cq[cat] = cq.get(cat, 0) + int(row["quantity"] or 0)
+                    profit = revenue - sum(cq.get(c, 0) * p for c, p in PRODUCT_COST.items())
+                    payload = {
+                        "visitors": visitors,
+                        "summary": summary,
+                        "analytics": {"total": summary["total"], "revenue": revenue, "schoolCount": school_cnt, "profit": profit},
+                    }
+                    h = hash(json.dumps(payload, sort_keys=True))
+                    if h != last_hash:
+                        self.wfile.write(("data: " + json.dumps(payload) + "\n\n").encode())
                         self.wfile.flush()
-                        last_count = count
-                    time.sleep(1)
+                        last_hash = h
+                    time.sleep(1 if tick < 10 else 5)
+                    tick += 1
             except (BrokenPipeError, ConnectionResetError, OSError):
                 pass
             return
