@@ -899,17 +899,39 @@ ADMIN_HTML = r"""<!doctype html>
         if (p < 1) requestAnimationFrame(tick);
       })(s);
     }
-    var webVisitorTimer = null;
-    async function fetchWebVisitors() {
-      var el = document.querySelector('#webVisitorCount');
-      if (!el) return;
+    var _webVisitorCtrl = null;
+    async function startWebVisitorStream() {
+      if (_webVisitorCtrl) { _webVisitorCtrl.abort(); _webVisitorCtrl = null; }
+      var ctrl = new AbortController();
+      _webVisitorCtrl = ctrl;
       try {
-        var res = await fetch('/site-status', { cache: 'no-store' });
+        var res = await fetch('/admin/visitor-stream', {
+          headers: { 'Authorization': 'Bearer ' + tokenInput.value.trim() },
+          signal: ctrl.signal
+        });
         if (!res.ok) return;
-        var d = await res.json();
-        var v = Number(d.activeVisitors || 0);
-        el.textContent = v.toLocaleString();
-      } catch(e) {}
+        var reader = res.body.getReader();
+        var dec = new TextDecoder();
+        var buf = '';
+        while (true) {
+          var chunk = await reader.read();
+          if (chunk.done) break;
+          buf += dec.decode(chunk.value, { stream: true });
+          var lines = buf.split('\n');
+          buf = lines.pop();
+          lines.forEach(function(line) {
+            if (line.indexOf('data: ') === 0) {
+              var v = parseInt(line.slice(6), 10);
+              if (!isNaN(v)) {
+                var el = document.querySelector('#webVisitorCount');
+                if (el) el.textContent = v.toLocaleString();
+              }
+            }
+          });
+        }
+      } catch(e) {
+        if (e.name !== 'AbortError') setTimeout(startWebVisitorStream, 5000);
+      }
     }
     function renderOrderStats(summary) {
       var k100Used = Number(summary.khantokTicket100Used || 0);
@@ -972,10 +994,8 @@ ADMIN_HTML = r"""<!doctype html>
           if (target > 0) countUp(el, target, 900);
         }
       });
-      // Start web visitor counter
-      fetchWebVisitors();
-      clearInterval(webVisitorTimer);
-      webVisitorTimer = setInterval(fetchWebVisitors, 30000);
+      // Start real-time web visitor stream
+      startWebVisitorStream();
     }
 
     var SCHOOL_OPTIONS = [
@@ -4625,6 +4645,30 @@ class OrderRequestHandler(BaseHTTPRequestHandler):
                 self._send_json(HTTPStatus.OK, {"order": public_order(rows[0])})
             else:
                 self._send_json(HTTPStatus.OK, {"orders": [public_order(o) for o in rows]})
+            return
+
+        if path == "/admin/visitor-stream":
+            if not self._require_admin_authorization():
+                return
+            self.send_response(200)
+            self.send_header("Content-Type", "text/event-stream")
+            self.send_header("Cache-Control", "no-cache")
+            self.send_header("Connection", "keep-alive")
+            self.send_header("X-Accel-Buffering", "no")
+            self.end_headers()
+            last_count = -1
+            try:
+                while True:
+                    cutoff = time.time() - _VISITOR_ACTIVE_SECONDS
+                    with _global_lock:
+                        count = sum(1 for t in list(_visitor_registry.values()) if t >= cutoff)
+                    if count != last_count:
+                        self.wfile.write(f"data: {count}\n\n".encode())
+                        self.wfile.flush()
+                        last_count = count
+                    time.sleep(1)
+            except (BrokenPipeError, ConnectionResetError, OSError):
+                pass
             return
 
         if path == "/admin/orders":
