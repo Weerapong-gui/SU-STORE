@@ -53,6 +53,8 @@ services:
       GOOGLE_SHEETS_WEBHOOK_URL: ${GOOGLE_SHEETS_WEBHOOK_URL:-}
       GOOGLE_SHEETS_WEBHOOK_TOKEN: ${GOOGLE_SHEETS_WEBHOOK_TOKEN:-}
       BYPASS_TOKEN: ${BYPASS_TOKEN:-}
+      PICKUP_USERNAME: ${PICKUP_USERNAME:-staff}
+      PICKUP_PASSWORD: ${PICKUP_PASSWORD:-}
     volumes:
       - /home/park/SU-STORE/data/order-api:/var/data
     healthcheck:
