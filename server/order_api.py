@@ -3061,7 +3061,7 @@ CLAIM_STATION_HTML = r"""<!doctype html>
 <head>
   <meta charset="utf-8"/>
   <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no"/>
-  <title>Claim Station — SU STORE</title>
+  <title>Claim Station</title>
   <script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.min.js"></script>
   <style>
     *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
@@ -3080,8 +3080,11 @@ CLAIM_STATION_HTML = r"""<!doctype html>
     }
     body{font-family:system-ui,-apple-system,sans-serif;background:var(--bg);color:var(--ink);min-height:100vh}
     input,button,textarea,select{font-family:inherit}
-    /* Login */
-    #loginScreen{min-height:100vh;display:flex;align-items:center;justify-content:center;padding:16px}
+    /* Screen switching — explicit display values to avoid [hidden] CSS conflict */
+    #loginScreen{display:flex;min-height:100vh;align-items:center;justify-content:center;padding:16px}
+    #loginScreen.scr-off{display:none!important}
+    #mainScreen{display:none;min-height:100vh;flex-direction:column}
+    #mainScreen.scr-on{display:flex!important}
     .login-card{background:var(--card);border-radius:var(--radius);padding:36px 28px;width:100%;max-width:380px;box-shadow:var(--shadow)}
     .login-logo{text-align:center;margin-bottom:28px}
     .login-logo h1{font-size:22px;font-weight:800;letter-spacing:-.03em;color:var(--primary)}
@@ -3096,7 +3099,6 @@ CLAIM_STATION_HTML = r"""<!doctype html>
     .btn-primary:disabled{opacity:.5;cursor:not-allowed}
     .login-error{color:var(--danger);font-size:13px;margin-top:10px;text-align:center;min-height:18px}
     /* Top bar */
-    #mainScreen{min-height:100vh;display:flex;flex-direction:column}
     .top-bar{background:var(--card);border-bottom:1px solid var(--border);padding:0 16px;height:52px;display:flex;align-items:center;gap:10px;position:sticky;top:0;z-index:10;box-shadow:0 1px 4px rgba(0,0,0,.06)}
     .top-bar-title{font-size:15px;font-weight:800;color:var(--primary);letter-spacing:-.02em;flex:1}
     .top-bar-user{font-size:12px;color:var(--muted);font-weight:600;max-width:120px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
@@ -3157,6 +3159,12 @@ CLAIM_STATION_HTML = r"""<!doctype html>
     .err-card{background:var(--danger-bg);color:var(--danger);border-radius:var(--radius);padding:16px;box-shadow:var(--shadow);margin-bottom:12px}
     .err-card h3{font-size:15px;margin-bottom:6px}
     .err-card p{font-size:13px;margin-bottom:12px}
+    /* Stats bar */
+    .stats-bar{display:flex;gap:10px;margin-bottom:12px;flex-wrap:wrap}
+    .stat-card{background:var(--card);border-radius:var(--radius);box-shadow:var(--shadow);padding:14px 18px;flex:1;min-width:120px}
+    .stat-label{font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.06em;margin-bottom:4px}
+    .stat-value{font-size:28px;font-weight:800;color:var(--ink);letter-spacing:-.02em}
+    .stat-value.ok{color:var(--ok)}
     /* Recent */
     .recent-card{background:var(--card);border-radius:var(--radius);box-shadow:var(--shadow);overflow:hidden}
     .recent-hdr{padding:11px 14px;border-bottom:1px solid var(--border);font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.06em}
@@ -3193,13 +3201,27 @@ CLAIM_STATION_HTML = r"""<!doctype html>
     </div>
   </div>
 
-  <div id="mainScreen" hidden>
+  <div id="mainScreen">
     <div class="top-bar">
       <span class="top-bar-title">CLAIM STATION</span>
       <span class="top-bar-user" id="userLabel"></span>
       <button id="logoutBtn" class="btn-logout">ออกจากระบบ</button>
     </div>
     <div class="main-content">
+      <div class="stats-bar">
+        <div class="stat-card">
+          <div class="stat-label">รับวันนี้</div>
+          <div class="stat-value ok" id="statToday">—</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-label">รับทั้งหมด</div>
+          <div class="stat-value" id="statTotal">—</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-label">รอรับอยู่</div>
+          <div class="stat-value" id="statPending">—</div>
+        </div>
+      </div>
       <div class="main-grid">
         <div class="scan-col">
           <div class="scanner-card">
@@ -3236,6 +3258,7 @@ CLAIM_STATION_HTML = r"""<!doctype html>
   <script>
     var currentToken = '';
     var currentUser = '';
+    var statsInterval = null;
     var scanCooldown = false;
     var cameraStream = null;
     var animFrame = null;
@@ -3261,14 +3284,27 @@ CLAIM_STATION_HTML = r"""<!doctype html>
     })();
 
     function showLogin() {
-      document.getElementById('loginScreen').hidden = false;
-      document.getElementById('mainScreen').hidden = true;
+      document.getElementById('loginScreen').classList.remove('scr-off');
+      document.getElementById('mainScreen').classList.remove('scr-on');
+      if (statsInterval) { clearInterval(statsInterval); statsInterval = null; }
     }
     function showMain() {
-      document.getElementById('loginScreen').hidden = true;
-      document.getElementById('mainScreen').hidden = false;
+      document.getElementById('loginScreen').classList.add('scr-off');
+      document.getElementById('mainScreen').classList.add('scr-on');
       document.getElementById('userLabel').textContent = currentUser;
+      loadStats();
+      statsInterval = setInterval(loadStats, 30000);
       startCamera();
+    }
+    function loadStats() {
+      fetch('/claim-station/stats', {headers: {'Authorization': 'Claim ' + currentToken}})
+        .then(function(r) { return r.ok ? r.json() : null; })
+        .then(function(d) {
+          if (!d) return;
+          document.getElementById('statToday').textContent = d.receivedToday;
+          document.getElementById('statTotal').textContent = d.receivedTotal;
+          document.getElementById('statPending').textContent = d.pendingPickup;
+        }).catch(function() {});
     }
 
     document.getElementById('loginForm').addEventListener('submit', function(e) {
@@ -3307,7 +3343,8 @@ CLAIM_STATION_HTML = r"""<!doctype html>
       localStorage.removeItem('csToken'); localStorage.removeItem('csUser');
       sessionStorage.removeItem('csToken'); sessionStorage.removeItem('csUser');
       currentToken = ''; currentUser = '';
-      stopCamera(); showLogin();
+      stopCamera();
+      showLogin();
     }
 
     document.getElementById('toggleCamBtn').addEventListener('click', function() {
@@ -3474,6 +3511,7 @@ CLAIM_STATION_HTML = r"""<!doctype html>
       var now = new Date();
       recentPickups.unshift({code: order.id || '', name: cust.fullName || '', time: String(now.getHours()).padStart(2,'0') + ':' + String(now.getMinutes()).padStart(2,'0')});
       if (recentPickups.length > 30) recentPickups.pop();
+      loadStats();
       var html = '';
       for (var i = 0; i < recentPickups.length; i++) {
         var p = recentPickups[i];
@@ -5279,6 +5317,29 @@ class OrderRequestHandler(BaseHTTPRequestHandler):
 
         if path == "/claim-station":
             self._send_html(HTTPStatus.OK, CLAIM_STATION_HTML)
+            return
+
+        if path == "/claim-station/stats":
+            if not self._has_claim_station_authorization():
+                self._deny_unauthorized()
+                return
+            with open_db() as connection:
+                today_bkk = datetime.now(TZ_BANGKOK).strftime("%Y-%m-%d")
+                received_today = connection.execute(
+                    "SELECT COUNT(*) AS c FROM orders WHERE status='received' AND DATE(received_at,'+7 hours')=?",
+                    (today_bkk,),
+                ).fetchone()["c"]
+                received_total = connection.execute(
+                    "SELECT COUNT(*) AS c FROM orders WHERE status='received'"
+                ).fetchone()["c"]
+                pending_pickup = connection.execute(
+                    "SELECT COUNT(*) AS c FROM orders WHERE status='shipped'"
+                ).fetchone()["c"]
+            self._send_json(HTTPStatus.OK, {
+                "receivedToday": received_today,
+                "receivedTotal": received_total,
+                "pendingPickup": pending_pickup,
+            })
             return
 
         claim_order_get_match = re.fullmatch(r"/claim-station/orders/([A-Z0-9-]+)", path)
