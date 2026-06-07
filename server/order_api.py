@@ -15,7 +15,7 @@ import sqlite3
 import threading
 import urllib.error
 import urllib.request
-from datetime import datetime, timezone, timedelta
+from datetime import datetime, timezone, timedelta, date
 from email.parser import BytesParser
 from email.policy import default
 from http import HTTPStatus
@@ -36,6 +36,14 @@ ORDER_PREFIX = os.environ.get("ORDER_PREFIX", "FP28")
 ORDER_ROUND = int(os.environ.get("ORDER_ROUND", "1"))
 ORDER_API_TOKEN = os.environ.get("ORDER_API_TOKEN", "")
 BYPASS_TOKEN = os.environ.get("BYPASS_TOKEN", "")
+PICKUP_USERNAME = os.environ.get("PICKUP_USERNAME", "staff")
+PICKUP_PASSWORD = os.environ.get("PICKUP_PASSWORD", "")
+# Deterministic session token derived from credentials (survives restarts)
+CLAIM_STATION_TOKEN = hmac.new(
+    key=(PICKUP_USERNAME + ":" + PICKUP_PASSWORD).encode("utf-8"),
+    msg=b"claim-station-v1",
+    digestmod="sha256",
+).hexdigest() if PICKUP_PASSWORD else ""
 GOOGLE_SHEETS_WEBHOOK_URL = os.environ.get("GOOGLE_SHEETS_WEBHOOK_URL", "").strip()
 GOOGLE_SHEETS_WEBHOOK_TOKEN = os.environ.get("GOOGLE_SHEETS_WEBHOOK_TOKEN", "").strip()
 KHANTOK_QUOTA_100 = int(os.environ.get("KHANTOK_QUOTA_100", "2000"))
@@ -50,6 +58,7 @@ ORDER_STATUSES = {
     "paid",
     "preparing",
     "shipped",
+    "received",
     "cancelled",
     "rejected",
 }
@@ -59,6 +68,7 @@ PAYMENT_STATUS_BY_ORDER_STATUS = {
     "paid": "paid",
     "preparing": "paid",
     "shipped": "paid",
+    "received": "paid",
     "cancelled": "rejected",
     "rejected": "rejected",
 }
@@ -145,7 +155,7 @@ ADMIN_HTML = r"""<!doctype html>
       --bg: #f4f4f5; --surface: #fff; --surface2: #f9f9fa; --header-bg: rgba(255,255,255,.9);
       --line: #d8d8dd; --text: #111114;
       --muted: #666a73; --accent: #0071e3; --danger: #b42318; --ok: #027a48; --warn: #b45309;
-      --badge-default: #eef2ff; --badge-warn: #fff7ed; --badge-ok: #ecfdf3; --badge-danger: #fef3f2;
+      --badge-default: #eef2ff; --badge-warn: #fff7ed; --badge-ok: #ecfdf3; --badge-danger: #fef3f2; --badge-purple: #f5f3ff; --purple: #7c3aed;
       --editing-row: #fef9c3; --toggle-track: #d0d0d5; --bar-track: #eef2ff; --img-bg: #f0f0f0;
     }
     @media (prefers-color-scheme: dark) {
@@ -153,7 +163,7 @@ ADMIN_HTML = r"""<!doctype html>
         --bg: #111113; --surface: #1c1c1e; --surface2: #2c2c2e; --header-bg: rgba(28,28,30,.9);
         --line: #38383a; --text: #f5f5f7;
         --muted: #8e8e93; --accent: #0a84ff; --danger: #ff453a; --ok: #30d158; --warn: #ff9f0a;
-        --badge-default: #1e2640; --badge-warn: #2d1f00; --badge-ok: #0d2b1a; --badge-danger: #2d0c08;
+        --badge-default: #1e2640; --badge-warn: #2d1f00; --badge-ok: #0d2b1a; --badge-danger: #2d0c08; --badge-purple: #1e1040; --purple: #a78bfa;
         --editing-row: #2d2a00; --toggle-track: #48484a; --bar-track: #2c2c2e; --img-bg: #2c2c2e;
       }
     }
@@ -219,12 +229,12 @@ ADMIN_HTML = r"""<!doctype html>
       border-radius: 8px; overflow: hidden; margin-bottom: 16px;
     }
     .stat { background: var(--surface); padding: 14px 16px; }
-    .stat span { display: block; color: var(--muted); font-size: 11px; font-weight: 700; letter-spacing: .1em; text-transform: uppercase; }
+    .stat > span { display: block; color: var(--muted); font-size: 11px; font-weight: 700; letter-spacing: .1em; text-transform: uppercase; }
     .stat strong { display: block; margin-top: 6px; font-size: 24px; letter-spacing: -.04em; word-break: break-all; }
     .stat.compact strong { font-size: 14px; letter-spacing: 0; }
     .stat.stat-ring { display: flex; align-items: center; gap: 12px; padding: 12px 14px; }
     .stat.stat-ring span { font-size: 11px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); }
-    .stat.stat-ring strong { font-size: 13px; margin-top: 3px; letter-spacing: 0; font-weight: 600; }
+    .stat.stat-ring strong { font-size: 13px; margin-top: 3px; letter-spacing: 0; font-weight: 600; white-space: nowrap; }
     .toolbar { display: flex; flex-wrap: wrap; gap: 10px; margin-bottom: 14px; align-items: center; }
     .toolbar input, .toolbar select { max-width: 220px; }
     .table-card { border: 1px solid var(--line); border-radius: 8px; background: var(--surface); overflow: hidden; }
@@ -237,6 +247,7 @@ ADMIN_HTML = r"""<!doctype html>
     .badge { display: inline-flex; align-items: center; padding: 2px 9px; border-radius: 999px; background: var(--badge-default); font-size: 12px; font-weight: 700; white-space: nowrap; }
     .badge.waiting_confirm { background: var(--badge-warn); color: var(--warn); }
     .badge.paid, .badge.preparing, .badge.shipped { background: var(--badge-ok); color: var(--ok); }
+    .badge.received { background: var(--badge-purple); color: var(--purple); }
     .badge.rejected, .badge.cancelled { background: var(--badge-danger); color: var(--danger); }
     .products-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px,1fr)); gap: 16px; }
     .product-card { background: var(--surface); border: 1px solid var(--line); border-radius: 12px; overflow: hidden; transition: box-shadow .2s; }
@@ -281,6 +292,8 @@ ADMIN_HTML = r"""<!doctype html>
       .analytics-grid { grid-template-columns: 1fr; }
       .toolbar input, .toolbar select { max-width: 100%; }
     }
+    @keyframes odom-up { from { transform: translateY(60%); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
+    @keyframes odom-dn { from { transform: translateY(-60%); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
   </style>
 </head>
 <body>
@@ -304,6 +317,10 @@ ADMIN_HTML = r"""<!doctype html>
     <button class="tab-btn" data-tab="settings">Settings</button>
     <button class="tab-btn" data-tab="audit">Audit Log</button>
     <button class="tab-btn" data-tab="backup">Backup</button>
+    <span style="margin-left:auto;display:flex;align-items:center;gap:5px;padding:0 8px;font-size:12px;color:var(--muted);flex-shrink:0">
+      <span style="width:7px;height:7px;border-radius:50%;background:var(--ok);display:inline-block;flex-shrink:0"></span>
+      <span id="webVisitorCount">--</span> online
+    </span>
   </nav>
 
   <!-- ORDERS TAB -->
@@ -312,10 +329,9 @@ ADMIN_HTML = r"""<!doctype html>
       <div id="orderStats"></div>
       <div style="display:flex;gap:6px;align-items:center;margin-bottom:12px;flex-wrap:wrap">
         <span style="font-size:12px;font-weight:700;color:var(--muted);letter-spacing:.08em;text-transform:uppercase;margin-right:4px">Phase</span>
-        <button class="ghost phase-btn active-phase" data-round="0" style="min-height:30px;font-size:12px;padding:4px 12px">All</button>
-        <button class="ghost phase-btn" data-round="1" style="min-height:30px;font-size:12px;padding:4px 12px">Phase 1<span style="font-size:10px;color:var(--muted);margin-left:4px">18–23 พ.ค.</span></button>
-        <button class="ghost phase-btn" data-round="2" style="min-height:30px;font-size:12px;padding:4px 12px">Phase 2<span style="font-size:10px;color:var(--muted);margin-left:4px">25–30 พ.ค.</span></button>
-        <button class="ghost phase-btn" data-round="3" style="min-height:30px;font-size:12px;padding:4px 12px">Phase 3<span style="font-size:10px;color:var(--muted);margin-left:4px">1–7 มิ.ย.</span></button>
+        <div id="phaseBtnContainer" style="display:flex;gap:6px;flex-wrap:wrap">
+          <button class="ghost phase-btn active-phase" data-round="0" style="min-height:30px;font-size:12px;padding:4px 12px">All</button>
+        </div>
       </div>
       <div class="toolbar">
         <input id="searchInput" type="search" placeholder="Search order, name, school..." />
@@ -326,6 +342,7 @@ ADMIN_HTML = r"""<!doctype html>
           <option value="paid">paid</option>
           <option value="preparing">preparing</option>
           <option value="shipped">Ready to Receive</option>
+          <option value="received">รับแล้ว (Received)</option>
           <option value="cancelled">cancelled</option>
           <option value="rejected">rejected</option>
         </select>
@@ -341,6 +358,7 @@ ADMIN_HTML = r"""<!doctype html>
           <option value="paid">paid</option>
           <option value="preparing">preparing</option>
           <option value="shipped">Ready to Receive</option>
+          <option value="received">รับแล้ว (Received)</option>
           <option value="cancelled">cancelled</option>
           <option value="rejected">rejected</option>
         </select>
@@ -502,17 +520,15 @@ ADMIN_HTML = r"""<!doctype html>
       </div>
       <div class="settings-card">
         <h3>Order Phase</h3>
-        <p style="color:var(--muted);font-size:13px;margin:0 0 12px">Phase ใช้กำหนด digit สุดท้ายของเลขออเดอร์ (FP28XXXX<b>P</b>) — auto จากวันที่ หรือ override ได้ที่นี่</p>
-        <div style="display:flex;align-items:center;gap:16px">
-          <button class="secondary" id="phaseDecBtn" style="width:36px;height:36px;font-size:18px;padding:0;border-radius:50%">−</button>
-          <div style="text-align:center;min-width:80px">
-            <div style="font-size:32px;font-weight:700;line-height:1" id="phaseDisplay">—</div>
-            <div style="font-size:11px;color:var(--muted);margin-top:4px" id="phaseLabel">loading...</div>
+        <p style="color:var(--muted);font-size:13px;margin:0 0 16px">Phase กำหนด digit สุดท้ายของเลขออเดอร์ (FP28XXXX<b>P</b>) — เพิ่ม/แก้ไข Phase ได้จาก Orders tab</p>
+        <div>
+          <label style="font-size:13px;font-weight:600;display:block;margin-bottom:8px">Phase ปัจจุบัน (Override)</label>
+          <div id="phaseSelectBtns" style="display:flex;gap:6px;flex-wrap:wrap"></div>
+          <div style="margin-top:10px;font-size:13px">
+            Phase ที่ใช้อยู่: <b id="phaseDisplay">—</b>
+            <span id="phaseLabel" style="color:var(--muted);margin-left:8px;font-size:12px"></span>
           </div>
-          <button class="secondary" id="phaseIncBtn" style="width:36px;height:36px;font-size:18px;padding:0;border-radius:50%">+</button>
-          <button class="secondary" id="phaseClearBtn" style="font-size:12px;padding:6px 12px">Auto (จากวันที่)</button>
         </div>
-        <p style="font-size:12px;color:var(--muted);margin:10px 0 0">Phase 0 = ก่อน 18 May &nbsp;|&nbsp; 1 = 18–23 May &nbsp;|&nbsp; 2 = 25–30 May &nbsp;|&nbsp; 3 = 1–7 Jun</p>
       </div>
       <div class="settings-card">
         <h3>Khantok Ticket Quota</h3>
@@ -752,6 +768,12 @@ ADMIN_HTML = r"""<!doctype html>
       <p style="font-size:11px;font-weight:700;color:var(--muted);letter-spacing:.1em;text-transform:uppercase;margin:0 0 10px">Note</p>
       <textarea id="oe_adminNote" rows="3" placeholder="Admin note (ไม่แสดงให้ลูกค้าเห็น)" style="width:100%;box-sizing:border-box;border:1px solid var(--line);border-radius:8px;padding:8px 10px;font-size:13px;resize:vertical;font-family:inherit;outline:none"></textarea>
 
+      <div id="oe_receivedInfo" style="display:none">
+        <hr style="border:none;border-top:1px solid var(--line);margin:20px 0" />
+        <p style="font-size:11px;font-weight:700;color:var(--muted);letter-spacing:.1em;text-transform:uppercase;margin:0 0 8px">Pickup Record</p>
+        <div id="oe_receivedDetail" style="font-size:13px;color:var(--text);padding:10px 12px;background:var(--surface2);border-radius:8px;border:1px solid var(--line)"></div>
+      </div>
+
       <p class="notice err" id="orderEditNotice" style="margin-top:14px"></p>
       <div style="display:flex;gap:10px;justify-content:flex-end;margin-top:16px;position:sticky;bottom:0;background:#fff;padding-top:12px;border-top:1px solid var(--line)">
         <button class="ghost" id="cancelOrderEditBtn">Cancel</button>
@@ -770,6 +792,26 @@ ADMIN_HTML = r"""<!doctype html>
     </div>
   </div>
 
+  <!-- Phase date dialog -->
+  <div id="phaseDialog" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.5);backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px);z-index:200;align-items:center;justify-content:center">
+    <div style="background:var(--card);border-radius:12px;padding:24px;min-width:300px;max-width:380px;width:90%;box-shadow:0 8px 32px rgba(0,0,0,.2)">
+      <h3 id="phaseDialogTitle" style="margin:0 0 16px;font-size:16px"></h3>
+      <div style="margin-bottom:12px">
+        <label style="font-size:13px;font-weight:600;display:block;margin-bottom:4px">วันเริ่มต้น</label>
+        <input id="phaseStartDate" type="date" style="width:100%;box-sizing:border-box" />
+      </div>
+      <div style="margin-bottom:20px">
+        <label style="font-size:13px;font-weight:600;display:block;margin-bottom:4px">วันสิ้นสุด</label>
+        <input id="phaseEndDate" type="date" style="width:100%;box-sizing:border-box" />
+      </div>
+      <p style="font-size:12px;color:var(--muted);margin:0 0 16px">วันที่ใช้สำหรับ Auto detection — ไม่กำหนดก็ได้</p>
+      <div style="display:flex;gap:8px;justify-content:flex-end">
+        <button class="secondary" id="phaseDialogCancelBtn">ยกเลิก</button>
+        <button class="primary" id="phaseDialogSaveBtn">บันทึก</button>
+      </div>
+    </div>
+  </div>
+
   <script>
     // ── Token ──────────────────────────────────────────────────────────────────
     const tokenInput = document.querySelector("#tokenInput");
@@ -783,6 +825,7 @@ ADMIN_HTML = r"""<!doctype html>
       sessionStorage.setItem("suStoreAdminToken", tokenInput.value.trim());
       loadOrders();
       loadProducts();
+      loadSettings();
     });
     document.querySelector("#clearTokenBtn").addEventListener("click", () => {
       sessionStorage.removeItem("suStoreAdminToken");
@@ -863,8 +906,8 @@ ADMIN_HTML = r"""<!doctype html>
     }
 
     // ── ORDERS ─────────────────────────────────────────────────────────────────
-    var statuses = ["pending_payment","waiting_confirm","paid","preparing","shipped","cancelled","rejected"];
-    var STATUS_TH = {"pending_payment":"รอสลิป","waiting_confirm":"รอยืนยัน","paid":"ชำระแล้ว","preparing":"กำลังจัดเตรียม","shipped":"พร้อมรับ","cancelled":"ยกเลิก","rejected":"ปฏิเสธ"};
+    var statuses = ["pending_payment","waiting_confirm","paid","preparing","shipped","received","cancelled","rejected"];
+    var STATUS_TH = {"pending_payment":"รอสลิป","waiting_confirm":"รอยืนยัน","paid":"ชำระแล้ว","preparing":"กำลังจัดเตรียม","shipped":"พร้อมรับ","received":"รับแล้ว ✓","cancelled":"ยกเลิก","rejected":"ปฏิเสธ"};
     function fmtDate(iso) {
       if (!iso) return "-";
       var s = String(iso).replace(" ", "T");
@@ -899,6 +942,50 @@ ADMIN_HTML = r"""<!doctype html>
         if (p < 1) requestAnimationFrame(tick);
       })(s);
     }
+    function odometer(el, newText) {
+      newText = String(newText);
+      var oldText = el.textContent;
+      if (oldText === newText) return;
+      var oldDigits = oldText.replace(/\D/g, '');
+      var newDigits = newText.replace(/\D/g, '');
+      var offset = oldDigits.length - newDigits.length;
+      var digitIdx = 0;
+      var parts = [];
+      // Match single digits OR runs of non-digits (keeps Thai combining chars together)
+      var segs = newText.match(/(\d|\D+)/g) || [newText];
+      segs.forEach(function(seg) {
+        if (/^\d$/.test(seg)) {
+          var nc = seg;
+          var oi = digitIdx + offset;
+          var oc = (oi >= 0 && oi < oldDigits.length) ? oldDigits[oi] : null;
+          if (nc !== oc) {
+            var nv = parseInt(nc, 10);
+            var ov = oc !== null ? parseInt(oc, 10) : -1;
+            var anim = (ov < 0 || nv > ov) ? 'odom-up' : 'odom-dn';
+            parts.push('<span style="animation:' + anim + ' 0.35s cubic-bezier(.22,1,.36,1) both">' + nc + '</span>');
+          } else {
+            parts.push('<span>' + nc + '</span>');
+          }
+          digitIdx++;
+        } else {
+          parts.push('<span>' + seg + '</span>');
+        }
+      });
+      // Wrap in inline-flex so word-break:break-all on parent cannot split between digit spans
+      el.innerHTML = '<span style="display:inline-flex;align-items:baseline">' + parts.join('') + '</span>';
+    }
+    function updateOrderStats(summary) {
+      function n(v) { return Number(v || 0).toLocaleString(); }
+      function setOdom(id, val) { var el = document.getElementById(id); if (el) odometer(el, val); }
+      setOdom('statTotal', n(summary.total));
+      setOdom('statPending', n(summary.pendingPayment));
+      setOdom('statWaiting', n(summary.waitingConfirm));
+      setOdom('statPaid', n(summary.paid));
+      setOdom('statRejected', n(summary.rejected));
+      setOdom('statSingle', n(summary.qtySingle) + ' ตัว');
+      setOdom('statJacket', n(summary.qtyJacket) + ' ตัว');
+      setOdom('statHeadband', n(summary.qtyHeadband) + ' อัน');
+    }
     var _statsStreamCtrl = null;
     async function startStatsStream() {
       if (_statsStreamCtrl) { _statsStreamCtrl.abort(); _statsStreamCtrl = null; }
@@ -925,23 +1012,29 @@ ADMIN_HTML = r"""<!doctype html>
               var d = JSON.parse(line.slice(6));
               // visitor count
               var ve = document.querySelector('#webVisitorCount');
-              if (ve && d.visitors != null) ve.textContent = Number(d.visitors).toLocaleString();
+              if (ve && d.visitors != null) odometer(ve, Number(d.visitors).toLocaleString());
               // orders summary
               if (d.summary) {
                 serverSummary = d.summary;
-                renderOrderStats(d.summary);
+                if (currentRound === 0) {
+                  if (document.getElementById('statTotal')) {
+                    updateOrderStats(d.summary);
+                  } else {
+                    renderOrderStats(d.summary);
+                  }
+                }
               }
               // analytics summary (only update if tab has been loaded)
               if (d.analytics) {
                 var ae = document.querySelector('#anTotal');
                 if (ae) {
-                  ae.textContent = d.analytics.total;
+                  odometer(ae, String(d.analytics.total));
                   var ar = document.querySelector('#anRevenue');
-                  if (ar) ar.textContent = baht(d.analytics.revenue);
+                  if (ar) odometer(ar, baht(d.analytics.revenue));
                   var as = document.querySelector('#anSchool');
-                  if (as) as.textContent = d.analytics.schoolCount;
+                  if (as) odometer(as, String(d.analytics.schoolCount));
                   var ap = document.querySelector('#anProfit');
-                  if (ap) ap.textContent = baht(d.analytics.profit);
+                  if (ap) odometer(ap, baht(d.analytics.profit));
                 }
               }
             } catch(e) {}
@@ -977,29 +1070,25 @@ ADMIN_HTML = r"""<!doctype html>
           '</svg>' +
           '<div style="min-width:0">' +
           '<span>' + esc(label) + '</span>' +
-          '<strong>' + esc(used + ' of ' + quota + ' used') + '</strong>' +
+          '<strong>' + used.toLocaleString() + ' / ' + quota.toLocaleString() + '</strong>' +
           '</div></div>';
       }
       function statClickHtml(label, value, category) {
         return '<div class="stat compact" style="cursor:pointer;border-bottom:2px solid var(--accent)" data-breakdown="' + esc(category) + '" title="คลิกดูรายละเอียด"><span>' + esc(label) + '</span><strong>' + esc(value) + '</strong></div>';
       }
       var row1 = [
-        statHtml("ทั้งหมด", summary.total || 0, false),
-        statHtml("รอสลิป", summary.pendingPayment || 0, false),
-        statHtml("รอยืนยัน", summary.waitingConfirm || 0, false),
-        '<div class="stat"><span>ชำระแล้ว</span><strong style="color:var(--ok)">' + esc(summary.paid || 0) + '</strong></div>',
-        statHtml("ปฏิเสธ", summary.rejected || 0, false),
+        '<div class="stat"><span>ทั้งหมด</span><strong id="statTotal">' + esc(summary.total || 0) + '</strong></div>',
+        '<div class="stat"><span>รอสลิป</span><strong id="statPending">' + esc(summary.pendingPayment || 0) + '</strong></div>',
+        '<div class="stat"><span>รอยืนยัน</span><strong id="statWaiting">' + esc(summary.waitingConfirm || 0) + '</strong></div>',
+        '<div class="stat"><span>ชำระแล้ว</span><strong id="statPaid" style="color:var(--ok)">' + esc(summary.paid || 0) + '</strong></div>',
+        '<div class="stat"><span>ปฏิเสธ</span><strong id="statRejected">' + esc(summary.rejected || 0) + '</strong></div>',
         khantokStatHtml("บัตรขันโตก ฿100", k100Used, k100Quota),
         khantokStatHtml("บัตรขันโตก ฿50", k50Used, k50Quota),
-        '<div class="stat" style="min-width:90px">' +
-          '<span>คนเข้าชมเว็บ</span>' +
-          '<strong id="webVisitorCount" style="font-size:20px">--</strong>' +
-        '</div>',
       ].join("");
       var row2 = [
-        statClickHtml("โปโล", (summary.qtySingle || 0) + " ตัว", "single"),
-        statClickHtml("แจ็คเก็ต", (summary.qtyJacket || 0) + " ตัว", "jacket"),
-        statClickHtml("Headband", (summary.qtyHeadband || 0) + " อัน", "headband"),
+        '<div class="stat compact" style="cursor:pointer;border-bottom:2px solid var(--accent)" data-breakdown="single" title="คลิกดูรายละเอียด"><span>โปโล</span><strong id="statSingle">' + esc((summary.qtySingle || 0) + ' ตัว') + '</strong></div>',
+        '<div class="stat compact" style="cursor:pointer;border-bottom:2px solid var(--accent)" data-breakdown="jacket" title="คลิกดูรายละเอียด"><span>แจ็คเก็ต</span><strong id="statJacket">' + esc((summary.qtyJacket || 0) + ' ตัว') + '</strong></div>',
+        '<div class="stat compact" style="cursor:pointer;border-bottom:2px solid var(--accent)" data-breakdown="headband" title="คลิกดูรายละเอียด"><span>Headband</span><strong id="statHeadband">' + esc((summary.qtyHeadband || 0) + ' อัน') + '</strong></div>',
       ].join("");
       document.querySelector("#orderStats").innerHTML =
         '<div class="stats" style="margin-bottom:8px">' + row1 + '</div>' +
@@ -1252,6 +1341,16 @@ ADMIN_HTML = r"""<!doctype html>
       document.querySelector("#oe_extraSlipNotice").textContent = "";
       document.querySelector("#oe_adminNote").value = order.adminNote || "";
       document.querySelector("#orderEditNotice").textContent = "";
+      var receivedInfoEl = document.querySelector("#oe_receivedInfo");
+      var receivedDetailEl = document.querySelector("#oe_receivedDetail");
+      if (order.receivedAt && receivedInfoEl && receivedDetailEl) {
+        var rdt = new Date(order.receivedAt.indexOf('Z') < 0 ? order.receivedAt + 'Z' : order.receivedAt);
+        var rdtStr = rdt.toLocaleString('th-TH', {timeZone:'Asia/Bangkok',day:'numeric',month:'short',year:'numeric',hour:'2-digit',minute:'2-digit'});
+        receivedDetailEl.textContent = 'รับสินค้าเมื่อ ' + rdtStr + (order.receivedBy ? ' โดย ' + order.receivedBy : '');
+        receivedInfoEl.style.display = '';
+      } else if (receivedInfoEl) {
+        receivedInfoEl.style.display = 'none';
+      }
       loadExtraSlips(editingOrderId);
       document.querySelector("#orderEditModal").classList.add("open");
       renderOrders();
@@ -1566,15 +1665,6 @@ ADMIN_HTML = r"""<!doctype html>
 
     document.querySelector("#refreshOrdersBtn").addEventListener("click", function() { currentPage = 1; loadOrders().catch(function(e) { setOrdersNotice(e.message, true); }); });
 
-    document.querySelectorAll(".phase-btn").forEach(function(btn) {
-      btn.addEventListener("click", function() {
-        currentRound = parseInt(this.dataset.round, 10) || 0;
-        document.querySelectorAll(".phase-btn").forEach(function(b) { b.classList.remove("active-phase"); });
-        this.classList.add("active-phase");
-        currentPage = 1;
-        loadOrders().catch(function(e) { setOrdersNotice(e.message, true); });
-      });
-    });
     document.querySelector("#exportCsvBtn").addEventListener("click", async function() {
       try {
         var res = await fetch("/admin/orders/export.csv", { headers: { "Authorization": "Bearer " + tokenInput.value.trim() } });
@@ -1996,16 +2086,131 @@ ADMIN_HTML = r"""<!doctype html>
     }
 
     var currentPhaseOverride = null;
+    var currentPhaseConfigs = {};
+    var phaseDialogPhaseNum = null;
+    var phaseDialogMode = null;
+
+    function formatPhaseDate(dateStr) {
+      if (!dateStr) return '';
+      try {
+        var d = new Date(dateStr + 'T00:00:00');
+        var M = ['ม.ค.','ก.พ.','มี.ค.','เม.ย.','พ.ค.','มิ.ย.','ก.ค.','ส.ค.','ก.ย.','ต.ค.','พ.ย.','ธ.ค.'];
+        return d.getDate() + ' ' + M[d.getMonth()];
+      } catch(e2) { return dateStr; }
+    }
+
+    function openPhaseDialog(phaseNum, isNew) {
+      phaseDialogMode = isNew ? 'add' : 'edit';
+      phaseDialogPhaseNum = phaseNum;
+      document.querySelector("#phaseDialogTitle").textContent = isNew ? 'เพิ่ม Phase ' + phaseNum : 'แก้ไข Phase ' + phaseNum;
+      var cfg = currentPhaseConfigs[String(phaseNum)] || {};
+      document.querySelector("#phaseStartDate").value = cfg.start || '';
+      document.querySelector("#phaseEndDate").value = cfg.end || '';
+      document.querySelector("#phaseDialog").style.display = "flex";
+    }
 
     function renderPhase(s) {
       var override = s.phaseOverride;
       var current = s.currentPhase;
+      var configs = s.phaseConfigs || {};
+      var maxPhase = 0;
+      Object.keys(configs).forEach(function(k) { maxPhase = Math.max(maxPhase, parseInt(k, 10) || 0); });
+      if (maxPhase < 1) maxPhase = 3;
       currentPhaseOverride = override;
-      document.querySelector("#phaseDisplay").textContent = current;
-      document.querySelector("#phaseLabel").textContent = override !== null && override !== undefined
-        ? "Override: Phase " + override
-        : "Auto (วันที่ปัจจุบัน)";
+      currentPhaseConfigs = configs;
+
+      var phaseDisplay = document.querySelector("#phaseDisplay");
+      if (phaseDisplay) phaseDisplay.textContent = "Phase " + current;
+      var phaseLabel = document.querySelector("#phaseLabel");
+      if (phaseLabel) phaseLabel.textContent = override !== null && override !== undefined
+        ? "(Override)"
+        : "(อัตโนมัติตามวันที่)";
+
+      var sel = document.querySelector("#phaseSelectBtns");
+      if (sel) {
+        var html = '';
+        var autoActive = override === null || override === undefined;
+        html += '<button class="' + (autoActive ? 'primary' : 'secondary') + ' phase-sel-btn" data-phase="null" style="font-size:12px;padding:6px 14px">Auto</button>';
+        for (var i = 1; i <= maxPhase; i++) {
+          var isActive = !autoActive && override === i;
+          html += '<button class="' + (isActive ? 'primary' : 'secondary') + ' phase-sel-btn" data-phase="' + i + '" style="font-size:12px;padding:6px 14px">Phase ' + i + '</button>';
+        }
+        sel.innerHTML = html;
+        sel.querySelectorAll(".phase-sel-btn").forEach(function(btn) {
+          btn.addEventListener("click", function() {
+            var val = this.dataset.phase === "null" ? null : parseInt(this.dataset.phase, 10);
+            patchPhase(val);
+          });
+        });
+      }
+
+      var container = document.querySelector("#phaseBtnContainer");
+      if (!container) return;
+
+      var fhtml = '<button class="ghost phase-btn' + (currentRound === 0 ? ' active-phase' : '') + '" data-round="0" style="min-height:30px;font-size:12px;padding:4px 12px">All</button>';
+      for (var j = 1; j <= maxPhase; j++) {
+        var cfg = configs[String(j)] || {};
+        var dateLabel = '';
+        if (cfg.start && cfg.end) dateLabel = formatPhaseDate(cfg.start) + '–' + formatPhaseDate(cfg.end);
+        else if (cfg.start) dateLabel = 'เริ่ม ' + formatPhaseDate(cfg.start);
+        var activeDot = (j === current) ? '<span style="color:var(--accent);font-size:9px;vertical-align:middle;margin-left:3px">●</span>' : '';
+        var dateSub = dateLabel ? '<span style="font-size:10px;color:var(--muted);margin-left:4px">' + dateLabel + '</span>' : '';
+        var editIcon = '<span class="phase-edit-icon" data-phase="' + j + '" title="แก้ไขวันที่" style="margin-left:5px;opacity:0;font-size:11px;cursor:pointer;transition:opacity .15s;color:var(--accent)">✎</span>';
+        fhtml += '<button class="ghost phase-btn' + (currentRound === j ? ' active-phase' : '') + '" data-round="' + j + '" style="min-height:30px;font-size:12px;padding:4px 12px">'
+          + 'Phase ' + j + activeDot + dateSub + editIcon + '</button>';
+      }
+      fhtml += '<button id="addPhaseBtn" class="ghost" style="min-height:30px;font-size:12px;padding:4px 14px;color:var(--accent);border-style:dashed;border-color:var(--accent)">+ Phase ' + (maxPhase + 1) + '</button>';
+      container.innerHTML = fhtml;
+
+      container.querySelectorAll(".phase-btn").forEach(function(btn) {
+        btn.addEventListener("click", function(e) {
+          if (e.target.classList.contains("phase-edit-icon")) return;
+          currentRound = parseInt(this.dataset.round, 10) || 0;
+          container.querySelectorAll(".phase-btn").forEach(function(b) { b.classList.remove("active-phase"); });
+          this.classList.add("active-phase");
+          currentPage = 1;
+          loadOrders().catch(function(e2) { setOrdersNotice(e2.message, true); });
+        });
+        var editIcon = btn.querySelector(".phase-edit-icon");
+        if (editIcon) {
+          btn.addEventListener("mouseenter", function() { editIcon.style.opacity = "1"; });
+          btn.addEventListener("mouseleave", function() { editIcon.style.opacity = "0"; });
+          editIcon.addEventListener("click", function(e) {
+            e.stopPropagation();
+            openPhaseDialog(parseInt(this.dataset.phase, 10), false);
+          });
+        }
+      });
+
+      var addBtn = container.querySelector("#addPhaseBtn");
+      if (addBtn) addBtn.addEventListener("click", function() { openPhaseDialog(maxPhase + 1, true); });
     }
+
+    document.querySelector("#phaseDialogCancelBtn").addEventListener("click", function() {
+      document.querySelector("#phaseDialog").style.display = "none";
+    });
+    document.querySelector("#phaseDialog").addEventListener("click", function(e) {
+      if (e.target === this) this.style.display = "none";
+    });
+    document.querySelector("#phaseDialogSaveBtn").addEventListener("click", async function() {
+      var start = document.querySelector("#phaseStartDate").value;
+      var end = document.querySelector("#phaseEndDate").value;
+      var configs = Object.assign({}, currentPhaseConfigs);
+      configs[String(phaseDialogPhaseNum)] = { start: start, end: end };
+      var newMax = Math.max.apply(null, Object.keys(configs).map(function(k) { return parseInt(k, 10) || 0; }));
+      var payload = { phaseConfigs: configs, maxPhases: newMax };
+      if (phaseDialogMode === 'add') payload.phaseOverride = phaseDialogPhaseNum;
+      try {
+        var res = await fetch("/admin/site-settings", {
+          method: "PATCH", headers: authHeaders(), body: JSON.stringify(payload)
+        });
+        if (!res.ok) throw new Error(await res.text());
+        var s = await res.json();
+        renderPhase(s);
+        document.querySelector("#phaseDialog").style.display = "none";
+        setOrdersNotice(phaseDialogMode === 'add' ? 'เพิ่ม Phase ' + phaseDialogPhaseNum + ' แล้ว และ set active' : 'อัปเดตวันที่ Phase ' + phaseDialogPhaseNum + ' แล้ว');
+      } catch(e2) { alert(e2.message); }
+    });
 
     async function patchPhase(value) {
       try {
@@ -2020,17 +2225,6 @@ ADMIN_HTML = r"""<!doctype html>
       } catch(e) { setSettingsNotice(e.message, true); }
     }
 
-    document.querySelector("#phaseDecBtn").addEventListener("click", function() {
-      var cur = currentPhaseOverride !== null ? currentPhaseOverride : 0;
-      patchPhase(Math.max(0, cur - 1));
-    });
-    document.querySelector("#phaseIncBtn").addEventListener("click", function() {
-      var cur = currentPhaseOverride !== null ? currentPhaseOverride : 0;
-      patchPhase(Math.min(9, cur + 1));
-    });
-    document.querySelector("#phaseClearBtn").addEventListener("click", function() {
-      patchPhase(null);
-    });
 
     function renderSiteClosed(siteClosed) {
       var closeBtn = document.querySelector("#closeSiteBtn");
@@ -2229,7 +2423,7 @@ ADMIN_HTML = r"""<!doctype html>
         orderDeadline: document.querySelector("#orderDeadline").value || null,
         khantokQuota100: parseInt(document.querySelector("#khantokQuota100").value, 10) || 0,
         khantokQuota50: parseInt(document.querySelector("#khantokQuota50").value, 10) || 0,
-        // siteClosed is managed via dedicated buttons, not the Save button
+        // siteClosed/phase managed via dedicated buttons, not the Save button
       };
       try {
         var res = await fetch("/admin/site-settings", {
@@ -2368,6 +2562,7 @@ ADMIN_HTML = r"""<!doctype html>
     loadProducts();
     if (tokenInput.value) {
       loadOrders();
+      loadSettings();
     } else {
       setOrdersNotice("Enter API Token to load orders");
     }
@@ -2569,6 +2764,7 @@ ORDER_VIEW_HTML = r"""<!doctype html>
     }
     .badge.waiting_confirm { background: #fff7ed; color: var(--orange); }
     .badge.paid, .badge.preparing, .badge.shipped { background: #ecfdf3; color: var(--green); }
+    .badge.received { background: #f5f3ff; color: #7c3aed; }
     .badge.rejected, .badge.cancelled { background: #fef3f2; color: var(--red); }
     .empty {
       padding: 28px;
@@ -2747,7 +2943,7 @@ ORDER_VIEW_HTML = r"""<!doctype html>
               return `
                 <tr>
                   <td><strong>${text(order.id || "-")}</strong></td>
-                  <td><span class="badge ${text(order.status || "")}">${order.status === "shipped" ? "Ready to Receive" : text(order.status || "-")}</span></td>
+                  <td><span class="badge ${text(order.status || "")}">${order.status === "shipped" ? "Ready to Receive" : order.status === "received" ? "Received ✓" : text(order.status || "-")}</span></td>
                   <td>
                     <strong>${text(customer.fullName || "-")}</strong><br />
                     <span class="tiny">${text(customer.studentCode || "-")}</span><br />
@@ -2854,6 +3050,436 @@ ORDER_VIEW_HTML = r"""<!doctype html>
       setNotice("Enter ORDER_API_TOKEN to load orders");
       renderSummary([]);
       renderOrders();
+    }
+  </script>
+</body>
+</html>"""
+
+
+CLAIM_STATION_HTML = r"""<!doctype html>
+<html lang="th">
+<head>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no"/>
+  <title>Claim Station — SU STORE</title>
+  <script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.min.js"></script>
+  <style>
+    *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+    :root{
+      --bg:#f0f2f5;--card:#fff;--ink:#0f172a;--muted:#64748b;--border:#e2e8f0;
+      --primary:#4f6ef7;--primary-dk:#3b56e0;
+      --ok:#16a34a;--ok-bg:#dcfce7;
+      --danger:#dc2626;--danger-bg:#fee2e2;
+      --warn:#d97706;--warn-bg:#fef3c7;
+      --purple:#7c3aed;--purple-bg:#ede9fe;
+      --radius:12px;--shadow:0 2px 8px rgba(0,0,0,.08);
+    }
+    @media(prefers-color-scheme:dark){
+      :root{--bg:#0f172a;--card:#1e293b;--ink:#f1f5f9;--muted:#94a3b8;--border:#334155;
+        --ok-bg:#052e16;--danger-bg:#450a0a;--warn-bg:#451a03;--purple-bg:#1e1040;--purple:#a78bfa;}
+    }
+    body{font-family:system-ui,-apple-system,sans-serif;background:var(--bg);color:var(--ink);min-height:100vh}
+    input,button,textarea,select{font-family:inherit}
+    /* Login */
+    #loginScreen{min-height:100vh;display:flex;align-items:center;justify-content:center;padding:16px}
+    .login-card{background:var(--card);border-radius:var(--radius);padding:36px 28px;width:100%;max-width:380px;box-shadow:var(--shadow)}
+    .login-logo{text-align:center;margin-bottom:28px}
+    .login-logo h1{font-size:22px;font-weight:800;letter-spacing:-.03em;color:var(--primary)}
+    .login-logo p{font-size:13px;color:var(--muted);margin-top:4px}
+    .lbl{display:block;font-size:11px;font-weight:700;color:var(--muted);margin-bottom:5px;letter-spacing:.06em;text-transform:uppercase}
+    .inp{width:100%;height:44px;border:1.5px solid var(--border);border-radius:8px;padding:0 12px;font-size:15px;color:var(--ink);background:var(--card);outline:none;transition:border-color .15s;margin-bottom:14px}
+    .inp:focus{border-color:var(--primary)}
+    .remember-row{display:flex;align-items:center;gap:8px;margin-bottom:20px;font-size:13px;color:var(--muted);cursor:pointer}
+    .remember-row input[type="checkbox"]{width:16px;height:16px;cursor:pointer;accent-color:var(--primary)}
+    .btn-primary{width:100%;height:46px;background:var(--primary);color:#fff;border:none;border-radius:8px;font-size:15px;font-weight:700;cursor:pointer;transition:background .15s}
+    .btn-primary:hover{background:var(--primary-dk)}
+    .btn-primary:disabled{opacity:.5;cursor:not-allowed}
+    .login-error{color:var(--danger);font-size:13px;margin-top:10px;text-align:center;min-height:18px}
+    /* Top bar */
+    #mainScreen{min-height:100vh;display:flex;flex-direction:column}
+    .top-bar{background:var(--card);border-bottom:1px solid var(--border);padding:0 16px;height:52px;display:flex;align-items:center;gap:10px;position:sticky;top:0;z-index:10;box-shadow:0 1px 4px rgba(0,0,0,.06)}
+    .top-bar-title{font-size:15px;font-weight:800;color:var(--primary);letter-spacing:-.02em;flex:1}
+    .top-bar-user{font-size:12px;color:var(--muted);font-weight:600;max-width:120px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+    .btn-logout{background:none;border:1.5px solid var(--border);border-radius:8px;padding:5px 10px;font-size:12px;color:var(--muted);cursor:pointer;transition:border-color .15s,color .15s;white-space:nowrap}
+    .btn-logout:hover{border-color:var(--danger);color:var(--danger)}
+    /* Layout */
+    .main-content{flex:1;padding:14px;max-width:1000px;margin:0 auto;width:100%}
+    @media(min-width:640px){
+      .main-grid{display:grid;grid-template-columns:1fr 1fr;gap:14px;align-items:start}
+    }
+    /* Scanner card */
+    .scanner-card{background:var(--card);border-radius:var(--radius);overflow:hidden;box-shadow:var(--shadow);margin-bottom:12px}
+    .card-header{padding:11px 14px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:8px}
+    .card-header h2{font-size:13px;font-weight:700;flex:1;letter-spacing:.01em}
+    .scanner-body{position:relative;background:#000;aspect-ratio:4/3;overflow:hidden}
+    #scanVideo{width:100%;height:100%;object-fit:cover;display:block}
+    #scanCanvas{display:none}
+    .scan-overlay{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;pointer-events:none}
+    .scan-frame{width:55%;aspect-ratio:1;border:2px solid rgba(255,255,255,.7);border-radius:10px;box-shadow:0 0 0 9999px rgba(0,0,0,.3)}
+    .scan-status{padding:9px 14px;font-size:13px;color:var(--muted);text-align:center;min-height:36px;display:flex;align-items:center;justify-content:center}
+    .scan-status.error{color:var(--danger)}
+    .scan-status.success{color:var(--ok);font-weight:600}
+    /* Manual */
+    .manual-card{background:var(--card);border-radius:var(--radius);padding:14px;box-shadow:var(--shadow);margin-bottom:12px}
+    .manual-lbl{font-size:11px;font-weight:700;color:var(--muted);letter-spacing:.06em;text-transform:uppercase;margin-bottom:8px}
+    .manual-row{display:flex;gap:8px}
+    .manual-inp{flex:1;height:40px;border:1.5px solid var(--border);border-radius:8px;padding:0 12px;font-size:14px;color:var(--ink);background:var(--card);outline:none}
+    .manual-inp:focus{border-color:var(--primary)}
+    .btn-search{height:40px;padding:0 16px;background:var(--primary);color:#fff;border:none;border-radius:8px;font-size:14px;font-weight:700;cursor:pointer;white-space:nowrap}
+    /* Result card */
+    .result-card{background:var(--card);border-radius:var(--radius);box-shadow:var(--shadow);overflow:hidden;margin-bottom:12px}
+    .order-hdr{display:flex;align-items:center;justify-content:space-between;padding:14px;border-bottom:1px solid var(--border)}
+    .order-code{font-family:ui-monospace,monospace;font-size:20px;font-weight:800;letter-spacing:.02em}
+    .st-badge{font-size:11px;font-weight:700;padding:4px 10px;border-radius:999px}
+    .st-badge.shipped{background:var(--ok-bg);color:var(--ok)}
+    .st-badge.received{background:var(--purple-bg);color:var(--purple)}
+    .st-badge.pending_payment,.st-badge.waiting_confirm,.st-badge.paid,.st-badge.preparing{background:var(--warn-bg);color:var(--warn)}
+    .st-badge.cancelled,.st-badge.rejected{background:var(--danger-bg);color:var(--danger)}
+    .cust-block{padding:12px 14px;border-bottom:1px solid var(--border)}
+    .cust-name{font-size:18px;font-weight:700}
+    .cust-meta{display:flex;gap:12px;flex-wrap:wrap;margin-top:4px}
+    .cust-meta span{font-size:13px;color:var(--muted)}
+    .items-block{padding:8px 14px;border-bottom:1px solid var(--border)}
+    .item-row{display:flex;align-items:baseline;gap:8px;padding:5px 0}
+    .item-name{font-size:14px;font-weight:600;flex:1}
+    .item-detail{font-size:13px;color:var(--muted)}
+    .khantok-badge{display:inline-flex;align-items:center;gap:6px;background:var(--ok-bg);color:var(--ok);padding:5px 12px;border-radius:999px;font-size:13px;font-weight:700;margin:8px 14px}
+    .banner{padding:10px 14px;font-size:13px;font-weight:600}
+    .banner.received-banner{background:var(--purple-bg);color:var(--purple)}
+    .banner.warn-banner{background:var(--warn-bg);color:var(--warn)}
+    .action-block{padding:12px 14px;display:flex;flex-direction:column;gap:8px}
+    .btn-confirm{width:100%;height:48px;background:var(--ok);color:#fff;border:none;border-radius:10px;font-size:16px;font-weight:700;cursor:pointer;transition:opacity .15s}
+    .btn-confirm:hover{opacity:.85}
+    .btn-confirm:disabled{opacity:.5;cursor:not-allowed}
+    .btn-close{width:100%;height:40px;background:none;border:1.5px solid var(--border);border-radius:8px;font-size:14px;font-weight:600;color:var(--muted);cursor:pointer}
+    .btn-close:hover{border-color:var(--ink);color:var(--ink)}
+    /* Error */
+    .err-card{background:var(--danger-bg);color:var(--danger);border-radius:var(--radius);padding:16px;box-shadow:var(--shadow);margin-bottom:12px}
+    .err-card h3{font-size:15px;margin-bottom:6px}
+    .err-card p{font-size:13px;margin-bottom:12px}
+    /* Recent */
+    .recent-card{background:var(--card);border-radius:var(--radius);box-shadow:var(--shadow);overflow:hidden}
+    .recent-hdr{padding:11px 14px;border-bottom:1px solid var(--border);font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.06em}
+    .recent-list{list-style:none;max-height:320px;overflow-y:auto}
+    .recent-item{display:flex;align-items:center;gap:10px;padding:9px 14px;border-bottom:1px solid var(--border);font-size:13px}
+    .recent-item:last-child{border-bottom:none}
+    .r-time{color:var(--muted);min-width:44px;font-size:12px}
+    .r-code{font-family:monospace;font-weight:700;font-size:12px}
+    .r-name{color:var(--muted);flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+    .r-ok{color:var(--ok);font-weight:700}
+    .recent-empty{padding:20px 14px;text-align:center;color:var(--muted);font-size:13px}
+  </style>
+</head>
+<body>
+
+  <div id="loginScreen">
+    <div class="login-card">
+      <div class="login-logo">
+        <h1>CLAIM STATION</h1>
+        <p>SU STORE — Pickup Management</p>
+      </div>
+      <form id="loginForm" autocomplete="off">
+        <label class="lbl" for="loginUser">Username</label>
+        <input id="loginUser" class="inp" type="text" autocomplete="username" required />
+        <label class="lbl" for="loginPass">Password</label>
+        <input id="loginPass" class="inp" type="password" autocomplete="current-password" required style="margin-bottom:8px"/>
+        <label class="remember-row">
+          <input id="loginRemember" type="checkbox" checked />
+          จำอุปกรณ์นี้
+        </label>
+        <button id="loginBtn" class="btn-primary" type="submit">เข้าสู่ระบบ</button>
+      </form>
+      <p id="loginError" class="login-error"></p>
+    </div>
+  </div>
+
+  <div id="mainScreen" hidden>
+    <div class="top-bar">
+      <span class="top-bar-title">CLAIM STATION</span>
+      <span class="top-bar-user" id="userLabel"></span>
+      <button id="logoutBtn" class="btn-logout">ออกจากระบบ</button>
+    </div>
+    <div class="main-content">
+      <div class="main-grid">
+        <div class="scan-col">
+          <div class="scanner-card">
+            <div class="card-header">
+              <h2>สแกน QR Code</h2>
+              <button id="toggleCamBtn" class="btn-logout" style="font-size:12px;padding:4px 10px;height:28px">หยุดกล้อง</button>
+            </div>
+            <div class="scanner-body">
+              <video id="scanVideo" autoplay playsinline muted></video>
+              <canvas id="scanCanvas"></canvas>
+              <div class="scan-overlay"><div class="scan-frame"></div></div>
+            </div>
+            <p id="scanStatus" class="scan-status">กำลังเริ่มกล้อง...</p>
+          </div>
+          <div class="manual-card">
+            <div class="manual-lbl">ค้นหาด้วยรหัสออเดอร์</div>
+            <div class="manual-row">
+              <input id="manualInput" class="manual-inp" type="text" placeholder="เช่น FP281501" />
+              <button id="manualBtn" class="btn-search">ค้นหา</button>
+            </div>
+          </div>
+        </div>
+        <div class="result-col">
+          <div id="resultSection"></div>
+          <div class="recent-card">
+            <div class="recent-hdr">ประวัติการรับล่าสุด</div>
+            <ul id="recentList" class="recent-list"><li class="recent-empty">ยังไม่มีประวัติ</li></ul>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    var currentToken = '';
+    var currentUser = '';
+    var scanCooldown = false;
+    var cameraStream = null;
+    var animFrame = null;
+    var recentPickups = [];
+    var camActive = false;
+
+    function esc(s) {
+      return String(s || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+    }
+    function fmt(s) {
+      var mth = ['ม.ค.','ก.พ.','มี.ค.','เม.ย.','พ.ค.','มิ.ย.','ก.ค.','ส.ค.','ก.ย.','ต.ค.','พ.ย.','ธ.ค.'];
+      try {
+        var d = new Date(s.indexOf('Z') < 0 ? s + 'Z' : s);
+        return d.getDate() + ' ' + mth[d.getMonth()] + ' ' + (d.getFullYear()+543).toString().slice(-2) + ' ' + String(d.getHours()).padStart(2,'0') + ':' + String(d.getMinutes()).padStart(2,'0') + ' น.';
+      } catch(e) { return s; }
+    }
+
+    (function init() {
+      var tok = localStorage.getItem('csToken') || sessionStorage.getItem('csToken');
+      var usr = localStorage.getItem('csUser') || sessionStorage.getItem('csUser');
+      if (tok && usr) { currentToken = tok; currentUser = usr; showMain(); }
+      else showLogin();
+    })();
+
+    function showLogin() {
+      document.getElementById('loginScreen').hidden = false;
+      document.getElementById('mainScreen').hidden = true;
+    }
+    function showMain() {
+      document.getElementById('loginScreen').hidden = true;
+      document.getElementById('mainScreen').hidden = false;
+      document.getElementById('userLabel').textContent = currentUser;
+      startCamera();
+    }
+
+    document.getElementById('loginForm').addEventListener('submit', function(e) {
+      e.preventDefault();
+      var user = document.getElementById('loginUser').value.trim();
+      var pass = document.getElementById('loginPass').value;
+      var rem  = document.getElementById('loginRemember').checked;
+      var errEl = document.getElementById('loginError');
+      var btn   = document.getElementById('loginBtn');
+      errEl.textContent = '';
+      btn.disabled = true; btn.textContent = 'กำลังเข้าสู่ระบบ...';
+      fetch('/claim-station/login', {
+        method: 'POST',
+        headers: {'Content-Type':'application/json'},
+        body: JSON.stringify({username: user, password: pass})
+      }).then(function(r) {
+        return r.json().then(function(d) { return {ok: r.ok, d: d}; });
+      }).then(function(r) {
+        if (!r.ok) throw new Error(r.d.message || 'ชื่อผู้ใช้หรือรหัสผ่านไม่ถูกต้อง');
+        currentToken = r.d.token;
+        currentUser = user;
+        if (rem) { localStorage.setItem('csToken', currentToken); localStorage.setItem('csUser', currentUser); }
+        else      { sessionStorage.setItem('csToken', currentToken); sessionStorage.setItem('csUser', currentUser); }
+        showMain();
+      }).catch(function(err) {
+        errEl.textContent = err.message;
+        btn.disabled = false; btn.textContent = 'เข้าสู่ระบบ';
+      });
+    });
+
+    document.getElementById('logoutBtn').addEventListener('click', function() {
+      if (!confirm('ออกจากระบบ?')) return;
+      doLogout();
+    });
+    function doLogout() {
+      localStorage.removeItem('csToken'); localStorage.removeItem('csUser');
+      sessionStorage.removeItem('csToken'); sessionStorage.removeItem('csUser');
+      currentToken = ''; currentUser = '';
+      stopCamera(); showLogin();
+    }
+
+    document.getElementById('toggleCamBtn').addEventListener('click', function() {
+      if (camActive) {
+        stopCamera(); camActive = false;
+        this.textContent = 'เปิดกล้อง';
+        setScanStatus('กล้องถูกปิด');
+      } else {
+        camActive = true;
+        this.textContent = 'หยุดกล้อง';
+        startCamera();
+      }
+    });
+
+    function startCamera() {
+      camActive = true;
+      if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+        setScanStatus('กล้องไม่รองรับในอุปกรณ์นี้', 'error'); return;
+      }
+      setScanStatus('กำลังขอสิทธิ์กล้อง...');
+      navigator.mediaDevices.getUserMedia({
+        video: {facingMode: {ideal:'environment'}, width:{ideal:1280}, height:{ideal:720}}
+      }).then(function(stream) {
+        cameraStream = stream;
+        var vid = document.getElementById('scanVideo');
+        vid.srcObject = stream;
+        vid.addEventListener('loadedmetadata', function() {
+          vid.play();
+          setScanStatus('กำลังสแกน QR Code...');
+          scanTick();
+        }, {once: true});
+      }).catch(function() {
+        setScanStatus('ไม่สามารถเปิดกล้องได้ กรุณาอนุญาตการเข้าถึงกล้อง', 'error');
+        camActive = false;
+        document.getElementById('toggleCamBtn').textContent = 'เปิดกล้อง';
+      });
+    }
+    function stopCamera() {
+      if (animFrame) { cancelAnimationFrame(animFrame); animFrame = null; }
+      if (cameraStream) { cameraStream.getTracks().forEach(function(t) { t.stop(); }); cameraStream = null; }
+    }
+    function scanTick() {
+      if (!cameraStream) return;
+      var vid = document.getElementById('scanVideo');
+      var can = document.getElementById('scanCanvas');
+      if (vid.readyState === vid.HAVE_ENOUGH_DATA && !scanCooldown && typeof jsQR !== 'undefined') {
+        can.height = vid.videoHeight; can.width = vid.videoWidth;
+        can.getContext('2d').drawImage(vid, 0, 0);
+        var img = can.getContext('2d').getImageData(0, 0, can.width, can.height);
+        var code = jsQR(img.data, img.width, img.height, {inversionAttempts:'dontInvert'});
+        if (code && code.data) {
+          var val = code.data.trim().toUpperCase();
+          if (val) {
+            scanCooldown = true;
+            setScanStatus('พบ QR: ' + val, 'success');
+            lookupOrder(val);
+            setTimeout(function() { scanCooldown = false; }, 4000);
+          }
+        }
+      }
+      animFrame = requestAnimationFrame(scanTick);
+    }
+    function setScanStatus(msg, cls) {
+      var el = document.getElementById('scanStatus');
+      el.textContent = msg;
+      el.className = 'scan-status' + (cls ? ' ' + cls : '');
+    }
+
+    document.getElementById('manualBtn').addEventListener('click', function() {
+      var v = document.getElementById('manualInput').value.trim().toUpperCase();
+      if (v) lookupOrder(v);
+    });
+    document.getElementById('manualInput').addEventListener('keydown', function(e) {
+      if (e.key === 'Enter') { var v = this.value.trim().toUpperCase(); if (v) lookupOrder(v); }
+    });
+
+    function lookupOrder(code) {
+      fetch('/claim-station/orders/' + encodeURIComponent(code), {
+        headers: {'Authorization': 'Claim ' + currentToken}
+      }).then(function(r) {
+        if (r.status === 401) { doLogout(); return null; }
+        return r.json().then(function(d) { return {ok: r.ok, d: d}; });
+      }).then(function(r) {
+        if (!r) return;
+        if (!r.ok) { showError(r.d.message || 'ไม่พบออเดอร์'); return; }
+        showOrderCard(r.d.order);
+      }).catch(function() { showError('ไม่สามารถเชื่อมต่อได้'); });
+    }
+
+    var ST_TH = {pending_payment:'รอสลิป',waiting_confirm:'รอยืนยัน',paid:'ชำระแล้ว',preparing:'กำลังเตรียมของ',shipped:'พร้อมรับ',received:'รับแล้ว',cancelled:'ยกเลิก',rejected:'ปฏิเสธ'};
+
+    function showOrderCard(order) {
+      var st = order.status || '';
+      var stLabel = ST_TH[st] || st;
+      var cust = order.customer || {};
+      var canReceive = st === 'shipped';
+      var alreadyReceived = st === 'received';
+      var items = (order.items && order.items.length) ? order.items : [{product: order.product, size: order.size, quantity: order.quantity}];
+      var itemsHtml = '';
+      for (var i = 0; i < items.length; i++) {
+        var itm = items[i]; var p = itm.product || {};
+        itemsHtml += '<div class="item-row"><span class="item-name">' + esc(p.name || p.shortName || '') + '</span><span class="item-detail">Size ' + esc(itm.size || '-') + ' &times; ' + esc(String(itm.quantity || 1)) + '</span></div>';
+      }
+      var khantok = '';
+      if (order.khantokTicket) khantok = '<div class="khantok-badge">&#127903; บัตรขันโตก' + (order.khantokTicketValue ? ' &#3647;' + order.khantokTicketValue : '') + '</div>';
+      var banner = '';
+      if (alreadyReceived) {
+        banner = '<div class="banner received-banner">&#10003; รับสินค้าแล้ว' + (order.receivedAt ? ' เมื่อ ' + esc(fmt(order.receivedAt)) : '') + (order.receivedBy ? ' โดย ' + esc(order.receivedBy) : '') + '</div>';
+      } else if (!canReceive) {
+        banner = '<div class="banner warn-banner">&#9888; ยังไม่พร้อมรับ &mdash; สถานะ: ' + esc(stLabel) + '</div>';
+      }
+      var action = '';
+      if (canReceive) {
+        action = '<button id="confirmBtn" class="btn-confirm" onclick="doReceive(' + JSON.stringify(order.id || '') + ')">&#10003; ยืนยันรับสินค้า</button><button class="btn-close" onclick="clearResult()">ยกเลิก</button>';
+      } else {
+        action = '<button class="btn-close" onclick="clearResult()">ปิด</button>';
+      }
+      var html = '<div class="result-card">' +
+        '<div class="order-hdr"><span class="order-code">' + esc(order.id || '') + '</span><span class="st-badge ' + esc(st) + '">' + esc(stLabel) + '</span></div>' +
+        banner +
+        '<div class="cust-block"><div class="cust-name">' + esc(cust.fullName || '') + '</div>' +
+          '<div class="cust-meta"><span>' + esc(cust.studentCode || '') + '</span><span>' + esc(cust.school || '') + '</span></div></div>' +
+        '<div class="items-block">' + itemsHtml + '</div>' +
+        khantok +
+        '<div class="action-block">' + action + '</div>' +
+      '</div>';
+      var sec = document.getElementById('resultSection');
+      sec.innerHTML = html;
+      if (window.innerWidth < 640) sec.scrollIntoView({behavior:'smooth', block:'nearest'});
+    }
+
+    function showError(msg) {
+      document.getElementById('resultSection').innerHTML =
+        '<div class="err-card"><h3>ไม่พบออเดอร์</h3><p>' + esc(msg) + '</p><button class="btn-close" onclick="clearResult()">ปิด</button></div>';
+    }
+    function clearResult() {
+      document.getElementById('resultSection').innerHTML = '';
+      document.getElementById('manualInput').value = '';
+      setScanStatus('กำลังสแกน QR Code...');
+      scanCooldown = false;
+    }
+
+    function doReceive(code) {
+      var btn = document.getElementById('confirmBtn');
+      if (btn) { btn.disabled = true; btn.textContent = 'กำลังบันทึก...'; }
+      fetch('/claim-station/orders/' + encodeURIComponent(code) + '/received', {
+        method: 'PATCH',
+        headers: {'Authorization':'Claim ' + currentToken, 'Content-Type':'application/json'},
+        body: JSON.stringify({receivedBy: currentUser})
+      }).then(function(r) {
+        if (r.status === 401) { doLogout(); return null; }
+        return r.json().then(function(d) { return {ok: r.ok, d: d}; });
+      }).then(function(r) {
+        if (!r) return;
+        if (!r.ok) { alert(r.d.message || 'เกิดข้อผิดพลาด'); if (btn) { btn.disabled = false; btn.textContent = '&#10003; ยืนยันรับสินค้า'; } return; }
+        addRecentPickup(r.d.order);
+        showOrderCard(r.d.order);
+        setScanStatus('&#10003; บันทึกแล้ว — พร้อมสแกนต่อ', 'success');
+      }).catch(function() { alert('ไม่สามารถเชื่อมต่อได้'); if (btn) { btn.disabled = false; } });
+    }
+
+    function addRecentPickup(order) {
+      var cust = order.customer || {};
+      var now = new Date();
+      recentPickups.unshift({code: order.id || '', name: cust.fullName || '', time: String(now.getHours()).padStart(2,'0') + ':' + String(now.getMinutes()).padStart(2,'0')});
+      if (recentPickups.length > 30) recentPickups.pop();
+      var html = '';
+      for (var i = 0; i < recentPickups.length; i++) {
+        var p = recentPickups[i];
+        html += '<li class="recent-item"><span class="r-time">' + esc(p.time) + '</span><span class="r-code">' + esc(p.code) + '</span><span class="r-name">' + esc(p.name) + '</span><span class="r-ok">&#10003;</span></li>';
+      }
+      document.getElementById('recentList').innerHTML = html;
     }
   </script>
 </body>
@@ -2968,6 +3594,10 @@ def ensure_db() -> None:
           connection.execute("ALTER TABLE orders ADD COLUMN items_json TEXT NOT NULL DEFAULT '[]'")
       if "admin_note" not in columns:
           connection.execute("ALTER TABLE orders ADD COLUMN admin_note TEXT")
+      if "received_at" not in columns:
+          connection.execute("ALTER TABLE orders ADD COLUMN received_at TEXT")
+      if "received_by" not in columns:
+          connection.execute("ALTER TABLE orders ADD COLUMN received_by TEXT")
       existing_rows = connection.execute(
           "SELECT internal_id FROM orders WHERE access_token IS NULL OR access_token = ''"
       ).fetchall()
@@ -3129,6 +3759,19 @@ def get_current_phase(connection: sqlite3.Connection | None = None) -> int:
             try:
                 return int(row["value"])
             except (ValueError, TypeError):
+                pass
+        config_row = connection.execute(
+            "SELECT value FROM site_settings WHERE key = 'phase_configs'"
+        ).fetchone()
+        if config_row is not None and config_row["value"]:
+            try:
+                configs = json.loads(config_row["value"])
+                today = datetime.now(TZ_BANGKOK).date()
+                for phase_str, info in configs.items():
+                    s, e = info.get("start", ""), info.get("end", "")
+                    if s and e and date.fromisoformat(s) <= today <= date.fromisoformat(e):
+                        return int(phase_str)
+            except (json.JSONDecodeError, ValueError, KeyError):
                 pass
     now = datetime.now(TZ_BANGKOK)
     m, d = now.month, now.day
@@ -3351,6 +3994,8 @@ def serialize_order(row: sqlite3.Row, include_access_token: bool = False) -> dic
         },
         "slip": slip,
         "adminNote": row["admin_note"] if "admin_note" in row_keys else None,
+        "receivedAt": row["received_at"] if "received_at" in row_keys else None,
+        "receivedBy": row["received_by"] if "received_by" in row_keys else None,
     }
     if include_access_token:
         payload["accessToken"] = row["access_token"]
@@ -3645,7 +4290,8 @@ def create_orders_summary(connection: sqlite3.Connection, round_filter: int = 0)
         "total": int(total_row["cnt"] if total_row else 0),
         "pendingPayment": counts.get("pending_payment", 0),
         "waitingConfirm": counts.get("waiting_confirm", 0),
-        "paid": counts.get("paid", 0) + counts.get("preparing", 0) + counts.get("shipped", 0),
+        "paid": counts.get("paid", 0) + counts.get("preparing", 0) + counts.get("shipped", 0) + counts.get("received", 0),
+        "received": counts.get("received", 0),
         "rejected": counts.get("rejected", 0),
         "cancelled": counts.get("cancelled", 0),
         "khantokTicket100Quota": quota_100,
@@ -4199,6 +4845,18 @@ def get_site_settings(connection: sqlite3.Connection) -> dict[str, Any]:
     settings: dict[str, str] = {row["key"]: row["value"] for row in rows}
     phase_override_raw = settings.get("phase_override", "")
     phase_override = int(phase_override_raw) if phase_override_raw not in ("", None) else None
+    phase_configs_raw = settings.get("phase_configs", "")
+    try:
+        phase_configs: dict = json.loads(phase_configs_raw) if phase_configs_raw else {}
+    except (json.JSONDecodeError, TypeError):
+        phase_configs = {}
+    if not phase_configs:
+        phase_configs = {
+            "1": {"start": "2026-05-18", "end": "2026-05-23"},
+            "2": {"start": "2026-05-25", "end": "2026-05-30"},
+            "3": {"start": "2026-06-01", "end": "2026-06-07"},
+        }
+    max_phases = max((int(k) for k in phase_configs.keys()), default=3)
     return {
         "announcementBanner": settings.get("announcement_banner", ""),
         "announcementBannerEnabled": settings.get("announcement_banner_enabled", "0") == "1",
@@ -4209,6 +4867,8 @@ def get_site_settings(connection: sqlite3.Connection) -> dict[str, Any]:
         "orderDeadline": settings.get("order_deadline", ""),
         "phaseOverride": phase_override,
         "currentPhase": get_current_phase(connection),
+        "phaseConfigs": phase_configs,
+        "maxPhases": max_phases,
         "khantokQuota100": int(settings.get("khantok_quota_100") or KHANTOK_QUOTA_100),
         "khantokQuota50": int(settings.get("khantok_quota_50") or KHANTOK_QUOTA_50),
         "beRightBackDates": settings.get("be_right_back_dates", "2026-05-24,2026-05-31,2026-06-07"),
@@ -4416,7 +5076,7 @@ def get_analytics(connection: sqlite3.Connection) -> dict[str, Any]:
     total_row = connection.execute("SELECT COUNT(*) AS cnt FROM orders").fetchone()
     total = int(total_row["cnt"] if total_row else 0)
     revenue_row = connection.execute(
-        "SELECT COALESCE(SUM(total_amount), 0) AS rev FROM orders WHERE status IN ('paid','preparing','shipped')"
+        "SELECT COALESCE(SUM(total_amount), 0) AS rev FROM orders WHERE status IN ('paid','preparing','shipped','received')"
     ).fetchone()
     revenue = int(revenue_row["rev"] if revenue_row else 0)
     school_count_row = connection.execute("SELECT COUNT(DISTINCT school) AS cnt FROM orders").fetchone()
@@ -4438,7 +5098,7 @@ def get_analytics(connection: sqlite3.Connection) -> dict[str, Any]:
     ).fetchall()
     # คำนวณต้นทุนจากออเดอร์ที่ confirmed เท่านั้น
     confirmed_rows = connection.execute(
-        "SELECT items_json, product_category, quantity FROM orders WHERE status IN ('paid','preparing','shipped')"
+        "SELECT items_json, product_category, quantity FROM orders WHERE status IN ('paid','preparing','shipped','received')"
     ).fetchall()
     cost_qty: dict[str, int] = {}
     for row in confirmed_rows:
@@ -4583,6 +5243,11 @@ class OrderRequestHandler(BaseHTTPRequestHandler):
         expected = f"Bearer {ORDER_API_TOKEN}"
         return bool(ORDER_API_TOKEN) and hmac.compare_digest(incoming, expected)
 
+    def _has_claim_station_authorization(self) -> bool:
+        incoming = self.headers.get("Authorization", "")
+        expected = f"Claim {CLAIM_STATION_TOKEN}"
+        return bool(PICKUP_PASSWORD) and hmac.compare_digest(incoming, expected)
+
     def _is_authorized_for_order(self, row: sqlite3.Row) -> bool:
         if self._has_global_authorization():
             return True
@@ -4610,6 +5275,24 @@ class OrderRequestHandler(BaseHTTPRequestHandler):
 
         if path == "/orders":
             self._send_html(HTTPStatus.OK, ORDER_VIEW_HTML)
+            return
+
+        if path == "/claim-station":
+            self._send_html(HTTPStatus.OK, CLAIM_STATION_HTML)
+            return
+
+        claim_order_get_match = re.fullmatch(r"/claim-station/orders/([A-Z0-9-]+)", path)
+        if claim_order_get_match:
+            if not self._has_claim_station_authorization():
+                self._deny_unauthorized()
+                return
+            order_code = claim_order_get_match.group(1)
+            with open_db() as connection:
+                row = fetch_order_by_code(connection, order_code)
+            if row is None:
+                self._send_json(HTTPStatus.NOT_FOUND, {"message": "ไม่พบออเดอร์"})
+                return
+            self._send_json(HTTPStatus.OK, {"order": serialize_order(row)})
             return
 
         if path == "/check-order":
@@ -4684,14 +5367,14 @@ class OrderRequestHandler(BaseHTTPRequestHandler):
                     with open_db() as conn:
                         summary = create_orders_summary(conn)
                         rev_row = conn.execute(
-                            "SELECT COALESCE(SUM(total_amount),0) AS r FROM orders WHERE status IN ('paid','preparing','shipped')"
+                            "SELECT COALESCE(SUM(total_amount),0) AS r FROM orders WHERE status IN ('paid','preparing','shipped','received')"
                         ).fetchone()
                         revenue = int(rev_row["r"] if rev_row else 0)
                         school_cnt = conn.execute(
                             "SELECT COUNT(DISTINCT school) AS c FROM orders"
                         ).fetchone()["c"]
                         cost_rows = conn.execute(
-                            "SELECT items_json, product_category, quantity FROM orders WHERE status IN ('paid','preparing','shipped')"
+                            "SELECT items_json, product_category, quantity FROM orders WHERE status IN ('paid','preparing','shipped','received')"
                         ).fetchall()
                     cq: dict[str, int] = {}
                     for row in cost_rows:
@@ -5106,6 +5789,25 @@ class OrderRequestHandler(BaseHTTPRequestHandler):
             })
             return
 
+        if path == "/claim-station/login":
+            try:
+                payload = self._read_json()
+            except json.JSONDecodeError:
+                self._send_json(HTTPStatus.BAD_REQUEST, {"message": "invalid json"})
+                return
+            username = (payload or {}).get("username", "") if isinstance(payload, dict) else ""
+            password = (payload or {}).get("password", "") if isinstance(payload, dict) else ""
+            if (
+                bool(PICKUP_PASSWORD)
+                and isinstance(username, str) and isinstance(password, str)
+                and hmac.compare_digest(username, PICKUP_USERNAME)
+                and hmac.compare_digest(password, PICKUP_PASSWORD)
+            ):
+                self._send_json(HTTPStatus.OK, {"token": CLAIM_STATION_TOKEN})
+            else:
+                self._send_json(HTTPStatus.UNAUTHORIZED, {"message": "ชื่อผู้ใช้หรือรหัสผ่านไม่ถูกต้อง"})
+            return
+
         if path == "/admin/test-warning":
             if not self._require_admin_authorization():
                 return
@@ -5281,6 +5983,40 @@ class OrderRequestHandler(BaseHTTPRequestHandler):
 
     def do_PATCH(self) -> None:
         path = urlparse(self.path).path
+
+        claim_received_match = re.fullmatch(r"/claim-station/orders/([A-Z0-9-]+)/received", path)
+        if claim_received_match:
+            if not self._has_claim_station_authorization():
+                self._deny_unauthorized()
+                return
+            order_code = claim_received_match.group(1)
+            try:
+                payload = self._read_json()
+            except json.JSONDecodeError:
+                payload = {}
+            received_by = (payload or {}).get("receivedBy", "") if isinstance(payload, dict) else ""
+            with open_db() as connection:
+                row = fetch_order_by_code(connection, order_code)
+                if row is None:
+                    self._send_json(HTTPStatus.NOT_FOUND, {"message": "ไม่พบออเดอร์"})
+                    return
+                if row["status"] != "shipped":
+                    self._send_json(
+                        HTTPStatus.BAD_REQUEST,
+                        {"message": f"ออเดอร์มีสถานะ '{row['status']}' ยังไม่พร้อมรับ"},
+                    )
+                    return
+                ts = now_iso()
+                connection.execute(
+                    "UPDATE orders SET status='received', payment_status='paid', received_at=?, received_by=?, updated_at=? WHERE order_code=?",
+                    (ts, received_by or "staff", ts, order_code),
+                )
+                log_audit(connection, order_code, "claim_received", f"received by {received_by or 'staff'}")
+                connection.commit()
+                updated = fetch_order_by_code(connection, order_code)
+            self._send_json(HTTPStatus.OK, {"order": serialize_order(updated)})
+            return
+
         status_match = re.fullmatch(r"/admin/orders/([A-Z0-9-]+)/status", path)
         if status_match:
             if not self._require_admin_authorization():
@@ -5405,6 +6141,10 @@ class OrderRequestHandler(BaseHTTPRequestHandler):
                 if "phaseOverride" in payload:
                     v = payload["phaseOverride"]
                     upsert_site_setting(connection, "phase_override", str(int(v)) if v is not None else "")
+                if "maxPhases" in payload:
+                    upsert_site_setting(connection, "max_phases", str(max(1, int(payload["maxPhases"]))))
+                if "phaseConfigs" in payload and isinstance(payload["phaseConfigs"], dict):
+                    upsert_site_setting(connection, "phase_configs", json.dumps(payload["phaseConfigs"]))
                 if "siteClosed" in payload:
                     upsert_site_setting(connection, "site_closed", "1" if payload["siteClosed"] else "0")
                 if "scheduleEnabled" in payload:

@@ -6,8 +6,9 @@ import { useSearchParams, useRouter } from "next/navigation";
 import { Container } from "@/components/ui/Container";
 import { Search, Package, CheckCircle2, Clock, XCircle, Truck, AlertCircle, Ticket, Upload } from "lucide-react";
 import { useLang } from "@/lib/i18n";
+import QRCode from "qrcode";
 
-type OrderStatus = "pending_payment" | "waiting_confirm" | "paid" | "preparing" | "shipped" | "cancelled" | "rejected";
+type OrderStatus = "pending_payment" | "waiting_confirm" | "paid" | "preparing" | "shipped" | "received" | "cancelled" | "rejected";
 
 interface PublicOrder {
   id: string;
@@ -33,6 +34,7 @@ const STATUS_COLORS: Record<OrderStatus, string> = {
   paid:            "text-emerald-700 bg-emerald-50",
   preparing:       "text-blue-700 bg-blue-50",
   shipped:         "text-emerald-700 bg-emerald-50",
+  received:        "text-purple-700 bg-purple-50",
   cancelled:       "text-zinc-500 bg-zinc-100",
   rejected:        "text-red-700 bg-red-50",
 };
@@ -43,6 +45,7 @@ const STATUS_ICONS: Record<OrderStatus, React.ReactNode> = {
   paid:            <CheckCircle2 className="h-5 w-5" />,
   preparing:       <Package className="h-5 w-5" />,
   shipped:         <Truck className="h-5 w-5" />,
+  received:        <CheckCircle2 className="h-5 w-5" />,
   cancelled:       <XCircle className="h-5 w-5" />,
   rejected:        <XCircle className="h-5 w-5" />,
 };
@@ -66,6 +69,17 @@ function OrderCard({ order }: { order: PublicOrder }) {
   const cfg = t.status[statusKey as OrderStatus];
   const color = STATUS_COLORS[order.status] ?? STATUS_COLORS.pending_payment;
   const icon = STATUS_ICONS[order.status] ?? STATUS_ICONS.pending_payment;
+  const [qrDataUrl, setQrDataUrl] = useState<string>("");
+
+  useEffect(() => {
+    if (order.status === "shipped" && order.id) {
+      QRCode.toDataURL(order.id, { width: 220, margin: 2, color: { dark: "#000000", light: "#ffffff" } })
+        .then(setQrDataUrl)
+        .catch(() => {});
+    } else {
+      setQrDataUrl("");
+    }
+  }, [order.id, order.status]);
 
   return (
     <div className="overflow-hidden rounded-2xl border border-black/[0.08] bg-white shadow-sm">
@@ -131,6 +145,17 @@ function OrderCard({ order }: { order: PublicOrder }) {
           <p className="text-base font-bold text-zinc-900">{t.checkOrder.total} {baht(order.totalAmount)}</p>
         </div>
       </div>
+
+      {/* QR code for shipped orders */}
+      {order.status === "shipped" && qrDataUrl && (
+        <div className="border-t border-black/[0.06] px-6 py-5 text-center">
+          <p className="mb-3 text-sm font-semibold text-zinc-700">แสดง QR นี้ที่จุดรับสินค้า</p>
+          <div className="inline-block rounded-2xl border border-black/[0.08] bg-white p-3 shadow-sm">
+            <img src={qrDataUrl} alt={`QR ${order.id}`} width={200} height={200} className="block" />
+          </div>
+          <p className="mt-2 font-mono text-xs text-zinc-400">{order.id}</p>
+        </div>
+      )}
 
       {/* Upload slip CTA — only for pending_payment */}
       {order.status === "pending_payment" && (
