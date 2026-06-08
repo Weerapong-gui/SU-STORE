@@ -62,7 +62,7 @@ SU-STORE/
 แอดมิน → Cloudflare Tunnel → admin.sumfu.xyz → order-api (:3010 → :10000)
 ```
 
-**เซิร์ฟเวอร์จริง:** `park@arch.sumfu.xyz` (password: `23007`)
+**เซิร์ฟเวอร์จริง:** `park@arch.sumfu.xyz` (password: ดูจาก admin)
 
 **Docker containers:**
 - `su-store` — port 3000, connects to order-api via `http://order-api:10000`
@@ -254,7 +254,7 @@ round_number       INTEGER
 ### SSH เข้าเซิร์ฟเวอร์โดยตรง
 
 ```bash
-sshpass -p 23007 ssh -o StrictHostKeyChecking=no park@arch.sumfu.xyz
+sshpass -p <PASSWORD> ssh -o StrictHostKeyChecking=no park@arch.sumfu.xyz
 ```
 
 ### คำสั่ง Docker ที่ใช้บ่อย

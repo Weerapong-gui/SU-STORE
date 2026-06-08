@@ -13,6 +13,7 @@ import { BankName } from "@/components/BankName";
 import { getOrderCustomerName, getOrderStatusLabel } from "@/lib/orderStatus";
 import { getOrderById, getPaymentSlipUploadAvailability } from "@/lib/orderStore";
 import { formatStoredProductSize } from "@/lib/productSizing";
+import { getProducts } from "@/lib/getProducts";
 
 export const dynamic = "force-dynamic";
 
@@ -31,7 +32,11 @@ export default async function CheckoutPaymentPage({ params }: CheckoutPaymentPag
     return <OrderAccessFallback orderId={params.orderId} title="Unable to open the payment page" />;
   }
 
-  const slipUploadAvailability = await getPaymentSlipUploadAvailability();
+  const [slipUploadAvailability, allProducts] = await Promise.all([
+    getPaymentSlipUploadAvailability(),
+    getProducts(),
+  ]);
+  const storeClosed = allProducts.length > 0 && allProducts.every((p) => p.available === false);
 
   return (
     <section className="bg-[#ececec] py-6 md:py-10">
@@ -76,50 +81,59 @@ export default async function CheckoutPaymentPage({ params }: CheckoutPaymentPag
               </div>
             </div>
 
-            <div className={INFO_CARD_CLASSES}>
-              <p className="text-xs font-semibold tracking-[0.1em] text-zinc-500">BANK ACCOUNT</p>
-              <h2 className="mt-2 text-xl font-semibold text-zinc-900"><BankName /></h2>
+            {storeClosed ? (
+              <div className={INFO_CARD_CLASSES}>
+                <p className="text-sm font-semibold text-zinc-900">ปิดรับสั่งซื้อ</p>
+                <p className="mt-1 text-sm text-zinc-500">ขณะนี้ไม่รับคำสั่งซื้อ กรุณาติดต่อแอดมินหากมีคำถามเกี่ยวกับออเดอร์นี้</p>
+              </div>
+            ) : (
+              <>
+                <div className={INFO_CARD_CLASSES}>
+                  <p className="text-xs font-semibold tracking-[0.1em] text-zinc-500">BANK ACCOUNT</p>
+                  <h2 className="mt-2 text-xl font-semibold text-zinc-900"><BankName /></h2>
 
-              <div className="mx-auto mt-4 max-w-[48rem]">
-                <div className="flex items-center justify-center rounded-[1.75rem] border border-zinc-200 bg-white px-5 py-4">
-                  <Image
-                    src="/images/logoBank.png"
-                    alt="Bangkok Bank — องค์การบริหาร องค์การนักศึกษา มหาวิทยาลัยแม่ฟ้าหลวง"
-                    width={1000}
-                    height={500}
-                    className="w-full max-w-sm object-contain"
-                  />
+                  <div className="mx-auto mt-4 max-w-[48rem]">
+                    <div className="flex items-center justify-center rounded-[1.75rem] border border-zinc-200 bg-white px-5 py-4">
+                      <Image
+                        src="/images/logoBank.png"
+                        alt="Bangkok Bank — องค์การบริหาร องค์การนักศึกษา มหาวิทยาลัยแม่ฟ้าหลวง"
+                        width={1000}
+                        height={500}
+                        className="w-full max-w-sm object-contain"
+                      />
+                    </div>
+
+                    <BankAccountCopyField
+                      formattedAccountNumber={PAYMENT_ACCOUNT_NUMBER}
+                      copyValue={PAYMENT_ACCOUNT_COPY_VALUE}
+                    />
+                  </div>
+
+                  <div className="mx-auto mt-5 max-w-[48rem] rounded-2xl border border-zinc-200 bg-[#f7f7f9] p-4">
+                    <p className="text-xs font-semibold tracking-[0.08em] text-zinc-500">TOTAL AMOUNT</p>
+                    <p className="mt-1 text-3xl font-semibold tracking-tight text-apple-blue">
+                      {formatPrice(order.totalAmount)}
+                    </p>
+                    <p className="mt-2 text-xs text-zinc-500">
+                      Transfer this exact amount, then attach your slip below using the order number as reference.
+                    </p>
+                  </div>
                 </div>
 
-                <BankAccountCopyField
-                  formattedAccountNumber={PAYMENT_ACCOUNT_NUMBER}
-                  copyValue={PAYMENT_ACCOUNT_COPY_VALUE}
-                />
-              </div>
-
-              <div className="mx-auto mt-5 max-w-[48rem] rounded-2xl border border-zinc-200 bg-[#f7f7f9] p-4">
-                <p className="text-xs font-semibold tracking-[0.08em] text-zinc-500">TOTAL AMOUNT</p>
-                <p className="mt-1 text-3xl font-semibold tracking-tight text-apple-blue">
-                  {formatPrice(order.totalAmount)}
-                </p>
-                <p className="mt-2 text-xs text-zinc-500">
-                  Transfer this exact amount, then attach your slip below using the order number as reference.
-                </p>
-              </div>
-            </div>
-
-            <div className={INFO_CARD_CLASSES}>
-              <p className="text-xs font-semibold tracking-[0.1em] text-zinc-500">UPLOAD SLIP</p>
-              <div className="mt-3 text-sm text-zinc-700">
-                <PaymentSlipUploadForm
-                  orderId={order.id}
-                  hasUploadedSlip={Boolean(order.slip)}
-                  orderStatus={order.status}
-                  slipUploadEnabled={slipUploadAvailability.enabled}
-                  slipUploadMessage={slipUploadAvailability.message}
-                />
-              </div>
-            </div>
+                <div className={INFO_CARD_CLASSES}>
+                  <p className="text-xs font-semibold tracking-[0.1em] text-zinc-500">UPLOAD SLIP</p>
+                  <div className="mt-3 text-sm text-zinc-700">
+                    <PaymentSlipUploadForm
+                      orderId={order.id}
+                      hasUploadedSlip={Boolean(order.slip)}
+                      orderStatus={order.status}
+                      slipUploadEnabled={slipUploadAvailability.enabled}
+                      slipUploadMessage={slipUploadAvailability.message}
+                    />
+                  </div>
+                </div>
+              </>
+            )}
           </div>
         </div>
       </Container>
