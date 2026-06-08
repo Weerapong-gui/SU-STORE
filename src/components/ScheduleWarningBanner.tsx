@@ -72,6 +72,18 @@ export function ScheduleWarningBanner() {
     return () => clearInterval(poll);
   }, [checkStatus]);
 
+  // Re-check immediately when page becomes visible (handles Safari BFCache + tab switching)
+  useEffect(() => {
+    const onVisible = () => { if (document.visibilityState === "visible") checkStatus(); };
+    const onPageShow = (e: PageTransitionEvent) => { if (e.persisted) checkStatus(); };
+    document.addEventListener("visibilitychange", onVisible);
+    window.addEventListener("pageshow", onPageShow);
+    return () => {
+      document.removeEventListener("visibilitychange", onVisible);
+      window.removeEventListener("pageshow", onPageShow);
+    };
+  }, [checkStatus]);
+
   // Tick countdown every second
   useEffect(() => {
     if (!warning) return;

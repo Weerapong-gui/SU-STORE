@@ -676,6 +676,10 @@ export async function createOrder(input: ValidatedOrderInput) {
 
       console.warn("Remote order API returned no order during creation. Falling back to local storage.");
     } catch (error) {
+      // API explicitly rejected (4xx) — surface the error, don't create a ghost local order
+      if (error instanceof Error && /Remote order API request failed \([45]\d\d\)/.test(error.message)) {
+        throw error;
+      }
       console.error("Remote order API create failed. Falling back to local storage.", error);
     }
   }

@@ -39,9 +39,17 @@ export async function POST(request: Request) {
     return response;
   } catch (error) {
     console.error("Failed to create order", error);
-    return NextResponse.json(
-      { success: false, message: "Unable to create order at this time" },
-      { status: 500 }
-    );
+    // Forward the API rejection message (e.g. "สินค้าปิดจำหน่าย") instead of generic 500
+    let userMessage = "Unable to create order at this time";
+    if (error instanceof Error) {
+      const jsonMatch = error.message.match(/:\s*(\{.*\})\s*$/);
+      if (jsonMatch) {
+        try {
+          const body = JSON.parse(jsonMatch[1]) as { message?: string };
+          if (typeof body.message === "string") userMessage = body.message;
+        } catch { /* keep default */ }
+      }
+    }
+    return NextResponse.json({ success: false, message: userMessage }, { status: 400 });
   }
 }

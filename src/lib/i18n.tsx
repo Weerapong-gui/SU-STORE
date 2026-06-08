@@ -80,7 +80,7 @@ export const translations = {
       paid:            { label: "ชำระเงินแล้ว",    description: "ยืนยันการชำระเงินเรียบร้อย" },
       preparing:       { label: "กำลังเตรียมของ",  description: "กำลังเตรียมสินค้าของคุณ" },
       shipped:         { label: "พร้อมรับสินค้า",  description: "สินค้าพร้อมแล้ว — แสดง QR ที่จุดรับสินค้า" },
-      received:        { label: "รับสินค้าแล้ว",   description: "รับสินค้าเรียบร้อยแล้ว ขอบคุณ!" },
+      received:        { label: "รับสินค้าแล้ว",   description: "รับสินค้าเรียบร้อยแล้ว" },
       cancelled:       { label: "ยกเลิก",          description: "ออเดอร์ถูกยกเลิก" },
       rejected:        { label: "ปฏิเสธ",          description: "ไม่ผ่านการยืนยัน กรุณาติดต่อทีมงาน" },
     },
