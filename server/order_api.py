@@ -3338,6 +3338,9 @@ CLAIM_STATION_HTML = r"""<!doctype html>
 <head>
   <meta charset="utf-8"/>
   <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no"/>
+  <meta name="mobile-web-app-capable" content="yes"/>
+  <meta name="apple-mobile-web-app-capable" content="yes"/>
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent"/>
   <title>Claim Station</title>
   <script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.min.js"></script>
   <style>
@@ -3416,14 +3419,20 @@ CLAIM_STATION_HTML = r"""<!doctype html>
     .st-badge.received{background:var(--purple-bg);color:var(--purple)}
     .st-badge.pending_payment,.st-badge.waiting_confirm,.st-badge.paid,.st-badge.preparing{background:var(--warn-bg);color:var(--warn)}
     .st-badge.cancelled,.st-badge.rejected{background:var(--danger-bg);color:var(--danger)}
-    .cust-block{padding:12px 14px;border-bottom:1px solid var(--border)}
-    .cust-name{font-size:18px;font-weight:700}
-    .cust-meta{display:flex;gap:12px;flex-wrap:wrap;margin-top:4px}
+    .cust-block{padding:10px 14px;border-bottom:1px solid var(--border)}
+    .cust-name{font-size:17px;font-weight:700}
+    .cust-meta{display:flex;gap:12px;flex-wrap:wrap;margin-top:3px}
     .cust-meta span{font-size:13px;color:var(--muted)}
-    .items-block{padding:8px 14px;border-bottom:1px solid var(--border)}
-    .item-row{display:flex;align-items:baseline;gap:8px;padding:5px 0}
-    .item-name{font-size:14px;font-weight:600;flex:1}
-    .item-detail{font-size:13px;color:var(--muted)}
+    .items-block{padding:10px 14px 4px;border-bottom:1px solid var(--border)}
+    .items-label{font-size:10px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);margin-bottom:6px}
+    .item-row{display:flex;align-items:center;gap:10px;padding:7px 10px;margin-bottom:4px;background:var(--surface2,rgba(255,255,255,.04));border-radius:10px;border:1px solid var(--border)}
+    .item-name{font-size:16px;font-weight:800;flex:1;color:var(--ink)}
+    .item-size-badge{font-size:13px;font-weight:700;padding:3px 10px;border-radius:6px;background:var(--primary);color:#fff;white-space:nowrap}
+    .item-qty{font-size:13px;color:var(--muted);white-space:nowrap}
+    .slip-block{padding:10px 14px;border-bottom:1px solid var(--border)}
+    .slip-thumb{max-width:100%;max-height:180px;border-radius:8px;border:1px solid var(--border);cursor:pointer;display:block;object-fit:contain}
+    .slip-expand{position:fixed;inset:0;background:rgba(0,0,0,.5);backdrop-filter:blur(20px) saturate(180%);-webkit-backdrop-filter:blur(20px) saturate(180%);z-index:9000;display:flex;align-items:center;justify-content:center;cursor:zoom-out}
+    .slip-expand img{max-width:92vw;max-height:92vh;border-radius:10px;object-fit:contain}
     .khantok-badge{display:inline-flex;align-items:center;gap:6px;background:var(--ok-bg);color:var(--ok);padding:5px 12px;border-radius:999px;font-size:13px;font-weight:700;margin:8px 14px}
     .banner{padding:10px 14px;font-size:13px;font-weight:600}
     .banner.received-banner{background:var(--purple-bg);color:var(--purple)}
@@ -3438,12 +3447,17 @@ CLAIM_STATION_HTML = r"""<!doctype html>
     .err-card{background:var(--danger-bg);color:var(--danger);border-radius:var(--radius);padding:16px;box-shadow:var(--shadow);margin-bottom:12px}
     .err-card h3{font-size:15px;margin-bottom:6px}
     .err-card p{font-size:13px;margin-bottom:12px}
-    /* Stats bar */
-    .stats-bar{display:flex;gap:10px;margin-bottom:12px;flex-wrap:wrap}
-    .stat-card{background:var(--card);border-radius:var(--radius);box-shadow:var(--shadow);padding:14px 18px;flex:1;min-width:120px}
+    /* Stats slide panel */
+    #statsPanel{position:fixed;left:-256px;top:52px;width:256px;height:calc(100vh - 52px);background:var(--card);border-right:1px solid var(--border);z-index:500;transition:left .25s cubic-bezier(.4,0,.2,1);box-shadow:4px 0 20px rgba(0,0,0,.12);overflow-y:auto}
+    #statsPanel.open{left:0}
+    #statsTab{position:fixed;left:0;top:50%;transform:translateY(-50%);z-index:501;background:var(--primary);color:#fff;border:none;border-radius:0 8px 8px 0;padding:12px 8px;font-size:11px;font-weight:700;cursor:pointer;writing-mode:vertical-rl;text-orientation:mixed;letter-spacing:.06em;transition:left .25s cubic-bezier(.4,0,.2,1);display:flex;align-items:center;gap:6px;line-height:1}
+    #statsTab.open{left:256px}
+    .sp-header{display:flex;align-items:center;justify-content:space-between;padding:14px 16px;border-bottom:1px solid var(--border);font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:.08em;color:var(--muted)}
+    .sp-stat{padding:14px 16px;border-bottom:1px solid var(--border)}
     .stat-label{font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.06em;margin-bottom:4px}
     .stat-value{font-size:28px;font-weight:800;color:var(--ink);letter-spacing:-.02em}
     .stat-value.ok{color:var(--ok)}
+    .stat-value.session{color:var(--primary)}
     /* Recent */
     .recent-card{background:var(--card);border-radius:var(--radius);box-shadow:var(--shadow);overflow:hidden}
     .recent-hdr{padding:11px 14px;border-bottom:1px solid var(--border);font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.06em}
@@ -3458,6 +3472,23 @@ CLAIM_STATION_HTML = r"""<!doctype html>
     .recent-empty{padding:20px 14px;text-align:center;color:var(--muted);font-size:13px}
     .btn-print{width:100%;height:48px;background:var(--primary);color:#fff;border:none;border-radius:10px;font-size:16px;font-weight:700;cursor:pointer;transition:opacity .15s}
     .btn-print:hover{opacity:.85}
+    /* Connection dot */
+    .conn-dot{width:8px;height:8px;border-radius:50%;background:var(--ok);display:inline-block;margin-right:4px;transition:background .3s}
+    .conn-dot.offline{background:var(--danger)}
+    .conn-dot.warn{background:var(--warn)}
+    /* Sound / util buttons */
+    .btn-icon{background:none;border:1.5px solid var(--border);border-radius:8px;padding:4px 8px;font-size:13px;color:var(--muted);cursor:pointer;height:28px;line-height:1;transition:border-color .15s}
+    .btn-icon:hover{border-color:var(--primary);color:var(--primary)}
+    /* Idle overlay */
+    #idleOverlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.85);z-index:8000;align-items:center;justify-content:center;flex-direction:column;gap:16px;color:#fff}
+    #idleOverlay h2{font-size:22px;font-weight:700}
+    #idleOverlay p{font-size:14px;color:rgba(255,255,255,.6)}
+    /* Search type tabs */
+    .search-tabs{display:flex;gap:4px;margin-bottom:8px}
+    .stab{flex:1;height:30px;border:1.5px solid var(--border);border-radius:6px;background:none;font-size:12px;font-weight:600;color:var(--muted);cursor:pointer;transition:all .15s}
+    .stab.active{background:var(--primary);border-color:var(--primary);color:#fff}
+    /* Fullscreen btn */
+    .btn-fs{background:none;border:none;font-size:16px;color:var(--muted);cursor:pointer;padding:2px 4px;line-height:1}
     #printReceipt{ display:none }
     @media print {
       body * { visibility:hidden }
@@ -3479,7 +3510,9 @@ CLAIM_STATION_HTML = r"""<!doctype html>
         <label class="lbl" for="loginUser">Username</label>
         <input id="loginUser" class="inp" type="text" autocomplete="username" required />
         <label class="lbl" for="loginPass">Password</label>
-        <input id="loginPass" class="inp" type="password" autocomplete="current-password" required style="margin-bottom:8px"/>
+        <input id="loginPass" class="inp" type="password" autocomplete="current-password" required style="margin-bottom:14px"/>
+        <label class="lbl" for="loginStation">ชื่อสถานีนี้ (ไม่บังคับ)</label>
+        <input id="loginStation" class="inp" type="text" placeholder="เช่น Station A, โต๊ะ 1" style="margin-bottom:8px"/>
         <label class="remember-row">
           <input id="loginRemember" type="checkbox" checked />
           จำอุปกรณ์นี้
@@ -3493,29 +3526,31 @@ CLAIM_STATION_HTML = r"""<!doctype html>
   <div id="mainScreen">
     <div class="top-bar">
       <span class="top-bar-title">CLAIM STATION</span>
+      <span id="connDot" class="conn-dot" title="เชื่อมต่ออยู่"></span>
       <span class="top-bar-user" id="userLabel"></span>
+      <button id="soundBtn" class="btn-icon" title="เปิด/ปิดเสียง"><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><path d="M15.54 8.46a5 5 0 0 1 0 7.07"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14"/></svg></button>
+      <button id="fullscreenBtn" class="btn-fs" title="เต็มจอ"><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 3 21 3 21 9"/><polyline points="9 21 3 21 3 15"/><line x1="21" y1="3" x2="14" y2="10"/><line x1="3" y1="21" x2="10" y2="14"/></svg></button>
       <button id="logoutBtn" class="btn-logout">ออกจากระบบ</button>
     </div>
-    <div class="main-content">
-      <div class="stats-bar">
-        <div class="stat-card">
-          <div class="stat-label">รับวันนี้</div>
-          <div class="stat-value ok" id="statToday">—</div>
-        </div>
-        <div class="stat-card">
-          <div class="stat-label">รับทั้งหมด</div>
-          <div class="stat-value" id="statTotal">—</div>
-        </div>
-        <div class="stat-card">
-          <div class="stat-label">รอรับอยู่</div>
-          <div class="stat-value" id="statPending">—</div>
-        </div>
+    <div id="statsPanel">
+      <div class="sp-header">
+        <span>สถิติ</span>
+        <button class="btn-icon" onclick="toggleStatsPanel()" title="ปิด"><svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
       </div>
+      <div class="sp-stat"><div class="stat-label">Session นี้</div><div class="stat-value session" id="statSession">0</div></div>
+      <div class="sp-stat"><div class="stat-label">รับวันนี้</div><div class="stat-value ok" id="statToday">—</div></div>
+      <div class="sp-stat"><div class="stat-label">รอรับอยู่</div><div class="stat-value" id="statPending">—</div></div>
+      <div class="sp-stat"><div class="stat-label">รวมทั้งหมด</div><div class="stat-value" id="statTotal">—</div></div>
+      <div class="sp-stat"><div class="stat-label">ความคืบหน้า</div><div id="claimProgress" style="font-size:16px;font-weight:800;margin-top:2px">—</div></div>
+    </div>
+    <button id="statsTab" onclick="toggleStatsPanel()"><svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>สถิติ</button>
+    <div class="main-content">
       <div class="main-grid">
         <div class="scan-col">
           <div class="scanner-card">
             <div class="card-header">
               <h2>สแกน QR Code</h2>
+              <button id="torchBtn" class="btn-icon" style="display:none" title="ไฟฉาย"><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg></button>
               <button id="switchCamBtn" class="btn-logout" style="font-size:12px;padding:4px 10px;height:28px;display:none">สลับกล้อง</button>
               <button id="toggleCamBtn" class="btn-logout" style="font-size:12px;padding:4px 10px;height:28px">หยุดกล้อง</button>
             </div>
@@ -3527,7 +3562,13 @@ CLAIM_STATION_HTML = r"""<!doctype html>
             <p id="scanStatus" class="scan-status">กำลังเริ่มกล้อง...</p>
           </div>
           <div class="manual-card">
-            <div class="manual-lbl">ค้นหาด้วยรหัสนักศึกษา</div>
+            <div class="manual-lbl">ค้นหาด้วยตนเอง</div>
+            <div class="search-tabs">
+              <button class="stab active" data-type="student" onclick="setSearchType('student')">รหัส นศ.</button>
+              <button class="stab" data-type="phone" onclick="setSearchType('phone')">เบอร์โทร</button>
+              <button class="stab" data-type="order" onclick="setSearchType('order')">เลขออเดอร์</button>
+              <button class="stab" data-type="name" onclick="setSearchType('name')">ชื่อ</button>
+            </div>
             <div class="manual-row">
               <input id="manualInput" class="manual-inp" type="text" placeholder="ใส่รหัสนักศึกษา" inputmode="numeric" />
               <button id="manualBtn" class="btn-search">ค้นหา</button>
@@ -3538,7 +3579,10 @@ CLAIM_STATION_HTML = r"""<!doctype html>
           <div id="resultSection"></div>
         </div>
         <div class="recent-card" style="position:sticky;top:16px">
-          <div class="recent-hdr">ประวัติการรับ</div>
+          <div class="recent-hdr" style="display:flex;align-items:center;justify-content:space-between">
+            <span>ประวัติการรับ</span>
+            <button onclick="exportUnclaimed()" class="btn-icon" style="font-size:11px;height:24px;padding:0 8px;display:inline-flex;align-items:center;gap:4px" title="ออเดอร์ค้างรับ"><svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg> ค้างรับ</button>
+          </div>
           <ul id="recentList" class="recent-list"><li class="recent-empty">ยังไม่มีประวัติ</li></ul>
         </div>
       </div>
@@ -3548,6 +3592,7 @@ CLAIM_STATION_HTML = r"""<!doctype html>
   <script>
     var currentToken = '';
     var currentUser = '';
+    var currentStation = '';
     var lastOrder = null;
     var statsInterval = null;
     var scanCooldown = false;
@@ -3557,6 +3602,53 @@ CLAIM_STATION_HTML = r"""<!doctype html>
     var camActive = false;
     var availableCameras = [];
     var currentCamIndex = 0;
+    var soundEnabled = true;
+    var sessionClaimCount = 0;
+    var torchOn = false;
+    var torchTrack = null;
+    var idleTimer = null;
+    var isIdle = false;
+    var searchType = 'student';
+    var audioCtx = null;
+
+    var IDLE_MS = 25 * 60 * 1000;
+
+    var IC_CHECK = '<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>';
+    var IC_WARN  = '<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>';
+    var IC_PRINT = '<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></svg>';
+    var IC_PHONE = '<svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07A19.5 19.5 0 0 1 4.69 12 19.79 19.79 0 0 1 1.61 3.35a2 2 0 0 1 1.99-2.18h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L7.91 8.5a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 14.92z"/></svg>';
+    var IC_TICKET = '<svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M2 9a3 3 0 0 1 0 6v2a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-2a3 3 0 0 1 0-6V7a2 2 0 0 0-2-2H4a2 2 0 0 0-2 2z"/><line x1="9" y1="10" x2="15" y2="10"/><line x1="9" y1="14" x2="15" y2="14"/></svg>';
+    var IC_CHKSQ = '<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 11 12 14 22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>';
+    var IC_SND_ON  = '<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><path d="M15.54 8.46a5 5 0 0 1 0 7.07"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14"/></svg>';
+    var IC_SND_OFF = '<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><line x1="23" y1="9" x2="17" y2="15"/><line x1="17" y1="9" x2="23" y2="15"/></svg>';
+
+    function getAudioCtx() {
+      if (!audioCtx) {
+        try { audioCtx = new (window.AudioContext || window.webkitAudioContext)(); } catch(e) {}
+      }
+      return audioCtx;
+    }
+
+    function beep(freq, dur, vol, type) {
+      if (!soundEnabled) return;
+      var ctx = getAudioCtx();
+      if (!ctx) return;
+      try {
+        var osc = ctx.createOscillator();
+        var gain = ctx.createGain();
+        osc.connect(gain); gain.connect(ctx.destination);
+        osc.frequency.value = freq || 880;
+        osc.type = type || 'sine';
+        gain.gain.setValueAtTime(vol || 0.3, ctx.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + (dur || 0.15));
+        osc.start(ctx.currentTime);
+        osc.stop(ctx.currentTime + (dur || 0.15));
+      } catch(e) {}
+    }
+    function beepSuccess() { beep(880, 0.12, 0.3); setTimeout(function() { beep(1320, 0.1, 0.25); }, 100); }
+    function beepError()   { beep(220, 0.25, 0.35, 'sawtooth'); }
+    function beepWarn()    { beep(440, 0.18, 0.3); }
+    function vibrate(ms)   { if (navigator.vibrate) navigator.vibrate(ms || 100); }
 
     function esc(s) {
       return String(s || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
@@ -3570,10 +3662,46 @@ CLAIM_STATION_HTML = r"""<!doctype html>
       } catch(e) { return s; }
     }
 
+    /* ── Idle / lock ── */
+    function resetIdle() {
+      if (isIdle) {
+        isIdle = false;
+        document.getElementById('idleOverlay').style.display = 'none';
+      }
+      clearTimeout(idleTimer);
+      idleTimer = setTimeout(function() {
+        if (currentToken) {
+          isIdle = true;
+          document.getElementById('idleOverlay').style.display = 'flex';
+          beepWarn();
+        }
+      }, IDLE_MS);
+    }
+    document.addEventListener('touchstart', resetIdle, {passive:true});
+    document.addEventListener('mousedown', resetIdle);
+    document.addEventListener('keydown', resetIdle);
+    document.addEventListener('DOMContentLoaded', function() { var o = document.getElementById('idleOverlay'); if (o) o.addEventListener('click', resetIdle); });
+
+    /* ── Connection indicator ── */
+    function setConnState(online) {
+      var dot = document.getElementById('connDot');
+      if (!dot) return;
+      dot.className = 'conn-dot' + (online ? '' : ' offline');
+      dot.title = online ? 'เชื่อมต่ออยู่' : 'ออฟไลน์';
+    }
+    window.addEventListener('online', function() { setConnState(true); });
+    window.addEventListener('offline', function() { setConnState(false); });
+    setConnState(navigator.onLine !== false);
+
+    /* ── Init ── */
     (function init() {
       var tok = localStorage.getItem('csToken') || sessionStorage.getItem('csToken');
       var usr = localStorage.getItem('csUser') || sessionStorage.getItem('csUser');
-      if (tok && usr) { currentToken = tok; currentUser = usr; showMain(); }
+      var stn = localStorage.getItem('csStation') || sessionStorage.getItem('csStation') || '';
+      var snd = localStorage.getItem('csSound');
+      soundEnabled = snd !== '0';
+      document.getElementById('soundBtn').innerHTML = soundEnabled ? IC_SND_ON : IC_SND_OFF;
+      if (tok && usr) { currentToken = tok; currentUser = usr; currentStation = stn; showMain(); }
       else showLogin();
     })();
 
@@ -3581,30 +3709,75 @@ CLAIM_STATION_HTML = r"""<!doctype html>
       document.getElementById('loginScreen').classList.remove('scr-off');
       document.getElementById('mainScreen').classList.remove('scr-on');
       if (statsInterval) { clearInterval(statsInterval); statsInterval = null; }
+      clearTimeout(idleTimer);
     }
     function showMain() {
       document.getElementById('loginScreen').classList.add('scr-off');
       document.getElementById('mainScreen').classList.add('scr-on');
-      document.getElementById('userLabel').textContent = currentUser;
+      var lbl = currentUser + (currentStation ? ' • ' + currentStation : '');
+      document.getElementById('userLabel').textContent = lbl;
       loadStats();
       statsInterval = setInterval(loadStats, 30000);
-      startCamera();
+      if (localStorage.getItem('csCamOff') === '1') {
+        camActive = false;
+        document.getElementById('toggleCamBtn').textContent = 'เปิดกล้อง';
+        setScanStatus('กล้องถูกปิด');
+      } else {
+        startCamera();
+      }
+      resetIdle();
     }
     function loadStats() {
       fetch('/claim-station/stats', {headers: {'Authorization': 'Claim ' + currentToken}})
-        .then(function(r) { return r.ok ? r.json() : null; })
+        .then(function(r) {
+          setConnState(true);
+          return r.ok ? r.json() : null;
+        })
         .then(function(d) {
           if (!d) return;
-          document.getElementById('statToday').textContent = d.receivedToday;
-          document.getElementById('statTotal').textContent = d.receivedTotal;
-          document.getElementById('statPending').textContent = d.pendingPickup;
-        }).catch(function() {});
+          var todayEl = document.getElementById('statToday');
+          var totalEl = document.getElementById('statTotal');
+          var pendEl  = document.getElementById('statPending');
+          if (todayEl) todayEl.textContent = d.receivedToday;
+          if (totalEl) totalEl.textContent = d.receivedTotal;
+          if (pendEl)  pendEl.textContent  = d.pendingPickup;
+          var total = (d.receivedTotal || 0) + (d.pendingPickup || 0);
+          var pct = total > 0 ? Math.round((d.receivedTotal || 0) / total * 100) : 0;
+          var progEl = document.getElementById('claimProgress');
+          if (progEl) {
+            progEl.textContent = total > 0 ? pct + '% (' + d.receivedTotal + '/' + total + ')' : '—';
+            progEl.style.color = pct >= 90 ? 'var(--ok)' : pct >= 50 ? 'var(--primary)' : 'var(--warn)';
+          }
+        }).catch(function() { setConnState(false); });
+    }
+    function toggleStatsPanel() {
+      var open = document.getElementById('statsPanel').classList.toggle('open');
+      document.getElementById('statsTab').classList.toggle('open', open);
     }
 
+    /* ── Sound toggle ── */
+    document.getElementById('soundBtn').addEventListener('click', function() {
+      soundEnabled = !soundEnabled;
+      this.innerHTML = soundEnabled ? IC_SND_ON : IC_SND_OFF;
+      localStorage.setItem('csSound', soundEnabled ? '1' : '0');
+      if (soundEnabled) beepSuccess();
+    });
+
+    /* ── Fullscreen ── */
+    document.getElementById('fullscreenBtn').addEventListener('click', function() {
+      if (!document.fullscreenElement) {
+        document.documentElement.requestFullscreen().catch(function() {});
+      } else {
+        document.exitFullscreen().catch(function() {});
+      }
+    });
+
+    /* ── Login ── */
     document.getElementById('loginForm').addEventListener('submit', function(e) {
       e.preventDefault();
       var user = document.getElementById('loginUser').value.trim();
       var pass = document.getElementById('loginPass').value;
+      var station = document.getElementById('loginStation').value.trim();
       var rem  = document.getElementById('loginRemember').checked;
       var errEl = document.getElementById('loginError');
       var btn   = document.getElementById('loginBtn');
@@ -3615,40 +3788,66 @@ CLAIM_STATION_HTML = r"""<!doctype html>
         headers: {'Content-Type':'application/json'},
         body: JSON.stringify({username: user, password: pass})
       }).then(function(r) {
+        var ct = r.headers.get('content-type') || '';
+        if (ct.indexOf('application/json') < 0) {
+          throw new Error('ไม่สามารถเชื่อมต่อกับ server ได้ — ตรวจสอบ URL และ server status');
+        }
         return r.json().then(function(d) { return {ok: r.ok, d: d}; });
       }).then(function(r) {
         if (!r.ok) throw new Error(r.d.message || 'ชื่อผู้ใช้หรือรหัสผ่านไม่ถูกต้อง');
         currentToken = r.d.token;
         currentUser = user;
-        if (rem) { localStorage.setItem('csToken', currentToken); localStorage.setItem('csUser', currentUser); }
-        else      { sessionStorage.setItem('csToken', currentToken); sessionStorage.setItem('csUser', currentUser); }
+        currentStation = station;
+        if (rem) {
+          localStorage.setItem('csToken', currentToken);
+          localStorage.setItem('csUser', currentUser);
+          localStorage.setItem('csStation', currentStation);
+        } else {
+          sessionStorage.setItem('csToken', currentToken);
+          sessionStorage.setItem('csUser', currentUser);
+          sessionStorage.setItem('csStation', currentStation);
+        }
         showMain();
       }).catch(function(err) {
         errEl.textContent = err.message;
         btn.disabled = false; btn.textContent = 'เข้าสู่ระบบ';
+        beepError();
       });
     });
 
+    /* ── Logout ── */
     document.getElementById('logoutBtn').addEventListener('click', async function() {
       if (!await showCsDialog({icon:'warn',title:'ออกจากระบบ',message:'ต้องการออกจากระบบ?',confirmText:'ออกจากระบบ'})) return;
       doLogout();
     });
     function doLogout() {
-      localStorage.removeItem('csToken'); localStorage.removeItem('csUser');
-      sessionStorage.removeItem('csToken'); sessionStorage.removeItem('csUser');
-      currentToken = ''; currentUser = '';
+      localStorage.removeItem('csToken'); localStorage.removeItem('csUser'); localStorage.removeItem('csStation');
+      sessionStorage.removeItem('csToken'); sessionStorage.removeItem('csUser'); sessionStorage.removeItem('csStation');
+      currentToken = ''; currentUser = ''; currentStation = ''; sessionClaimCount = 0;
+      document.getElementById('statSession').textContent = '0';
       stopCamera();
       showLogin();
     }
 
+    /* ── Torch ── */
+    document.getElementById('torchBtn').addEventListener('click', function() {
+      if (!torchTrack) return;
+      torchOn = !torchOn;
+      torchTrack.applyConstraints({advanced: [{torch: torchOn}]}).catch(function() {});
+      this.textContent = torchOn ? '\u{1F526}' : '\u{1F294}';
+    });
+
+    /* ── Camera ── */
     document.getElementById('toggleCamBtn').addEventListener('click', function() {
       if (camActive) {
         stopCamera(); camActive = false;
         this.textContent = 'เปิดกล้อง';
         setScanStatus('กล้องถูกปิด');
+        localStorage.setItem('csCamOff', '1');
       } else {
         camActive = true;
         this.textContent = 'หยุดกล้อง';
+        localStorage.removeItem('csCamOff');
         startCamera();
       }
     });
@@ -3664,12 +3863,29 @@ CLAIM_STATION_HTML = r"""<!doctype html>
       if (!navigator.mediaDevices || !navigator.mediaDevices.enumerateDevices) return;
       navigator.mediaDevices.enumerateDevices().then(function(devices) {
         availableCameras = devices.filter(function(d) { return d.kind === 'videoinput'; });
-        var switchBtn = document.getElementById('switchCamBtn');
-        switchBtn.style.display = availableCameras.length > 1 ? '' : 'none';
+        document.getElementById('switchCamBtn').style.display = availableCameras.length > 1 ? '' : 'none';
       }).catch(function() {});
     }
+
+    function trySetupTorch(stream) {
+      try {
+        var tracks = stream.getVideoTracks();
+        if (!tracks.length) return;
+        var track = tracks[0];
+        var caps = track.getCapabilities ? track.getCapabilities() : {};
+        if (caps.torch) {
+          torchTrack = track;
+          document.getElementById('torchBtn').style.display = '';
+        }
+      } catch(e) {}
+    }
+
     function startCamera(deviceId) {
       camActive = true;
+      torchTrack = null;
+      document.getElementById('torchBtn').style.display = 'none';
+      torchOn = false;
+      document.getElementById('torchBtn').textContent = '\u{1F294}';
       if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
         setScanStatus('กล้องไม่รองรับในอุปกรณ์นี้', 'error'); return;
       }
@@ -3679,6 +3895,7 @@ CLAIM_STATION_HTML = r"""<!doctype html>
         : {video: {facingMode: {ideal:'environment'}, width:{ideal:1280}, height:{ideal:720}}};
       navigator.mediaDevices.getUserMedia(constraints).then(function(stream) {
         cameraStream = stream;
+        trySetupTorch(stream);
         var vid = document.getElementById('scanVideo');
         vid.srcObject = stream;
         vid.addEventListener('loadedmetadata', function() {
@@ -3693,10 +3910,13 @@ CLAIM_STATION_HTML = r"""<!doctype html>
         document.getElementById('toggleCamBtn').textContent = 'เปิดกล้อง';
       });
     }
+
     function stopCamera() {
       if (animFrame) { cancelAnimationFrame(animFrame); animFrame = null; }
       if (cameraStream) { cameraStream.getTracks().forEach(function(t) { t.stop(); }); cameraStream = null; }
+      torchTrack = null; torchOn = false;
     }
+
     function scanTick() {
       if (!cameraStream) return;
       var vid = document.getElementById('scanVideo');
@@ -3707,47 +3927,82 @@ CLAIM_STATION_HTML = r"""<!doctype html>
         var img = can.getContext('2d').getImageData(0, 0, can.width, can.height);
         var code = jsQR(img.data, img.width, img.height, {inversionAttempts:'dontInvert'});
         if (code && code.data) {
-          var val = code.data.trim().toUpperCase();
-          if (val) {
+          var raw = code.data.trim();
+          if (raw) {
             scanCooldown = true;
-            setScanStatus('พบ QR: ' + val, 'success');
-            lookupOrder(val);
+            vibrate(80);
+            var parsed = parseQrCode(raw);
+            setScanStatus('พบ QR: ' + parsed.displayCode, 'success');
+            lookupOrder(parsed.orderCode, parsed.qrToken);
             setTimeout(function() { scanCooldown = false; }, 4000);
           }
         }
       }
       animFrame = requestAnimationFrame(scanTick);
     }
+
+    function parseQrCode(raw) {
+      var upper = raw.toUpperCase();
+      if (upper.indexOf('SUQR:') === 0) {
+        var parts = raw.split(':');
+        if (parts.length >= 3) {
+          var orderCode = parts[1].toUpperCase();
+          var token = parts[2];
+          return {orderCode: orderCode, qrToken: token, displayCode: orderCode + ' (signed)'};
+        }
+      }
+      return {orderCode: upper, qrToken: '', displayCode: upper};
+    }
+
     function setScanStatus(msg, cls) {
       var el = document.getElementById('scanStatus');
       el.textContent = msg;
       el.className = 'scan-status' + (cls ? ' ' + cls : '');
     }
 
+    /* ── Search type ── */
+    function setSearchType(type) {
+      searchType = type;
+      var placeholders = {student:'ใส่รหัสนักศึกษา',phone:'ใส่เบอร์โทร',order:'ใส่เลขออเดอร์',name:'ใส่ชื่อ-สกุล'};
+      var modes = {student:'numeric',phone:'tel',order:'text',name:'text'};
+      var inp = document.getElementById('manualInput');
+      inp.placeholder = placeholders[type] || '';
+      inp.inputMode = modes[type] || 'text';
+      inp.value = '';
+      document.querySelectorAll('.stab').forEach(function(btn) {
+        btn.classList.toggle('active', btn.dataset.type === type);
+      });
+      inp.focus();
+    }
+
     document.getElementById('manualBtn').addEventListener('click', function() {
       var v = document.getElementById('manualInput').value.trim();
-      if (v) lookupByStudentCode(v);
+      if (v) doManualSearch(v);
     });
     document.getElementById('manualInput').addEventListener('keydown', function(e) {
-      if (e.key === 'Enter') { var v = this.value.trim(); if (v) lookupByStudentCode(v); }
+      if (e.key === 'Enter') { var v = this.value.trim(); if (v) doManualSearch(v); }
     });
 
-    function lookupByStudentCode(studentCode) {
-      fetch('/claim-station/orders?studentCode=' + encodeURIComponent(studentCode), {
-        headers: {'Authorization': 'Claim ' + currentToken}
-      }).then(function(r) {
-        if (r.status === 401) { doLogout(); return null; }
-        return r.json().then(function(d) { return {ok: r.ok, d: d}; });
-      }).then(function(r) {
-        if (!r) return;
-        if (!r.ok) { showError(r.d.message || 'ไม่พบออเดอร์พร้อมรับ'); return; }
-        var orders = r.d.orders || [];
-        if (orders.length === 1) {
-          showOrderCard(orders[0]);
-        } else {
-          showOrderList(orders);
-        }
-      }).catch(function() { showError('ไม่สามารถเชื่อมต่อได้'); });
+    function doManualSearch(val) {
+      if (searchType === 'order') {
+        lookupOrder(val.toUpperCase(), '');
+        return;
+      }
+      var url = '/claim-station/orders?';
+      if (searchType === 'phone') url += 'phone=' + encodeURIComponent(val);
+      else if (searchType === 'name') url += 'name=' + encodeURIComponent(val);
+      else url += 'studentCode=' + encodeURIComponent(val);
+      fetch(url, {headers: {'Authorization': 'Claim ' + currentToken}})
+        .then(function(r) {
+          if (r.status === 401) { doLogout(); return null; }
+          return r.json().then(function(d) { return {ok: r.ok, d: d}; });
+        }).then(function(r) {
+          if (!r) return;
+          if (!r.ok) { showError(r.d.message || 'ไม่พบออเดอร์พร้อมรับ'); beepWarn(); return; }
+          var orders = r.d.orders || [];
+          if (orders.length === 1) showOrderCard(orders[0]);
+          else showOrderList(orders);
+        }).catch(function() { showError('ไม่สามารถเชื่อมต่อได้'); beepError(); });
     }
 
     function showOrderList(orders) {
@@ -3757,11 +4012,11 @@ CLAIM_STATION_HTML = r"""<!doctype html>
         var items = (o.items && o.items.length) ? o.items : [{product: o.product, size: o.size, quantity: o.quantity}];
         var itemSummary = items.map(function(it) {
           var p = it.product || {};
-          return esc((p.shortName || p.name || '')) + ' ' + esc(it.size || '');
+          return esc((p.shortName || p.name || '')) + (it.size ? ' ' + esc(it.size) : '');
         }).join(', ');
-        html += '<div class="cust-block" style="cursor:pointer" onclick="lookupOrder(\'' + esc(o.id) + '\')">' +
+        html += '<div class="cust-block" style="cursor:pointer" onclick="lookupOrder(\'' + esc(o.id) + '\',\'\')">' +
           '<div class="cust-name" style="font-size:15px">' + esc(o.id) + '</div>' +
-          '<div class="cust-meta"><span>' + esc(itemSummary) + '</span></div>' +
+          '<div class="cust-meta"><span>' + esc((o.customer || {}).fullName || '') + '</span><span>' + esc(itemSummary) + '</span></div>' +
         '</div>';
       }
       html += '<div class="action-block"><button class="btn-close" onclick="clearResult()">ปิด</button></div></div>';
@@ -3769,17 +4024,22 @@ CLAIM_STATION_HTML = r"""<!doctype html>
       document.getElementById('resultSection').innerHTML = html;
     }
 
-    function lookupOrder(code) {
-      fetch('/claim-station/orders/' + encodeURIComponent(code), {
-        headers: {'Authorization': 'Claim ' + currentToken}
-      }).then(function(r) {
-        if (r.status === 401) { doLogout(); return null; }
-        return r.json().then(function(d) { return {ok: r.ok, d: d}; });
-      }).then(function(r) {
-        if (!r) return;
-        if (!r.ok) { showError(r.d.message || 'ไม่พบออเดอร์'); return; }
-        showOrderCard(r.d.order);
-      }).catch(function() { showError('ไม่สามารถเชื่อมต่อได้'); });
+    function lookupOrder(code, qrToken) {
+      var url = '/claim-station/orders/' + encodeURIComponent(code);
+      if (qrToken) url += '?qrToken=' + encodeURIComponent(qrToken);
+      fetch(url, {headers: {'Authorization': 'Claim ' + currentToken}})
+        .then(function(r) {
+          if (r.status === 401) { doLogout(); return null; }
+          return r.json().then(function(d) { return {ok: r.ok, status: r.status, d: d}; });
+        }).then(function(r) {
+          if (!r) return;
+          if (!r.ok) {
+            showError(r.d.message || 'ไม่พบออเดอร์');
+            beepError(); vibrate([100, 80, 100]);
+            return;
+          }
+          showOrderCard(r.d.order);
+        }).catch(function() { showError('ไม่สามารถเชื่อมต่อได้'); beepError(); });
     }
 
     var ST_TH = {pending_payment:'รอสลิป',waiting_confirm:'รอยืนยัน',paid:'ชำระแล้ว',preparing:'กำลังเตรียมของ',shipped:'พร้อมรับ',received:'รับแล้ว',cancelled:'ยกเลิก',rejected:'ปฏิเสธ'};
@@ -3792,47 +4052,129 @@ CLAIM_STATION_HTML = r"""<!doctype html>
       var canReceive = st === 'shipped';
       var alreadyReceived = st === 'received';
       var items = (order.items && order.items.length) ? order.items : [{product: order.product, size: order.size, quantity: order.quantity}];
+      var needChecklist = canReceive && items.length > 1;
       var itemsHtml = '';
       for (var i = 0; i < items.length; i++) {
         var itm = items[i]; var p = itm.product || {};
-        itemsHtml += '<div class="item-row"><span class="item-name">' + esc(p.name || p.shortName || '') + '</span><span class="item-detail">Size ' + esc(itm.size || '-') + ' &times; ' + esc(String(itm.quantity || 1)) + '</span></div>';
+        var cat = (p.category || '').toLowerCase();
+        var unit = (cat.indexOf('headband') >= 0 || (p.name||'').toLowerCase().indexOf('headband') >= 0) ? 'ผืน' : 'ตัว';
+        var schoolLine = itm.school ? '<div style="font-size:12px;color:var(--muted);margin-top:1px">' + (cat.indexOf('headband')>=0?'Print: ':'โรงเรียน: ') + esc(itm.school) + '</div>' : '';
+        if (needChecklist) {
+          itemsHtml += '<label class="item-row" style="cursor:pointer">' +
+            '<input type="checkbox" class="item-chk" onchange="updateConfirmBtn()" style="width:20px;height:20px;accent-color:var(--ok);flex-shrink:0">' +
+            '<div style="flex:1"><div class="item-name">' + esc(p.name || p.shortName || '') + '</div>' + schoolLine + '</div>' +
+            '<span class="item-size-badge">S ' + esc(itm.size || '-') + '</span>' +
+            '<span class="item-qty">&times; ' + esc(String(itm.quantity || 1)) + ' ' + unit + '</span>' +
+            '</label>';
+        } else {
+          itemsHtml += '<div class="item-row">' +
+            '<div style="flex:1"><div class="item-name">' + esc(p.name || p.shortName || '') + '</div>' + schoolLine + '</div>' +
+            '<span class="item-size-badge">S ' + esc(itm.size || '-') + '</span>' +
+            '<span class="item-qty">&times; ' + esc(String(itm.quantity || 1)) + ' ' + unit + '</span>' +
+            '</div>';
+        }
       }
+      var checklabel = needChecklist ? '<div style="font-size:10px;font-weight:800;color:var(--warn);letter-spacing:.06em;text-transform:uppercase;margin-bottom:6px;display:flex;align-items:center;gap:4px">' + IC_CHKSQ + ' เช็คของก่อนกด ยืนยัน</div>' : '';
+      itemsHtml = '<div class="items-block"><div class="items-label">รายการสินค้า</div>' + checklabel + itemsHtml + '</div>';
       var khantok = '';
-      if (order.khantokTicket) khantok = '<div class="khantok-badge">&#127903; บัตรขันโตก' + (order.khantokTicketValue ? ' &#3647;' + order.khantokTicketValue : '') + '</div>';
+      if (order.khantokTicket) khantok = '<div class="khantok-badge" style="display:flex;align-items:center;gap:4px">' + IC_TICKET + ' บัตรขันโตก' + (order.khantokTicketValue ? ' ฿' + order.khantokTicketValue : '') + '</div>';
       var banner = '';
       if (alreadyReceived) {
-        banner = '<div class="banner received-banner">&#10003; รับสินค้าแล้ว' + (order.receivedAt ? ' เมื่อ ' + esc(fmt(order.receivedAt)) : '') + (order.receivedBy ? ' โดย ' + esc(order.receivedBy) : '') + '</div>';
+        banner = '<div class="banner received-banner" style="display:flex;align-items:center;gap:6px">' + IC_CHECK + ' รับสินค้าแล้ว' +
+          (order.receivedAt ? ' เมื่อ ' + esc(fmt(order.receivedAt)) : '') +
+          (order.receivedBy ? ' โดย ' + esc(order.receivedBy) : '') + '</div>';
+        beepWarn();
       } else if (!canReceive) {
-        banner = '<div class="banner warn-banner">&#9888; ยังไม่พร้อมรับ &mdash; สถานะ: ' + esc(stLabel) + '</div>';
+        banner = '<div class="banner warn-banner" style="display:flex;align-items:center;gap:6px">' + IC_WARN + ' ยังไม่พร้อมรับ &mdash; สถานะ: ' + esc(stLabel) + '</div>';
+        beepWarn();
+      } else {
+        beepSuccess(); vibrate(80);
       }
       var action = '';
       if (canReceive) {
-        action = '<button id="confirmBtn" class="btn-confirm" onclick="doReceive(\'' + esc(order.id || '') + '\')">&#10003; ยืนยันรับสินค้า</button><button class="btn-close" onclick="clearResult()">ยกเลิก</button>';
+        var confirmDisabled = needChecklist ? ' disabled style="opacity:.45;cursor:not-allowed"' : '';
+        action = '<button id="confirmBtn" class="btn-confirm" style="display:flex;align-items:center;justify-content:center;gap:6px"' + confirmDisabled + ' onclick="doReceive(\'' + esc(order.id || '') + '\')">' + IC_CHECK + ' ยืนยันรับสินค้า</button>' +
+                 '<button class="btn-close" onclick="clearResult()">ยกเลิก</button>';
       } else if (alreadyReceived) {
-        action = '<button class="btn-print" onclick="printReceipt()">&#128438; พิมพ์ใบเสร็จ</button><button class="btn-close" onclick="clearResult()">ปิด</button>';
+        action = '<button class="btn-print" style="display:flex;align-items:center;justify-content:center;gap:6px" onclick="printReceipt()">' + IC_PRINT + ' พิมพ์ใบเสร็จ</button>' +
+                 '<button class="btn-close" onclick="clearResult()">ปิด</button>';
       } else {
         action = '<button class="btn-close" onclick="clearResult()">ปิด</button>';
+      }
+      var phone = (cust.phone || '');
+      var slipHtml = '';
+      if (order.slip && order.slip.uploadedAt) {
+        slipHtml = '<div class="slip-block"><div class="items-label">สลิปการชำระเงิน</div>' +
+          '<img id="slipImg" class="slip-thumb" src="" alt="slip" onclick="expandSlip(this.src)" />' +
+          '<div id="slipLoading" style="font-size:12px;color:var(--muted);padding:4px 0">กำลังโหลดสลิป...</div>' +
+          '</div>';
       }
       var html = '<div class="result-card">' +
         '<div class="order-hdr"><span class="order-code">' + esc(order.id || '') + '</span><span class="st-badge ' + esc(st) + '">' + esc(stLabel) + '</span></div>' +
         banner +
-        '<div class="cust-block"><div class="cust-name">' + esc(cust.fullName || '') + '</div>' +
-          '<div class="cust-meta"><span>' + esc(cust.studentCode || '') + '</span><span>' + esc(cust.school || '') + '</span></div></div>' +
-        '<div class="items-block">' + itemsHtml + '</div>' +
+        '<div class="cust-block"><div class="cust-name">' + esc(cust.fullName || '') + (order.roundNumber ? '<span style="margin-left:8px;font-size:12px;font-weight:600;padding:2px 8px;border-radius:5px;background:var(--primary);color:#fff;vertical-align:middle">Phase ' + esc(String(order.roundNumber)) + '</span>' : '') + '</div>' +
+          '<div class="cust-meta">' +
+          (cust.studentCode ? '<span>' + esc(cust.studentCode) + '</span>' : '') +
+          (cust.school ? '<span>' + esc(cust.school) + '</span>' : '') +
+          (phone ? '<span style="display:inline-flex;align-items:center;gap:3px">' + IC_PHONE + ' ' + esc(phone) + '</span>' : '') +
+          '</div></div>' +
+        itemsHtml +
+        slipHtml +
         khantok +
         '<div class="action-block">' + action + '</div>' +
       '</div>';
       document.getElementById('resultCol').style.display = '';
       var sec = document.getElementById('resultSection');
       sec.innerHTML = html;
+      if (order.slip && order.slip.uploadedAt) { loadSlipImage(order.id || ''); }
       if (window.innerWidth < 640) sec.scrollIntoView({behavior:'smooth', block:'nearest'});
     }
 
+    function loadSlipImage(orderId) {
+      fetch('/claim-station/orders/' + encodeURIComponent(orderId) + '/slip', {
+        headers: {'Authorization': 'Claim ' + currentToken}
+      }).then(function(r) {
+        if (!r.ok) throw new Error('slip ' + r.status);
+        return r.blob();
+      }).then(function(blob) {
+        var url = URL.createObjectURL(blob);
+        var img = document.getElementById('slipImg');
+        var ld = document.getElementById('slipLoading');
+        if (img) { img.src = url; img.style.display = 'block'; }
+        if (ld) ld.style.display = 'none';
+      }).catch(function() {
+        var ld = document.getElementById('slipLoading');
+        if (ld) ld.textContent = 'ไม่พบสลิป';
+      });
+    }
+
+    function expandSlip(src) {
+      if (!src) return;
+      var overlay = document.createElement('div');
+      overlay.className = 'slip-expand';
+      overlay.innerHTML = '<img src="' + src + '" alt="slip">';
+      overlay.onclick = function() { document.body.removeChild(overlay); };
+      document.body.appendChild(overlay);
+    }
+
+    function updateConfirmBtn() {
+      var btn = document.getElementById('confirmBtn');
+      if (!btn) return;
+      var chks = document.querySelectorAll('.item-chk');
+      if (!chks.length) return;
+      var allChecked = Array.from(chks).every(function(c) { return c.checked; });
+      btn.disabled = !allChecked;
+      btn.style.opacity = allChecked ? '' : '.45';
+      btn.style.cursor = allChecked ? '' : 'not-allowed';
+    }
+
     function showError(msg) {
+      beepError(); vibrate([100, 80, 100]);
       document.getElementById('resultCol').style.display = '';
       document.getElementById('resultSection').innerHTML =
-        '<div class="err-card"><h3>ไม่พบออเดอร์</h3><p>' + esc(msg) + '</p><button class="btn-close" onclick="clearResult()">ปิด</button></div>';
+        '<div class="err-card"><h3 style="display:flex;align-items:center;gap:6px">' + IC_WARN + ' ไม่พบออเดอร์</h3><p>' + esc(msg) + '</p><button class="btn-close" onclick="clearResult()">ปิด</button></div>';
     }
+
     function clearResult() {
       document.getElementById('resultCol').style.display = 'none';
       document.getElementById('resultSection').innerHTML = '';
@@ -3848,19 +4190,28 @@ CLAIM_STATION_HTML = r"""<!doctype html>
         var r = await fetch('/claim-station/orders/' + encodeURIComponent(code) + '/received', {
           method: 'PATCH',
           headers: {'Authorization':'Claim ' + currentToken, 'Content-Type':'application/json'},
-          body: JSON.stringify({receivedBy: currentUser})
+          body: JSON.stringify({receivedBy: (currentStation ? currentUser + ' (' + currentStation + ')' : currentUser)})
         });
         if (r.status === 401) { doLogout(); return; }
         var d = await r.json();
         if (!r.ok) {
-          await showCsDialog({type:'alert',icon:'danger',title:'เกิดข้อผิดพลาด',message:d.message||'เกิดข้อผิดพลาด'});
-          if (btn) { btn.disabled = false; btn.textContent = '&#10003; ยืนยันรับสินค้า'; }
+          if (r.status === 409) {
+            beepWarn();
+            await showCsDialog({type:'alert',icon:'warn',title:'รับไปแล้ว',message:d.message || 'ออเดอร์นี้ถูกรับสินค้าไปแล้ว'});
+          } else {
+            beepError();
+            await showCsDialog({type:'alert',icon:'danger',title:'เกิดข้อผิดพลาด',message:d.message||'เกิดข้อผิดพลาด'});
+          }
+          if (btn) { btn.disabled = false; btn.innerHTML = IC_CHECK + ' ยืนยันรับสินค้า'; }
           return;
         }
+        sessionClaimCount++;
+        document.getElementById('statSession').textContent = String(sessionClaimCount);
         addRecentPickup(d.order);
         showOrderCard(d.order);
-        setScanStatus('&#10003; บันทึกแล้ว — พร้อมสแกนต่อ', 'success');
+        setScanStatus('บันทึกแล้ว — พร้อมสแกนต่อ', 'success');
       } catch(e) {
+        beepError();
         await showCsDialog({type:'alert',icon:'danger',title:'เชื่อมต่อไม่ได้',message:'ไม่สามารถเชื่อมต่อได้'});
         if (btn) { btn.disabled = false; }
       }
@@ -3870,22 +4221,51 @@ CLAIM_STATION_HTML = r"""<!doctype html>
       var cust = order.customer || {};
       var now = new Date();
       recentPickups.unshift({code: order.id || '', name: cust.fullName || '', time: String(now.getHours()).padStart(2,'0') + ':' + String(now.getMinutes()).padStart(2,'0'), order: order});
-      if (recentPickups.length > 30) recentPickups.pop();
+      if (recentPickups.length > 50) recentPickups.pop();
       loadStats();
       var html = '';
       for (var i = 0; i < recentPickups.length; i++) {
         var p = recentPickups[i];
-        html += '<li class="recent-item" onclick="reloadOrder(' + i + ')"><span class="r-time">' + esc(p.time) + '</span><span class="r-code">' + esc(p.code) + '</span><span class="r-name">' + esc(p.name) + '</span><span class="r-ok">&#10003;</span></li>';
+        html += '<li class="recent-item" onclick="reloadOrder(' + i + ')">' +
+          '<span class="r-time">' + esc(p.time) + '</span>' +
+          '<span class="r-code">' + esc(p.code) + '</span>' +
+          '<span class="r-name">' + esc(p.name) + '</span>' +
+          '<span class="r-ok">' + IC_CHECK + '</span></li>';
       }
       document.getElementById('recentList').innerHTML = html;
     }
 
     function reloadOrder(i) {
       var p = recentPickups[i];
-      if (p && p.order) {
-        lastOrder = p.order;
-        showOrderCard(p.order);
-      }
+      if (p && p.order) { lastOrder = p.order; showOrderCard(p.order); }
+    }
+
+    /* ── Unclaimed export ── */
+    function exportUnclaimed() {
+      fetch('/claim-station/orders-pending', {headers: {'Authorization': 'Claim ' + currentToken}})
+        .then(function(r) { return r.ok ? r.json() : Promise.reject(r.status); })
+        .then(function(d) {
+          var rows = d.orders || [];
+          if (!rows.length) { alert('ไม่มีออเดอร์ค้างรับ'); return; }
+          var lines = ['﻿เลขออเดอร์,ชื่อ,รหัส นศ.,สถานศึกษา,รายการสินค้า,ยอดรวม'];
+          rows.forEach(function(o) {
+            var cust = o.customer || {};
+            var items = (o.items && o.items.length) ? o.items : [{product: o.product, size: o.size, quantity: o.quantity}];
+            var itemStr = items.map(function(it) {
+              var p = it.product || {};
+              return (p.shortName || p.name || '') + (it.size ? ' ' + it.size : '') + ' x' + (it.quantity || 1);
+            }).join('; ');
+            lines.push([o.id, cust.fullName, cust.studentCode, cust.school, itemStr, o.totalAmount].map(function(v) {
+              return '"' + String(v || '').replace(/"/g, '""') + '"';
+            }).join(','));
+          });
+          var blob = new Blob([lines.join('\r\n')], {type: 'text/csv;charset=utf-8'});
+          var url = URL.createObjectURL(blob);
+          var a = document.createElement('a');
+          a.href = url; a.download = 'unclaimed_' + new Date().toISOString().slice(0,10) + '.csv';
+          a.click();
+          setTimeout(function() { URL.revokeObjectURL(url); }, 3000);
+        }).catch(function() { alert('ไม่สามารถโหลดข้อมูลได้'); });
     }
 
     /* ── Print receipt ── */
@@ -4003,6 +4383,12 @@ CLAIM_STATION_HTML = r"""<!doctype html>
     });
   </script>
 
+  <div id="idleOverlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.85);z-index:8000;align-items:center;justify-content:center;flex-direction:column;gap:16px;color:#fff">
+    <div><svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg></div>
+    <h2 style="font-size:22px;font-weight:700;margin:0">หน้าจอถูกล็อก</h2>
+    <p style="font-size:14px;color:rgba(255,255,255,.6);margin:0">แตะหน้าจอเพื่อปลดล็อก</p>
+  </div>
+
   <div id="csDlgBackdrop" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.48);z-index:9999;align-items:center;justify-content:center;padding:16px">
     <div style="position:relative;background:var(--card);border-radius:18px;padding:32px 28px 24px;width:min(440px,100%);box-shadow:0 12px 48px rgba(0,0,0,.22);text-align:center">
       <button id="csDlgCloseBtn" style="position:absolute;top:12px;right:14px;background:none;border:none;font-size:20px;color:var(--muted);cursor:pointer;line-height:1">&#215;</button>
@@ -4097,7 +4483,7 @@ CLAIM_STATION_HTML = r"""<!doctype html>
       <div style="margin-top:10px;font-size:12px">
         <div style="font-weight:700">วิธีการชำระเงิน / Payment Method :</div>
         <div style="line-height:1.9;margin-top:2px">
-          <div>&#9745; ชำระโดยการโอน / Payment via bank transfer</div>
+          <div>&#9744; ชำระโดยการโอน / Payment via bank transfer</div>
           <div>&#9744; ชำระโดยเงินสด / Payment in cash</div>
         </div>
       </div>
@@ -4415,6 +4801,17 @@ def compute_claim_token(username: str, password: str) -> str:
     ).hexdigest()
 
 
+def compute_qr_token(order_code: str) -> str:
+    """Short HMAC token embedded in QR codes so staff can't forge scan codes."""
+    if not ORDER_API_TOKEN:
+        return ""
+    return hmac.new(
+        key=ORDER_API_TOKEN.encode("utf-8"),
+        msg=f"qr-v1:{order_code}".encode("utf-8"),
+        digestmod="sha256",
+    ).hexdigest()[:16]
+
+
 def compute_super_token(username: str, password: str) -> str:
     return hmac.new(
         key=(username + ":" + password).encode("utf-8"),
@@ -4669,6 +5066,7 @@ def serialize_order(row: sqlite3.Row, include_access_token: bool = False) -> dic
         "adminNote": row["admin_note"] if "admin_note" in row_keys else None,
         "receivedAt": row["received_at"] if "received_at" in row_keys else None,
         "receivedBy": row["received_by"] if "received_by" in row_keys else None,
+        "qrToken": compute_qr_token(row["order_code"]),
     }
     if include_access_token:
         payload["accessToken"] = row["access_token"]
@@ -6019,18 +6417,71 @@ class OrderRequestHandler(BaseHTTPRequestHandler):
             from urllib.parse import parse_qs
             qs = parse_qs(urlparse(self.path).query)
             student_code = (qs.get("studentCode") or [""])[0].strip()
-            if not student_code:
-                self._send_json(HTTPStatus.BAD_REQUEST, {"message": "studentCode is required"})
+            phone = (qs.get("phone") or [""])[0].strip()
+            full_name = (qs.get("name") or [""])[0].strip()
+            if not student_code and not phone and not full_name:
+                self._send_json(HTTPStatus.BAD_REQUEST, {"message": "studentCode, phone หรือ name is required"})
+                return
+            with open_db() as connection:
+                if student_code:
+                    rows = connection.execute(
+                        "SELECT * FROM orders WHERE student_code=? AND status='shipped' ORDER BY created_at DESC",
+                        (student_code,),
+                    ).fetchall()
+                    not_found_msg = "ไม่พบออเดอร์พร้อมรับสำหรับรหัสนักศึกษานี้"
+                elif phone:
+                    rows = connection.execute(
+                        "SELECT * FROM orders WHERE phone=? AND status='shipped' ORDER BY created_at DESC",
+                        (phone,),
+                    ).fetchall()
+                    not_found_msg = "ไม่พบออเดอร์พร้อมรับสำหรับเบอร์โทรนี้"
+                else:
+                    pat = f"%{full_name}%"
+                    rows = connection.execute(
+                        "SELECT * FROM orders WHERE (full_name LIKE ? OR (first_name || ' ' || last_name) LIKE ?) AND status='shipped' ORDER BY created_at DESC",
+                        (pat, pat),
+                    ).fetchall()
+                    not_found_msg = "ไม่พบออเดอร์พร้อมรับสำหรับชื่อนี้"
+            if not rows:
+                self._send_json(HTTPStatus.NOT_FOUND, {"message": not_found_msg})
+                return
+            self._send_json(HTTPStatus.OK, {"orders": [serialize_order(r) for r in rows]})
+            return
+
+        if path == "/claim-station/orders-pending":
+            if not self._has_claim_station_authorization():
+                self._deny_unauthorized()
                 return
             with open_db() as connection:
                 rows = connection.execute(
-                    "SELECT * FROM orders WHERE student_code=? AND status='shipped' ORDER BY created_at DESC",
-                    (student_code,),
+                    "SELECT * FROM orders WHERE status='shipped' ORDER BY created_at ASC"
                 ).fetchall()
-            if not rows:
-                self._send_json(HTTPStatus.NOT_FOUND, {"message": "ไม่พบออเดอร์พร้อมรับสำหรับรหัสนักศึกษานี้"})
-                return
             self._send_json(HTTPStatus.OK, {"orders": [serialize_order(r) for r in rows]})
+            return
+
+        claim_slip_match = re.fullmatch(r"/claim-station/orders/([A-Z0-9-]+)/slip", path)
+        if claim_slip_match:
+            if not self._has_claim_station_authorization():
+                self._deny_unauthorized()
+                return
+            order_code = claim_slip_match.group(1)
+            with open_db() as connection:
+                row = fetch_order_by_code(connection, order_code)
+            if row is None:
+                self._send_json(HTTPStatus.NOT_FOUND, {"message": "ไม่พบออเดอร์"})
+                return
+            slip_path = resolve_stored_slip_path(row["slip_stored_name"], row["slip_storage_path"] if "slip_storage_path" in row.keys() else None)
+            if slip_path is None or not slip_path.exists():
+                self._send_json(HTTPStatus.NOT_FOUND, {"message": "ไม่พบสลิป"})
+                return
+            mime = row["slip_mime_type"] or "image/jpeg"
+            data = slip_path.read_bytes()
+            self.send_response(HTTPStatus.OK)
+            self.send_header("Content-Type", mime)
+            self.send_header("Content-Length", str(len(data)))
+            self.send_header("Cache-Control", "private, max-age=300")
+            self.end_headers()
+            self.wfile.write(data)
             return
 
         claim_order_get_match = re.fullmatch(r"/claim-station/orders/([A-Z0-9-]+)", path)
@@ -6038,7 +6489,15 @@ class OrderRequestHandler(BaseHTTPRequestHandler):
             if not self._has_claim_station_authorization():
                 self._deny_unauthorized()
                 return
+            from urllib.parse import parse_qs
+            qs = parse_qs(urlparse(self.path).query)
+            qr_token = (qs.get("qrToken") or [""])[0].strip()
             order_code = claim_order_get_match.group(1)
+            if qr_token and ORDER_API_TOKEN:
+                expected = compute_qr_token(order_code)
+                if qr_token != expected:
+                    self._send_json(HTTPStatus.FORBIDDEN, {"message": "QR code ไม่ถูกต้อง — สแกนใหม่อีกครั้ง"})
+                    return
             with open_db() as connection:
                 row = fetch_order_by_code(connection, order_code)
             if row is None:
@@ -6093,6 +6552,7 @@ class OrderRequestHandler(BaseHTTPRequestHandler):
                         "school": (o.get("customer") or {}).get("school"),
                     },
                     "slip": {"uploadedAt": (o.get("slip") or {}).get("uploadedAt")} if o.get("slip") else None,
+                    "qrToken": o.get("qrToken") if o.get("status") == "shipped" else None,
                 }
             if code:
                 self._send_json(HTTPStatus.OK, {"order": public_order(rows[0])})
@@ -6807,21 +7267,23 @@ class OrderRequestHandler(BaseHTTPRequestHandler):
                 payload = {}
             received_by = (payload or {}).get("receivedBy", "") if isinstance(payload, dict) else ""
             with open_db() as connection:
-                row = fetch_order_by_code(connection, order_code)
-                if row is None:
-                    self._send_json(HTTPStatus.NOT_FOUND, {"message": "ไม่พบออเดอร์"})
-                    return
-                if row["status"] != "shipped":
-                    self._send_json(
-                        HTTPStatus.BAD_REQUEST,
-                        {"message": f"ออเดอร์มีสถานะ '{row['status']}' ยังไม่พร้อมรับ"},
-                    )
-                    return
                 ts = now_iso()
-                connection.execute(
-                    "UPDATE orders SET status='received', payment_status='paid', received_at=?, received_by=?, updated_at=? WHERE order_code=?",
+                cursor = connection.execute(
+                    "UPDATE orders SET status='received', payment_status='paid', received_at=?, received_by=?, updated_at=?"
+                    " WHERE order_code=? AND status='shipped'",
                     (ts, received_by or "staff", ts, order_code),
                 )
+                if cursor.rowcount == 0:
+                    row = fetch_order_by_code(connection, order_code)
+                    if row is None:
+                        self._send_json(HTTPStatus.NOT_FOUND, {"message": "ไม่พบออเดอร์"})
+                    else:
+                        st = row["status"]
+                        if st == "received":
+                            self._send_json(HTTPStatus.CONFLICT, {"message": "ออเดอร์นี้ถูกรับสินค้าไปแล้ว", "alreadyReceived": True})
+                        else:
+                            self._send_json(HTTPStatus.BAD_REQUEST, {"message": f"ออเดอร์มีสถานะ '{st}' ยังไม่พร้อมรับ"})
+                    return
                 log_audit(connection, order_code, "claim_received", f"received by {received_by or 'staff'}")
                 connection.commit()
                 updated = fetch_order_by_code(connection, order_code)
