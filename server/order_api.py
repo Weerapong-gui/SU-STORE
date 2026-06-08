@@ -5665,7 +5665,7 @@ def get_product_breakdown(connection: sqlite3.Connection, category: str, round_f
     SIZE_ORDER = ["XS", "S", "M", "L", "XL", "2XL", "3XL", "4XL", "5XL", "6XL", "7XL"]
     COLOR_ORDER = ["Blue", "Red", "White"]
     COLOR_THAI = {"Blue": "สีน้ำเงิน", "Red": "สีแดง", "White": "สีขาว"}
-    rw = "WHERE round_number = ?" if round_filter > 0 else ""
+    rw = "WHERE status NOT IN ('rejected', 'cancelled')" + (" AND round_number = ?" if round_filter > 0 else "")
     rp: list[Any] = [round_filter] if round_filter > 0 else []
 
     if category == "jacket":
@@ -5716,7 +5716,7 @@ def get_product_breakdown(connection: sqlite3.Connection, category: str, round_f
 
     # single / headband — flat rows
     counts: dict[str, int] = {}
-    for row in connection.execute(f"SELECT items_json, product_category, size, quantity FROM orders {rw}", rp).fetchall():
+    for row in connection.execute(f"SELECT items_json, product_category, size, quantity FROM orders {rw}", rp).fetchall():  # noqa: E501
         items_processed = False
         if row["items_json"]:
             try:
