@@ -3389,7 +3389,7 @@ CLAIM_STATION_HTML = r"""<!doctype html>
     @media(min-width:640px){
       .main-grid{display:flex;gap:14px;align-items:start}
     .scan-col{flex:1;min-width:0}
-    .result-col{flex:1;min-width:0}
+    .result-col{flex:1;min-width:0;max-width:640px;margin:0 auto}
     }
     /* Scanner card */
     .scanner-card{background:var(--card);border-radius:var(--radius);overflow:hidden;box-shadow:var(--shadow);margin-bottom:12px}
@@ -3430,7 +3430,7 @@ CLAIM_STATION_HTML = r"""<!doctype html>
     .item-size-badge{font-size:13px;font-weight:700;padding:3px 10px;border-radius:6px;background:var(--primary);color:#fff;white-space:nowrap}
     .item-qty{font-size:13px;color:var(--muted);white-space:nowrap}
     .slip-block{padding:10px 14px;border-bottom:1px solid var(--border)}
-    .slip-thumb{max-width:100%;max-height:180px;border-radius:8px;border:1px solid var(--border);cursor:pointer;display:block;object-fit:contain}
+    .slip-thumb{max-width:100%;max-height:380px;border-radius:8px;border:1px solid var(--border);cursor:pointer;display:block;object-fit:contain}
     .slip-expand{position:fixed;inset:0;background:rgba(0,0,0,.5);backdrop-filter:blur(20px) saturate(180%);-webkit-backdrop-filter:blur(20px) saturate(180%);z-index:9000;display:flex;align-items:center;justify-content:center;cursor:zoom-out}
     .slip-expand img{max-width:92vw;max-height:92vh;border-radius:10px;object-fit:contain}
     .khantok-badge{display:inline-flex;align-items:center;gap:6px;background:var(--ok-bg);color:var(--ok);padding:5px 12px;border-radius:999px;font-size:13px;font-weight:700;margin:8px 14px}
@@ -4020,6 +4020,7 @@ CLAIM_STATION_HTML = r"""<!doctype html>
         '</div>';
       }
       html += '<div class="action-block"><button class="btn-close" onclick="clearResult()">ปิด</button></div></div>';
+      _showResultMode();
       document.getElementById('resultCol').style.display = '';
       document.getElementById('resultSection').innerHTML = html;
     }
@@ -4123,11 +4124,12 @@ CLAIM_STATION_HTML = r"""<!doctype html>
         khantok +
         '<div class="action-block">' + action + '</div>' +
       '</div>';
+      _showResultMode();
       document.getElementById('resultCol').style.display = '';
       var sec = document.getElementById('resultSection');
       sec.innerHTML = html;
       if (order.slip && order.slip.uploadedAt) { loadSlipImage(order.id || ''); }
-      if (window.innerWidth < 640) sec.scrollIntoView({behavior:'smooth', block:'nearest'});
+      sec.scrollIntoView({behavior:'smooth', block:'start'});
     }
 
     function loadSlipImage(orderId) {
@@ -4170,6 +4172,7 @@ CLAIM_STATION_HTML = r"""<!doctype html>
 
     function showError(msg) {
       beepError(); vibrate([100, 80, 100]);
+      _showResultMode();
       document.getElementById('resultCol').style.display = '';
       document.getElementById('resultSection').innerHTML =
         '<div class="err-card"><h3 style="display:flex;align-items:center;gap:6px">' + IC_WARN + ' ไม่พบออเดอร์</h3><p>' + esc(msg) + '</p><button class="btn-close" onclick="clearResult()">ปิด</button></div>';
@@ -4179,8 +4182,18 @@ CLAIM_STATION_HTML = r"""<!doctype html>
       document.getElementById('resultCol').style.display = 'none';
       document.getElementById('resultSection').innerHTML = '';
       document.getElementById('manualInput').value = '';
+      var sc = document.querySelector('.scan-col');
+      var rc = document.querySelector('.recent-card');
+      if (sc) sc.style.display = '';
+      if (rc) rc.style.display = '';
       setScanStatus('กำลังสแกน QR Code...');
       scanCooldown = false;
+    }
+    function _showResultMode() {
+      var sc = document.querySelector('.scan-col');
+      var rc = document.querySelector('.recent-card');
+      if (sc) sc.style.display = 'none';
+      if (rc) rc.style.display = 'none';
     }
 
     async function doReceive(code) {
