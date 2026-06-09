@@ -4,6 +4,7 @@ import { Container } from "@/components/ui/Container";
 import { getOrderById } from "@/lib/orderStore";
 import { getProducts } from "@/lib/getProducts";
 
+
 export const dynamic = "force-dynamic";
 
 type CheckoutPaymentPageProps = {
@@ -31,28 +32,20 @@ export default async function CheckoutPaymentPage({ searchParams }: CheckoutPaym
     redirect(`/checkout/payment/${existingOrder.id}`);
   }
 
-  // Block if the specific product is unavailable, or if all products are closed (for cart mode)
+  // Block if the specific product is unavailable — redirect to configure page which shows the closed UI
   if (!existingOrder) {
     const allProducts = await getProducts();
     const requestedSlug = !cartMode ? searchParams?.product : undefined;
-    const requestedProduct = requestedSlug
-      ? allProducts.find((p) => p.slug === requestedSlug)
-      : null;
-    const unavailable = requestedProduct
-      ? requestedProduct.available === false
-      : allProducts.length > 0 && allProducts.every((p) => p.available === false);
-    if (unavailable) {
-      const productLabel = requestedProduct?.name ?? "สินค้า";
-      return (
-        <section className="bg-[#ececec] py-6 md:py-8">
-          <Container className="max-w-[1440px]">
-            <div className="flex min-h-[calc(100svh-8.5rem)] flex-col items-center justify-center gap-3 text-center">
-              <p className="text-2xl font-semibold tracking-tight text-zinc-900">ปิดรับสั่งซื้อ</p>
-              <p className="text-sm text-zinc-500">{productLabel} ไม่เปิดรับสั่งซื้อในขณะนี้ กรุณากลับมาใหม่ในภายหลัง</p>
-            </div>
-          </Container>
-        </section>
-      );
+    if (requestedSlug) {
+      const requestedProduct = allProducts.find((p) => p.slug === requestedSlug);
+      if (requestedProduct && requestedProduct.available === false) {
+        redirect(`/products/${requestedSlug}/configure`);
+      }
+    } else {
+      const allClosed = allProducts.length > 0 && allProducts.every((p) => p.available === false);
+      if (allClosed) {
+        redirect("/products");
+      }
     }
   }
 
