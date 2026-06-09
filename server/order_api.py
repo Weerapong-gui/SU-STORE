@@ -6076,6 +6076,8 @@ def get_product_breakdown(connection: sqlite3.Connection, category: str, round_f
     SIZE_ORDER = ["XS", "S", "M", "L", "XL", "2XL", "3XL", "4XL", "5XL", "6XL", "7XL"]
     COLOR_ORDER = ["Blue", "Red", "White"]
     COLOR_THAI = {"Blue": "สีน้ำเงิน", "Red": "สีแดง", "White": "สีขาว"}
+    # map legacy product_category values (shirt/jacket/headband) to slugs (single/jacket/headband)
+    CATEGORY_TO_SLUG = {"shirt": "single", "jacket": "jacket", "headband": "headband"}
     rw = "WHERE status NOT IN ('rejected', 'cancelled')" + (" AND round_number = ?" if round_filter > 0 else "")
     rp: list[Any] = [round_filter] if round_filter > 0 else []
 
@@ -6089,7 +6091,8 @@ def get_product_breakdown(connection: sqlite3.Connection, category: str, round_f
                     parsed = json.loads(row["items_json"])
                     if isinstance(parsed, list):
                         for item in parsed:
-                            if (item.get("product") or {}).get("category") != "jacket":
+                            raw_cat = (item.get("product") or {}).get("category") or ""
+                            if CATEGORY_TO_SLUG.get(raw_cat, raw_cat) != "jacket":
                                 continue
                             qty = int(item.get("quantity") or 0)
                             raw_size = (item.get("size") or "").strip()
@@ -6101,7 +6104,7 @@ def get_product_breakdown(connection: sqlite3.Connection, category: str, round_f
                         items_processed = True
                 except (json.JSONDecodeError, TypeError, ValueError):
                     pass
-            if not items_processed and (row["product_category"] or "") == "jacket":
+            if not items_processed and CATEGORY_TO_SLUG.get(row["product_category"] or "", row["product_category"] or "") == "jacket":
                 qty = int(row["quantity"] or 0)
                 raw_size = (row["size"] or "").strip()
                 parts = raw_size.split(" / ")
@@ -6134,7 +6137,9 @@ def get_product_breakdown(connection: sqlite3.Connection, category: str, round_f
                 parsed = json.loads(row["items_json"])
                 if isinstance(parsed, list):
                     for item in parsed:
-                        if (item.get("product") or {}).get("category") != category:
+                        raw_cat = (item.get("product") or {}).get("category") or ""
+                        item_slug = CATEGORY_TO_SLUG.get(raw_cat, raw_cat)
+                        if item_slug != category:
                             continue
                         qty = int(item.get("quantity") or 0)
                         if category == "headband":
@@ -6145,7 +6150,9 @@ def get_product_breakdown(connection: sqlite3.Connection, category: str, round_f
                     items_processed = True
             except (json.JSONDecodeError, TypeError, ValueError):
                 pass
-        if not items_processed and (row["product_category"] or "") == category:
+        pc = row["product_category"] or ""
+        pc_slug = CATEGORY_TO_SLUG.get(pc, pc)
+        if not items_processed and (row["product_slug"] == category or pc_slug == category):
             qty = int(row["quantity"] or 0)
             key = "(ไม่ระบุสำนัก)" if category == "headband" else (row["size"] or "").strip() or "ONE SIZE"
             counts[key] = counts.get(key, 0) + qty
