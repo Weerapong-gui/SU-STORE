@@ -26,6 +26,7 @@ interface PublicOrder {
   khantokTicketAlreadyClaimed: boolean;
   customer: { fullName: string; studentCode: string; school: string };
   slip: { uploadedAt: string } | null;
+  qrToken?: string | null;
 }
 
 const STATUS_COLORS: Record<OrderStatus, string> = {
@@ -73,13 +74,16 @@ function OrderCard({ order }: { order: PublicOrder }) {
 
   useEffect(() => {
     if (order.status === "shipped" && order.id) {
-      QRCode.toDataURL(order.id, { width: 220, margin: 2, color: { dark: "#000000", light: "#ffffff" } })
+      const qrContent = order.qrToken
+        ? `SUQR:${order.id}:${order.qrToken}`
+        : order.id;
+      QRCode.toDataURL(qrContent, { width: 220, margin: 2, color: { dark: "#000000", light: "#ffffff" } })
         .then(setQrDataUrl)
         .catch(() => {});
     } else {
       setQrDataUrl("");
     }
-  }, [order.id, order.status]);
+  }, [order.id, order.status, order.qrToken]);
 
   return (
     <div className="overflow-hidden rounded-2xl border border-black/[0.08] bg-white shadow-sm">
