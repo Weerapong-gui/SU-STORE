@@ -1139,7 +1139,8 @@
         }
       }
       var totalAmt = o.totalAmount || 0;
-      document.getElementById('rcptOrderId').textContent = o.id || '';
+      var seqRaw = String(o.sequenceNumber || 0).padStart(8, '0');
+      document.getElementById('rcptOrderId').textContent = seqRaw.slice(0, 4) + ' ' + seqRaw.slice(4);
       document.getElementById('rcptDate').textContent = dateStr;
       document.getElementById('rcptName').textContent = cust.fullName || '';
       document.getElementById('rcptStudentId').textContent = cust.studentCode || '';

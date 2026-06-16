@@ -1030,166 +1030,127 @@
       var c = order.customer || {};
       var orderItems = (order.items && order.items.length > 0)
         ? order.items
-        : [{product: order.product || {}, size: order.size, quantity: order.quantity, unitPrice: ((order.product||{}).price||0), totalAmount: order.totalAmount}];
+        : [{ product: order.product || {}, size: order.size, quantity: order.quantity, unitPrice: ((order.product || {}).price || 0), totalAmount: order.totalAmount }];
+
+      var P = {
+        font: "'Sarabun','TH Sarabun New','Sukhumvit Set',Arial,sans-serif",
+        ink: "#10122e",
+        rightCopyOffset: 421.19,
+        date:      { x: 388, y: 35,  size: 9.5, weight: "500", anchor: "end" },
+        receiptNo: { x: 388, y: 56,  size: 9.5, weight: "500", anchor: "end" },
+        customer:  { x: 261, y: 93,  size: 8,   weight: "600" },
+        studentId: { x: 261, y: 112, size: 8,   weight: "600" },
+        school:    { x: 261, y: 131, size: 8,   weight: "600" },
+        rowYs: [197, 222, 247, 272, 297, 322, 347, 372],
+        rowSize: 7.5,
+        colNo: 11, colName: 25, colQty: 278, colPrice: 344, colAmount: 389,
+        subtotal: { x: 389, y: 399, size: 9, weight: "700", anchor: "end" },
+        total:    { x: 389, y: 429, size: 9, weight: "700", anchor: "end" },
+        words:    { x: 128, y: 399, size: 7,                anchor: "middle" },
+      };
 
       function fmtReceiptDate(iso) {
-        if (!iso) return "-";
+        if (!iso) return "";
         var s = String(iso).replace(" ", "T");
         if (!/Z$|[+-]\d{2}:\d{2}$/.test(s)) s += "Z";
         var d = new Date(new Date(s).getTime() + 7 * 3600000);
-        var months = ["มกราคม","กุมภาพันธ์","มีนาคม","เมษายน","พฤษภาคม","มิถุนายน","กรกฎาคม","สิงหาคม","กันยายน","ตุลาคม","พฤศจิกายน","ธันวาคม"];
-        return d.getUTCDate() + " " + months[d.getUTCMonth()] + " " + (d.getUTCFullYear() + 543);
+        function p(n) { return n < 10 ? "0" + n : "" + n; }
+        return p(d.getUTCDate()) + "/" + p(d.getUTCMonth() + 1) + "/" + (d.getUTCFullYear() + 543);
+      }
+
+      function toBahtText(n) {
+        var amt = Math.round(n || 0);
+        if (amt === 0) return "ศูนย์บาทถ้วน";
+        var ones = ["", "หนึ่ง", "สอง", "สาม", "สี่", "ห้า", "หก", "เจ็ด", "แปด", "เก้า"];
+        function u100(x) {
+          if (x === 0) return "";
+          if (x < 10) return ones[x];
+          var t = Math.floor(x / 10), u = x % 10;
+          var ts = t === 1 ? "สิบ" : (t === 2 ? "ยี่สิบ" : ones[t] + "สิบ");
+          return ts + (u === 0 ? "" : (t > 0 && u === 1 ? "เอ็ด" : ones[u]));
+        }
+        function u1k(x) {
+          if (x === 0) return "";
+          var h = Math.floor(x / 100), r = x % 100;
+          return (h > 0 ? ones[h] + "ร้อย" : "") + u100(r);
+        }
+        var res = "", a = amt;
+        if (a >= 1000000) { res += u1k(Math.floor(a / 1000000)) + "ล้าน"; a %= 1000000; }
+        if (a >= 100000)  { res += ones[Math.floor(a / 100000)] + "แสน"; a %= 100000; }
+        if (a >= 10000)   { res += ones[Math.floor(a / 10000)] + "หมื่น"; a %= 10000; }
+        if (a >= 1000)    { res += ones[Math.floor(a / 1000)] + "พัน"; a %= 1000; }
+        return res + u1k(a) + "บาทถ้วน";
       }
 
       var totalAmount = Number(order.totalAmount) || 0;
       var dateStr = fmtReceiptDate(order.createdAt);
       var school = c.school || (orderItems[0] && orderItems[0].school) || "";
+      var seqRaw = String(order.sequenceNumber || 0).padStart(8, "0");
+      var receiptNo = seqRaw.slice(0, 4) + " " + seqRaw.slice(4);
+      var bahtText = "(" + toBahtText(totalAmount) + ")";
 
-      function buildRows() {
-        var rows = "";
+      function mkText(x, y, val, opts) {
+        opts = opts || {};
+        var el = document.createElementNS("http://www.w3.org/2000/svg", "text");
+        el.setAttribute("x", x);
+        el.setAttribute("y", y);
+        el.setAttribute("font-family", P.font);
+        el.setAttribute("font-size", opts.size || P.rowSize);
+        el.setAttribute("fill", opts.fill || P.ink);
+        if (opts.anchor) el.setAttribute("text-anchor", opts.anchor);
+        if (opts.weight) el.setAttribute("font-weight", opts.weight);
+        el.textContent = String(val == null ? "" : val);
+        return el;
+      }
+
+      function injectData(svg, ox) {
+        svg.appendChild(mkText(ox + P.date.x,      P.date.y,      dateStr,   P.date));
+        svg.appendChild(mkText(ox + P.receiptNo.x, P.receiptNo.y, receiptNo, P.receiptNo));
+        svg.appendChild(mkText(ox + P.customer.x,  P.customer.y,  c.fullName || "",    P.customer));
+        svg.appendChild(mkText(ox + P.studentId.x, P.studentId.y, c.studentCode || "", P.studentId));
+        svg.appendChild(mkText(ox + P.school.x,    P.school.y,    school,              P.school));
         orderItems.forEach(function(item, idx) {
+          if (idx >= P.rowYs.length) return;
           var ip = item.product || {};
           var name = ip.name || "-";
           if (item.size && item.size !== "-" && item.size !== "") name += " (" + item.size + ")";
-          if (item.school) name += " - " + item.school;
+          if (item.school) name += " / " + item.school;
           var unitPrice = Number(item.unitPrice) || Number(ip.price) || 0;
           var qty = Number(item.quantity) || 0;
           var lineTotal = Number(item.totalAmount) || (unitPrice * qty);
-          rows += "<tr>" +
-            "<td class='c'>" + (idx + 1) + "</td>" +
-            "<td>" + name + "</td>" +
-            "<td class='c'>" + qty + "</td>" +
-            "<td class='r'>" + unitPrice.toLocaleString("th-TH") + "</td>" +
-            "<td class='r'>" + lineTotal.toLocaleString("th-TH") + "</td>" +
-            "</tr>";
+          var y = P.rowYs[idx];
+          var sz = P.rowSize;
+          svg.appendChild(mkText(ox + P.colNo,     y, idx + 1,                           { anchor: "middle", size: sz }));
+          svg.appendChild(mkText(ox + P.colName,   y, name,                              { size: sz }));
+          svg.appendChild(mkText(ox + P.colQty,    y, qty,                               { anchor: "middle", size: sz }));
+          svg.appendChild(mkText(ox + P.colPrice,  y, unitPrice.toLocaleString("th-TH"), { anchor: "end", size: sz }));
+          svg.appendChild(mkText(ox + P.colAmount, y, lineTotal.toLocaleString("th-TH"), { anchor: "end", size: sz }));
         });
-        var empty = Math.max(0, 8 - orderItems.length);
-        for (var i = 0; i < empty; i++) rows += "<tr class='empty-row'><td>&nbsp;</td><td></td><td></td><td></td><td></td></tr>";
-        return rows;
+        svg.appendChild(mkText(ox + P.subtotal.x, P.subtotal.y, totalAmount.toLocaleString("th-TH"), P.subtotal));
+        svg.appendChild(mkText(ox + P.total.x,    P.total.y,    totalAmount.toLocaleString("th-TH"), P.total));
+        svg.appendChild(mkText(ox + P.words.x,    P.words.y,    bahtText,                            P.words));
       }
 
-      var logoSvg = '<svg width="54" height="54" viewBox="0 0 54 54" xmlns="http://www.w3.org/2000/svg">' +
-        '<circle cx="27" cy="27" r="26" fill="none" stroke="white" stroke-width="1.5"/>' +
-        '<circle cx="27" cy="27" r="22" fill="none" stroke="white" stroke-width="0.5" opacity="0.5"/>' +
-        '<text x="27" y="23" text-anchor="middle" fill="white" font-size="14" font-weight="bold" font-family="Arial,sans-serif">SU</text>' +
-        '<text x="27" y="33" text-anchor="middle" fill="white" font-size="8" font-family="Arial,sans-serif">MFU</text>' +
-        '<text x="27" y="43" text-anchor="middle" fill="white" font-size="5" font-family="Arial,sans-serif" letter-spacing="0.5">STUDENT UNION</text>' +
-        '</svg>';
-
-      function oneCopy() {
-        return '<div class="receipt">' +
-          '<div class="hdr">' +
-            '<div class="hdr-logo">' + logoSvg + '</div>' +
-            '<div class="hdr-title">' +
-              '<div class="title-th">ใบเสร็จรับเงิน</div>' +
-              '<div class="title-en">Receipt</div>' +
-            '</div>' +
-            '<div class="hdr-meta">' +
-              '<table class="meta-tbl"><tbody>' +
-                '<tr><td class="meta-lbl">วันที่ / Date</td><td class="meta-val">' + dateStr + '</td></tr>' +
-                '<tr><td class="meta-lbl">เลขที่ใบเสร็จ / Receipt number</td><td class="meta-val">' + order.id + '</td></tr>' +
-              '</tbody></table>' +
-            '</div>' +
-          '</div>' +
-          '<div class="info-row">' +
-            '<div class="info-cell issuer">' +
-              '<div class="sec-lbl">ผู้ออก / Issuer</div>' +
-              '<div class="issuer-name">องค์การบริหาร องค์การนักศึกษา มหาวิทยาลัยแม่ฟ้าหลวง</div>' +
-              '<div class="issuer-sub">333 หมู่ 1 ตำบลท่าสุด อำเภอเมืองเชียงราย จังหวัดเชียงราย 57100</div>' +
-              '<div class="issuer-sub">Student Union of Mae Fah Luang University</div>' +
-              '<div class="issuer-sub">333 Moo 1, Tha Sut Subdistrict, Mueang Chiang Rai District, Chiang Rai 57100</div>' +
-            '</div>' +
-            '<div class="info-cell cust">' +
-              '<div class="cust-row"><span class="sec-lbl">ชื่อลูกค้า / Customer Name</span><span class="cust-val">' + (c.fullName || "-") + '</span></div>' +
-              '<div class="cust-row"><span class="sec-lbl">รหัสนักศึกษา / Student ID</span><span class="cust-val">' + (c.studentCode || "-") + '</span></div>' +
-              '<div class="cust-row"><span class="sec-lbl">สำนักวิชา / School of</span><span class="cust-val">' + school + '</span></div>' +
-            '</div>' +
-          '</div>' +
-          '<table class="items-tbl"><thead>' +
-            '<tr><th class="c">เลขที่<br>No.</th><th>รายการสินค้า / Product list</th><th class="c">จำนวน<br>Quantity</th><th class="r">ราคา<br>Price</th><th class="r">จำนวนเงิน<br>Amount</th></tr>' +
-          '</thead><tbody>' + buildRows() + '</tbody></table>' +
-          '<div class="totals-row">' +
-            '<div class="amount-lbl"><span class="sec-lbl">จำนวนเงิน / Amount</span></div>' +
-            '<div class="amount-num"><div class="sub-row"><span>รวมเป็นเงิน / Subtotal</span><span>' + totalAmount.toLocaleString("th-TH") + '</span></div></div>' +
-          '</div>' +
-          '<div class="pay-row">' +
-            '<div class="pay-label"><span class="sec-lbl">การชำระเงิน / Conditions of Payments</span></div>' +
-            '<div class="pay-methods">' +
-              '<label><input type="checkbox" disabled> <span>เงินสด / Cash</span></label>' +
-              '<label><input type="checkbox" checked disabled> <span>โอนเงิน / Mobile Banking</span></label>' +
-            '</div>' +
-            '<div class="total-box"><span>รวมเป็นเงินทั้งสิ้น / Total</span><strong>' + totalAmount.toLocaleString("th-TH") + ' บาท</strong></div>' +
-          '</div>' +
-          '<div class="sig-row">' +
-            '<div class="sig-cell"><div class="sec-lbl">ผู้รับเงิน / payee</div><div class="sig-line"></div><div class="sig-name">(นาย บัลลังก์ วงศ์ษารัตน์)</div></div>' +
-            '<div class="sig-cell"><div class="sec-lbl">ผู้จ่ายเงิน / payer</div></div>' +
-            '<div class="sig-cell"></div>' +
-          '</div>' +
-          '<div class="disclaimer">ไม่รับเปลี่ยนสินค้าทุกกรณี กรุณาตรวจสอบรายละเอียดก่อนรับสินค้า<br>' +
-            'No exchanges, returns, or refunds will be accepted under any circumstances. Please inspect the product and verify all order details</div>' +
-        '</div>';
-      }
-
-      var css = [
-        "* { margin:0; padding:0; box-sizing:border-box; }",
-        "body { font-family:'Sarabun','TH Sarabun New',Arial,sans-serif; font-size:9.5pt; background:#fff; color:#111; }",
-        "@page { size:A4 landscape; margin:8mm; }",
-        ".page { display:flex; gap:4mm; width:100%; }",
-        ".receipt { flex:1; border:1.5px solid #222; display:flex; flex-direction:column; }",
-        ".hdr { display:flex; align-items:stretch; border-bottom:1.5px solid #222; }",
-        ".hdr-logo { background:#0d1f40; padding:8px 10px; display:flex; align-items:center; justify-content:center; min-width:72px; }",
-        ".hdr-title { flex:1; padding:6px 10px; display:flex; flex-direction:column; justify-content:center; }",
-        ".title-th { font-size:17pt; font-weight:bold; color:#0d1f40; line-height:1.1; }",
-        ".title-en { font-size:10pt; color:#0d1f40; }",
-        ".hdr-meta { border-left:1.5px solid #222; min-width:130px; }",
-        ".meta-tbl { width:100%; height:100%; border-collapse:collapse; }",
-        ".meta-tbl td { padding:4px 6px; font-size:8pt; vertical-align:middle; }",
-        ".meta-tbl tr:first-child td { border-bottom:1px solid #ccc; }",
-        ".meta-lbl { color:#555; white-space:nowrap; }",
-        ".meta-val { font-weight:700; font-size:8.5pt; }",
-        ".info-row { display:flex; border-bottom:1.5px solid #222; }",
-        ".info-cell { padding:5px 7px; font-size:8pt; }",
-        ".issuer { flex:0 0 52%; border-right:1px solid #ccc; }",
-        ".cust { flex:1; }",
-        ".sec-lbl { font-size:7.5pt; color:#555; }",
-        ".issuer-name { font-weight:700; font-size:8pt; margin-top:2px; }",
-        ".issuer-sub { font-size:7pt; color:#444; line-height:1.35; }",
-        ".cust-row { margin-bottom:3px; }",
-        ".cust-val { margin-left:4px; font-weight:600; font-size:8.5pt; }",
-        ".items-tbl { width:100%; border-collapse:collapse; flex:1; }",
-        ".items-tbl th { background:#0d1f40; color:white; padding:4px 5px; font-size:8pt; font-weight:600; border-right:1px solid #1e3a6e; white-space:nowrap; }",
-        ".items-tbl th:last-child { border-right:none; }",
-        ".items-tbl td { border-bottom:1px solid #e5e7eb; border-right:1px solid #e5e7eb; padding:2px 5px; font-size:8.5pt; height:19px; vertical-align:middle; }",
-        ".items-tbl td:last-child { border-right:none; }",
-        ".empty-row td { border-color:#f3f4f6; }",
-        ".c { text-align:center; }",
-        ".r { text-align:right; }",
-        ".totals-row { display:flex; border-top:1.5px solid #222; border-bottom:1px solid #ccc; }",
-        ".amount-lbl { flex:1; padding:4px 7px; border-right:1px solid #ccc; }",
-        ".amount-num { min-width:160px; }",
-        ".sub-row { display:flex; justify-content:space-between; padding:3px 7px; font-size:8.5pt; }",
-        ".pay-row { display:flex; align-items:stretch; border-bottom:1px solid #ccc; }",
-        ".pay-label { flex:0 0 34%; padding:4px 7px; border-right:1px solid #ccc; display:flex; align-items:center; }",
-        ".pay-methods { flex:0 0 30%; display:flex; gap:8px; align-items:center; padding:0 8px; border-right:1px solid #ccc; font-size:7.5pt; }",
-        ".pay-methods label { display:flex; align-items:center; gap:3px; white-space:nowrap; }",
-        ".total-box { flex:1; display:flex; justify-content:space-between; align-items:center; padding:4px 8px; font-size:8.5pt; }",
-        ".total-box strong { font-size:10pt; }",
-        ".sig-row { display:flex; border-bottom:1px solid #ccc; min-height:68px; }",
-        ".sig-cell { flex:1; padding:6px 8px; border-right:1px solid #ccc; font-size:8pt; }",
-        ".sig-cell:last-child { border-right:none; }",
-        ".sig-line { border-top:1px dashed #999; margin:36px 12px 3px; }",
-        ".sig-name { text-align:center; font-size:7.5pt; }",
-        ".disclaimer { padding:4px 8px; font-size:7pt; color:#555; text-align:center; line-height:1.4; }",
-        "@media print { body { -webkit-print-color-adjust:exact; print-color-adjust:exact; } .page { page-break-inside:avoid; } }"
-      ].join(" ");
-
-      var w = window.open("", "_blank");
-      if (!w) { alert("กรุณาอนุญาต Popup เพื่อพิมพ์ใบเสร็จ"); return; }
-      w.document.write('<!DOCTYPE html><html lang="th"><head><meta charset="utf-8">' +
-        '<title>ใบเสร็จ ' + order.id + '</title><style>' + css + '</style></head>' +
-        '<body><div class="page">' + oneCopy() + oneCopy() + '</div>' +
-        '<script>window.onload=function(){window.print();}<\/script></body></html>');
-      w.document.close();
+      fetch("/admin/receipt-template")
+        .then(function(r) { return r.text(); })
+        .then(function(svgText) {
+          var parser = new DOMParser();
+          var doc = parser.parseFromString(svgText, "image/svg+xml");
+          var svg = doc.documentElement;
+          injectData(svg, 0);
+          injectData(svg, P.rightCopyOffset);
+          var serialized = new XMLSerializer().serializeToString(svg);
+          var w = window.open("", "_blank");
+          if (!w) { alert("กรุณาอนุญาต Popup เพื่อพิมพ์ใบเสร็จ"); return; }
+          w.document.write('<!DOCTYPE html><html lang="th"><head><meta charset="utf-8">' +
+            '<title>ใบเสร็จ ' + order.id + '</title>' +
+            '<style>@page{size:A4 landscape;margin:0}body{margin:0;padding:0}svg{width:100vw;height:100vh}' +
+            '@media print{body{-webkit-print-color-adjust:exact;print-color-adjust:exact}}</style>' +
+            '</head><body>' + serialized +
+            '<script>window.onload=function(){window.print();}<\/script></body></html>');
+          w.document.close();
+        })
+        .catch(function(err) { setOrdersNotice("ไม่สามารถโหลด receipt template: " + err.message, true); });
     }
 
     // ── ORDERS ─────────────────────────────────────────────────────────────────
