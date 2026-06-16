@@ -1120,9 +1120,9 @@
         school:    { x: 261, y: 131, size: 8,   weight: "600" },
         rowYs: [197, 222, 247, 272, 297, 322, 347, 372],
         rowSize: 7.5,
-        colNo: 11, colName: 25, colQty: 278, colPrice: 344, colAmount: 389,
-        subtotal: { x: 389, y: 399, size: 9, weight: "700", anchor: "end" },
-        total:    { x: 389, y: 429, size: 9, weight: "700", anchor: "end" },
+        colNo: 11, colName: 25, colQty: 278, colPrice: 329, colAmount: 374,
+        subtotal: { x: 374, y: 399, size: 9, weight: "700", anchor: "end" },
+        total:    { x: 374, y: 429, size: 9, weight: "700", anchor: "end" },
         words:    { x: 128, y: 399, size: 7,                anchor: "middle" },
       };
 
@@ -1167,7 +1167,6 @@
           var ip = item.product || {};
           var name = ip.name || "-";
           if (item.size && item.size !== "-" && item.size !== "") name += " (" + item.size + ")";
-          if (item.school) name += " / " + item.school;
           var unitPrice = Number(item.unitPrice) || Number(ip.price) || 0;
           var qty = Number(item.quantity) || 0;
           var lineTotal = Number(item.totalAmount) || (unitPrice * qty);
@@ -1197,10 +1196,10 @@
           if (!w) { alert("กรุณาอนุญาต Popup เพื่อพิมพ์ใบเสร็จ"); return; }
           w.document.write('<!DOCTYPE html><html lang="th"><head><meta charset="utf-8">' +
             '<title>ใบเสร็จ ' + (order.id || "") + '</title>' +
-            '<style>@page{size:A4 landscape;margin:0}body{margin:0;padding:0}svg{width:100vw;height:100vh}' +
+            '<style>@page{size:A4 landscape;margin:0}html,body{margin:0;padding:0;width:297mm;height:210mm;overflow:hidden}svg{display:block;width:297mm;height:210mm}' +
             '@media print{body{-webkit-print-color-adjust:exact;print-color-adjust:exact}}</style>' +
             '</head><body>' + serialized +
-            '<script>window.onload=function(){window.print();}<\/script></body></html>');
+            '<script>window.onload=function(){window.print();window.addEventListener("afterprint",function(){window.close();});}<\/script></body></html>');
           w.document.close();
         })
         .catch(function(err) { alert("ไม่สามารถโหลด receipt template: " + err.message); });
