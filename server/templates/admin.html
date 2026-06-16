@@ -1036,14 +1036,14 @@
         font: "'Sarabun','TH Sarabun New','Sukhumvit Set',Arial,sans-serif",
         ink: "#10122e",
         rightCopyOffset: 421.19,
-        date:      { x: 388, y: 35,  size: 9.5, weight: "500", anchor: "end" },
-        receiptNo: { x: 388, y: 56,  size: 9.5, weight: "500", anchor: "end" },
+        date:      { x: 384, y: 35,  size: 9.5, weight: "500", anchor: "end" },
+        receiptNo: { x: 384, y: 56,  size: 9.5, weight: "500", anchor: "end" },
         customer:  { x: 261, y: 93,  size: 8,   weight: "600" },
         studentId: { x: 261, y: 112, size: 8,   weight: "600" },
         school:    { x: 261, y: 131, size: 8,   weight: "600" },
         rowYs: [197, 222, 247, 272, 297, 322, 347, 372],
         rowSize: 7.5,
-        colNo: 11, colName: 25, colQty: 278, colPrice: 329, colAmount: 374,
+        colNo: 11, colName: 25, colQty: 278, colPrice: 305, colAmount: 349,
         subtotal: { x: 374, y: 399, size: 9, weight: "700", anchor: "end" },
         total:    { x: 374, y: 429, size: 9, weight: "700", anchor: "end" },
         words:    { x: 128, y: 399, size: 7,                anchor: "middle" },
@@ -1112,8 +1112,13 @@
         orderItems.forEach(function(item, idx) {
           if (idx >= P.rowYs.length) return;
           var ip = item.product || {};
+          var isHeadband = ((ip.category || ip.slug || "").toLowerCase().indexOf("headband") >= 0);
           var name = ip.name || "-";
-          if (item.size && item.size !== "-" && item.size !== "") name += " (" + item.size + ")";
+          if (isHeadband) {
+            if (item.school && item.school.trim()) name += " (" + item.school + ")";
+          } else {
+            if (item.size && item.size !== "-" && item.size !== "") name += " (" + item.size + ")";
+          }
           var unitPrice = Number(item.unitPrice) || Number(ip.price) || 0;
           var qty = Number(item.quantity) || 0;
           var lineTotal = Number(item.totalAmount) || (unitPrice * qty);
@@ -1122,8 +1127,8 @@
           svg.appendChild(mkText(ox + P.colNo,     y, idx + 1,                           { anchor: "middle", size: sz }));
           svg.appendChild(mkText(ox + P.colName,   y, name,                              { size: sz }));
           svg.appendChild(mkText(ox + P.colQty,    y, qty,                               { anchor: "middle", size: sz }));
-          svg.appendChild(mkText(ox + P.colPrice,  y, unitPrice.toLocaleString("th-TH"), { anchor: "end", size: sz }));
-          svg.appendChild(mkText(ox + P.colAmount, y, lineTotal.toLocaleString("th-TH"), { anchor: "end", size: sz }));
+          svg.appendChild(mkText(ox + P.colPrice,  y, unitPrice.toLocaleString("th-TH"), { anchor: "start", size: sz }));
+          svg.appendChild(mkText(ox + P.colAmount, y, lineTotal.toLocaleString("th-TH"), { anchor: "start", size: sz }));
         });
         svg.appendChild(mkText(ox + P.subtotal.x, P.subtotal.y, totalAmount.toLocaleString("th-TH"), P.subtotal));
         svg.appendChild(mkText(ox + P.total.x,    P.total.y,    totalAmount.toLocaleString("th-TH"), P.total));
