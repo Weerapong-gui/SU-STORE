@@ -1085,8 +1085,7 @@
       var totalAmount = Number(order.totalAmount) || 0;
       var dateStr = fmtReceiptDate(order.createdAt);
       var school = c.school || (orderItems[0] && orderItems[0].school) || "";
-      var seqRaw = String(order.sequenceNumber || 0).padStart(8, "0");
-      var receiptNo = seqRaw.slice(0, 4) + " " + seqRaw.slice(4);
+      var receiptNo = String(order.sequenceNumber || 0).padStart(4, "0");
       var bahtText = "(" + toBahtText(totalAmount) + ")";
 
       function mkText(x, y, val, opts) {
@@ -1127,11 +1126,13 @@
           svg.appendChild(mkText(ox + P.colNo,     y, idx + 1,                           { anchor: "middle", size: sz }));
           svg.appendChild(mkText(ox + P.colName,   y, name,                              { size: sz }));
           svg.appendChild(mkText(ox + P.colQty,    y, qty,                               { anchor: "middle", size: sz }));
-          svg.appendChild(mkText(ox + P.colPrice,  y, unitPrice.toLocaleString("th-TH"), { anchor: "start", size: sz }));
-          svg.appendChild(mkText(ox + P.colAmount, y, lineTotal.toLocaleString("th-TH"), { anchor: "start", size: sz }));
+          var fmtOpts = { minimumFractionDigits: 2, maximumFractionDigits: 2 };
+          svg.appendChild(mkText(ox + P.colPrice,  y, unitPrice.toLocaleString("th-TH", fmtOpts), { anchor: "start", size: sz }));
+          svg.appendChild(mkText(ox + P.colAmount, y, lineTotal.toLocaleString("th-TH", fmtOpts), { anchor: "start", size: sz }));
         });
-        svg.appendChild(mkText(ox + P.subtotal.x, P.subtotal.y, totalAmount.toLocaleString("th-TH"), P.subtotal));
-        svg.appendChild(mkText(ox + P.total.x,    P.total.y,    totalAmount.toLocaleString("th-TH"), P.total));
+        var totalFmt = totalAmount.toLocaleString("th-TH", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+        svg.appendChild(mkText(ox + P.subtotal.x, P.subtotal.y, totalFmt, P.subtotal));
+        svg.appendChild(mkText(ox + P.total.x,    P.total.y,    totalFmt, P.total));
         svg.appendChild(mkText(ox + P.words.x,    P.words.y,    bahtText,                            P.words));
       }
 
