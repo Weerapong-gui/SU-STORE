@@ -7,6 +7,9 @@
   <meta name="apple-mobile-web-app-capable" content="yes"/>
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent"/>
   <title>Claim Station</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@400;500;600;700;800&display=swap" rel="stylesheet">
   <script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.min.js"></script>
   <style>
     *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
@@ -23,7 +26,7 @@
       :root{--bg:#0f172a;--card:#1e293b;--ink:#f1f5f9;--muted:#94a3b8;--border:#334155;
         --ok-bg:#052e16;--danger-bg:#450a0a;--warn-bg:#451a03;--purple-bg:#1e1040;--purple:#a78bfa;}
     }
-    body{font-family:system-ui,-apple-system,sans-serif;background:var(--bg);color:var(--ink);min-height:100vh}
+    body{font-family:'Sarabun',system-ui,-apple-system,sans-serif;background:var(--bg);color:var(--ink);min-height:100vh}
     input,button,textarea,select{font-family:inherit}
     /* Screen switching — explicit display values to avoid [hidden] CSS conflict */
     #loginScreen{display:flex;min-height:100vh;align-items:center;justify-content:center;padding:16px}
@@ -1201,6 +1204,9 @@
           var w = window.open("", "_blank");
           if (!w) { alert("กรุณาอนุญาต Popup เพื่อพิมพ์ใบเสร็จ"); return; }
           w.document.write('<!DOCTYPE html><html lang="th"><head><meta charset="utf-8">' +
+            '<link rel="preconnect" href="https://fonts.googleapis.com">' +
+            '<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>' +
+            '<link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@400;500;600;700&display=swap" rel="stylesheet">' +
             '<title>ใบเสร็จ ' + (order.id || "") + '</title>' +
             '<style>@page{size:A4 landscape;margin:0}html,body{margin:0;padding:0;width:297mm;height:210mm;overflow:hidden}svg{display:block;width:297mm;height:210mm}' +
             '@media print{body{-webkit-print-color-adjust:exact;print-color-adjust:exact}}</style>' +

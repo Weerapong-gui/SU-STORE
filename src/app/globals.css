@@ -1,3 +1,5 @@
+@import url('https://fonts.googleapis.com/css2?family=Sarabun:wght@400;500;600;700;800&display=swap');
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
@@ -20,7 +22,7 @@ body {
 body {
   background: #ffffff;
   color: #1d1d1f;
-  font-family: "Sukhumvit Set", "Sukhumvit", -apple-system, BlinkMacSystemFont, "SF Pro Display",
+  font-family: 'Sarabun', "Sukhumvit Set", "Sukhumvit", -apple-system, BlinkMacSystemFont, "SF Pro Display",
     "SF Pro Text", "Helvetica Neue", Arial, sans-serif;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
@@ -32,7 +34,7 @@ body {
 }
 
 .font-sf-pro {
-  font-family: "Sukhumvit Set", "Sukhumvit", -apple-system, BlinkMacSystemFont, "SF Pro Display",
+  font-family: 'Sarabun', "Sukhumvit Set", "Sukhumvit", -apple-system, BlinkMacSystemFont, "SF Pro Display",
     "SF Pro Text", "Helvetica Neue", Arial, sans-serif;
   -webkit-font-smoothing: antialiased;
 }
