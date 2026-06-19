@@ -7,7 +7,7 @@ const PERSIST_PATH = path.join(process.cwd(), "data", "rate-limit.json");
 type Entry = { count: number; resetAt: number };
 type Store = Record<string, Entry>;
 
-let store: Store = {};
+const store: Store = {};
 let loaded = false;
 
 function load(): void {

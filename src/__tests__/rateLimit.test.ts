@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, vi } from "vitest";
+import { describe, it, expect, vi } from "vitest";
 
 // Mock fs to avoid file I/O during tests
 vi.mock("fs", () => ({
