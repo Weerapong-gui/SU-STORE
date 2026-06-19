@@ -3,6 +3,7 @@ import { formatOrderNumber } from "@/lib/formatOrderNumber";
 import { createOrder, setOrderResponseCookie } from "@/lib/orderStore";
 import { validateOrderInput } from "@/lib/orderValidation";
 import { getRateLimitKey, isRateLimited } from "@/lib/rateLimit";
+import { logger } from "@/lib/logger";
 
 const MAX_BODY_BYTES = 100 * 1024;
 const RATE_LIMIT_MAX = 5;
@@ -38,7 +39,10 @@ export async function POST(request: Request) {
     setOrderResponseCookie(response, order, { accessToken });
     return response;
   } catch (error) {
-    console.error("Failed to create order", error);
+    logger.error("Failed to create order", {
+      message: error instanceof Error ? error.message : String(error),
+      stack: error instanceof Error ? error.stack?.slice(0, 500) : undefined,
+    });
     // Forward the API rejection message (e.g. "สินค้าปิดจำหน่าย") instead of generic 500
     let userMessage = "Unable to create order at this time";
     if (error instanceof Error) {

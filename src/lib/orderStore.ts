@@ -32,12 +32,8 @@ const LOCAL_ORDER_SEQUENCE_COOKIE_NAME = "su-order-sequence";
 const ORDER_COOKIE_MAX_AGE_SECONDS = 60 * 60 * 24 * 7;
 const LOCAL_ORDER_SEQUENCE_BLOB_PATH = "orders/_sequence.json";
 const LOCAL_ORDER_SEQUENCE_FILE_PATH = path.join(DATA_ROOT, "order-sequence.json");
-const LOCAL_KHANTOK_TICKET_STATE_BLOB_PATH = "orders/_khantok-ticket-claims.json";
-const LOCAL_KHANTOK_TICKET_STATE_FILE_PATH = path.join(DATA_ROOT, "khantok-ticket-claims.json");
-const LEGACY_LOCAL_LUCKY_TICKET_STATE_BLOB_PATH = "orders/_lucky-ticket-claims.json";
-const LEGACY_LOCAL_LUCKY_TICKET_STATE_FILE_PATH = path.join(DATA_ROOT, "lucky-ticket-claims.json");
+
 const FS_SEQUENCE_LOCK_PATH = path.join(DATA_ROOT, "order-sequence.lock");
-const FS_KHANTOK_LOCK_PATH = path.join(DATA_ROOT, "khantok-ticket.lock");
 const LOCK_STALE_MS = 5000;
 const LOCK_MAX_RETRIES = 30;
 const LOCK_RETRY_MS = 100;
@@ -54,16 +50,6 @@ type SlipUploadAvailability = {
 type LocalOrderNumber = {
   roundNumber: number;
   sequenceNumber: number;
-};
-const HEADBAND_ONLY_SLUG = "fresh-headband";
-
-const KHANTOK_QUOTA_100 = 2000;
-const KHANTOK_QUOTA_50 = 1000;
-const KHANTOK_STUDENT_CODE_PREFIX = "693";
-
-type LocalKhantokTicketState = {
-  claims: Record<string, { claimedAt: string; value: number }>;
-  studentCodes: Record<string, string>;
 };
 type KhantokTicketAllocation = {
   khantokTicket: boolean;
@@ -403,142 +389,6 @@ async function writeStoredLocalSequenceNumber(sequenceNumber: number) {
   await fs.writeFile(LOCAL_ORDER_SEQUENCE_FILE_PATH, serializedState, "utf8");
 }
 
-async function readLocalKhantokTicketState(): Promise<LocalKhantokTicketState> {
-  const storageMode = getOrderStorageMode();
-
-  if (storageMode === "blob") {
-    const blobResult =
-      (await get(LOCAL_KHANTOK_TICKET_STATE_BLOB_PATH, {
-        access: "private"
-      })) ??
-      (await get(LEGACY_LOCAL_LUCKY_TICKET_STATE_BLOB_PATH, {
-        access: "private"
-      }));
-
-    if (!blobResult || blobResult.statusCode !== 200) {
-      return { claims: {}, studentCodes: {} } satisfies LocalKhantokTicketState;
-    }
-
-    try {
-      const rawState = await new Response(blobResult.stream).text();
-      const state = JSON.parse(rawState) as LocalKhantokTicketState;
-      return typeof state === "object" && state && typeof state.claims === "object"
-        ? { claims: state.claims ?? {}, studentCodes: state.studentCodes ?? {} }
-        : { claims: {}, studentCodes: {} };
-    } catch {
-      return { claims: {}, studentCodes: {} } satisfies LocalKhantokTicketState;
-    }
-  }
-
-  if (storageMode === "cookie") {
-    return { claims: {}, studentCodes: {} } satisfies LocalKhantokTicketState;
-  }
-
-  try {
-    const rawState = await fs.readFile(LOCAL_KHANTOK_TICKET_STATE_FILE_PATH, "utf8");
-    const state = JSON.parse(rawState) as LocalKhantokTicketState;
-    return typeof state === "object" && state && typeof state.claims === "object"
-      ? { claims: state.claims ?? {}, studentCodes: state.studentCodes ?? {} }
-      : { claims: {}, studentCodes: {} };
-  } catch (error) {
-    if ((error as NodeJS.ErrnoException).code === "ENOENT") {
-      try {
-        const rawLegacyState = await fs.readFile(LEGACY_LOCAL_LUCKY_TICKET_STATE_FILE_PATH, "utf8");
-        const legacyState = JSON.parse(rawLegacyState) as LocalKhantokTicketState;
-        return typeof legacyState === "object" &&
-          legacyState &&
-          typeof legacyState.claims === "object"
-          ? { claims: legacyState.claims ?? {}, studentCodes: legacyState.studentCodes ?? {} }
-          : { claims: {}, studentCodes: {} };
-      } catch {
-        return { claims: {}, studentCodes: {} } satisfies LocalKhantokTicketState;
-      }
-    }
-
-    throw error;
-  }
-}
-
-async function writeLocalKhantokTicketState(state: LocalKhantokTicketState) {
-  const storageMode = getOrderStorageMode();
-  const serializedState = JSON.stringify(state, null, 2);
-
-  if (storageMode === "blob") {
-    await put(LOCAL_KHANTOK_TICKET_STATE_BLOB_PATH, serializedState, {
-      access: "private",
-      addRandomSuffix: false,
-      allowOverwrite: true,
-      contentType: "application/json",
-      cacheControlMaxAge: 60
-    });
-    return;
-  }
-
-  if (storageMode === "cookie") {
-    return;
-  }
-
-  await ensureStorage();
-  await fs.writeFile(LOCAL_KHANTOK_TICKET_STATE_FILE_PATH, serializedState, "utf8");
-}
-
-async function allocateLocalKhantokTicket(
-  orderId: string,
-  studentCode: string,
-  items: { product: { slug: string } }[]
-): Promise<KhantokTicketAllocation> {
-  const storageMode = getOrderStorageMode();
-  const noTicket: KhantokTicketAllocation = { khantokTicket: false, khantokTicketValue: null, khantokTicketClaimedAt: null, khantokTicketAlreadyClaimed: false };
-
-  if (storageMode === "cookie") return noTicket;
-
-  const isHeadbandOnly = items.length > 0 && items.every((i) => i.product.slug === HEADBAND_ONLY_SLUG);
-  if (isHeadbandOnly) return noTicket;
-
-  const doAllocate = async (): Promise<KhantokTicketAllocation> => {
-    const state = await readLocalKhantokTicketState();
-
-    const existingClaim = state.claims[orderId];
-    if (existingClaim) {
-      return { khantokTicket: true, khantokTicketValue: existingClaim.value, khantokTicketClaimedAt: existingClaim.claimedAt, khantokTicketAlreadyClaimed: false };
-    }
-
-    const normalizedCode = studentCode.trim().toLowerCase();
-    if (!normalizedCode.startsWith(KHANTOK_STUDENT_CODE_PREFIX)) return noTicket;
-
-    if (normalizedCode && state.studentCodes[normalizedCode]) {
-      return { ...noTicket, khantokTicketAlreadyClaimed: true };
-    }
-
-    const count100 = Object.values(state.claims).filter(c => c.value === 100).length;
-    const count50 = Object.values(state.claims).filter(c => c.value === 50).length;
-
-    let ticketValue: number;
-    if (count100 < KHANTOK_QUOTA_100) {
-      ticketValue = 100;
-    } else if (count50 < KHANTOK_QUOTA_50) {
-      ticketValue = 50;
-    } else {
-      return noTicket;
-    }
-
-    const claimedAt = nowThaiISO();
-    state.claims[orderId] = { claimedAt, value: ticketValue };
-    if (normalizedCode) state.studentCodes[normalizedCode] = orderId;
-    await writeLocalKhantokTicketState(state);
-
-    return { khantokTicket: true, khantokTicketValue: ticketValue, khantokTicketClaimedAt: claimedAt, khantokTicketAlreadyClaimed: false };
-  };
-
-  if (storageMode === "filesystem") {
-    return withFileLock(FS_KHANTOK_LOCK_PATH, doAllocate);
-  }
-
-  // Blob mode: jitter to reduce simultaneous write collisions across serverless instances
-  await new Promise(r => setTimeout(r, Math.random() * 150));
-  return doAllocate();
-}
-
 async function allocateLocalOrderNumber(): Promise<LocalOrderNumber> {
   const storageMode = getOrderStorageMode();
   const roundNumber = getLocalOrderRound();
@@ -685,13 +535,7 @@ export async function createOrder(input: ValidatedOrderInput) {
   }
 
   const orderId = generateOrderId();
-  const order = buildOrderFromInput(
-    orderId,
-    input,
-    undefined,
-    undefined,
-    await allocateLocalKhantokTicket(orderId, input.studentCode, input.items)
-  );
+  const order = buildOrderFromInput(orderId, input);
   await writeOrder(order);
   return { order } satisfies CreateOrderResult;
 }

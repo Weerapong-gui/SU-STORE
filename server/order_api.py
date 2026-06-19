@@ -1448,19 +1448,26 @@ def _run_ocr_for_slip(order_code: str, slip_path: str, expected_amount: float | 
                       f"status={status}" + (f" ref={ref}" if ref else ""))
             conn.commit()
     except Exception as exc:
+        import sys
+        print(f"[OCR] ERROR order={order_code}: {exc}", file=sys.stderr)
         try:
             with open_db() as conn:
                 conn.execute(
                     "UPDATE slip_ocr_results SET status='error', raw_reason=?, checked_at=? WHERE order_code=?",
                     (str(exc)[:300], now_iso(), order_code),
                 )
+                log_audit(conn, order_code, "slip_ocr_error", str(exc)[:200])
                 conn.commit()
-        except Exception:
-            pass
+        except Exception as db_exc:
+            print(f"[OCR] failed to persist error for order={order_code}: {db_exc}", file=sys.stderr)
 
 
 def trigger_ocr_async(order_code: str, slip_path: str | None, expected_amount: float | None = None) -> None:
+    import os, sys
     if not slip_path:
+        return
+    if not os.path.exists(slip_path):
+        print(f"[OCR] slip not found on disk, skipping: {slip_path}", file=sys.stderr)
         return
     threading.Thread(
         target=_run_ocr_for_slip,
@@ -2032,6 +2039,33 @@ class OrderRequestHandler(BaseHTTPRequestHandler):
 
         if path == "/admin":
             self._send_html(HTTPStatus.OK, ADMIN_HTML)
+            return
+
+        if path == "/docs":
+            spec_path = Path(__file__).parent / "openapi.yaml"
+            spec_url = "/openapi.yaml"
+            swagger_html = f"""<!DOCTYPE html>
+<html lang="en"><head><meta charset="utf-8"><title>SU Order API Docs</title>
+<link rel="stylesheet" href="https://unpkg.com/swagger-ui-dist@5/swagger-ui.css"></head>
+<body>
+<div id="swagger-ui"></div>
+<script src="https://unpkg.com/swagger-ui-dist@5/swagger-ui-bundle.js"></script>
+<script>SwaggerUIBundle({{url:"{spec_url}",dom_id:"#swagger-ui",presets:[SwaggerUIBundle.presets.apis,SwaggerUIBundle.SwaggerUIStandalonePreset],layout:"BaseLayout"}});</script>
+</body></html>"""
+            self._send_html(HTTPStatus.OK, swagger_html)
+            return
+
+        if path == "/openapi.yaml":
+            spec_path = Path(__file__).parent / "openapi.yaml"
+            try:
+                content = spec_path.read_bytes()
+                self.send_response(HTTPStatus.OK)
+                self.send_header("Content-Type", "application/yaml")
+                self.send_header("Content-Length", str(len(content)))
+                self.end_headers()
+                self.wfile.write(content)
+            except FileNotFoundError:
+                self._send_json(HTTPStatus.NOT_FOUND, {"message": "openapi.yaml not found"})
             return
 
         if path == "/admin/receipt-template":
@@ -3257,8 +3291,40 @@ class OrderRequestHandler(BaseHTTPRequestHandler):
         print(f"[{timestamp}] {self.client_address[0]} {format % args}")
 
 
+def _run_scheduled_backup() -> None:
+    """Daemon thread: create one automatic backup per day at midnight Bangkok time, keep last 30."""
+    import time, sys
+    last_backup_date: str | None = None
+    while True:
+        try:
+            now_bkk = datetime.now(TZ_BANGKOK)
+            today = now_bkk.strftime("%Y-%m-%d")
+            # trigger between 00:00 and 00:05
+            if now_bkk.hour == 0 and now_bkk.minute < 5 and last_backup_date != today:
+                with open_db() as conn:
+                    # prune: keep most recent 30 auto-backups
+                    rows = conn.execute(
+                        "SELECT id FROM order_backups WHERE label LIKE 'auto-%' ORDER BY id DESC LIMIT -1 OFFSET 30"
+                    ).fetchall()
+                    for row in rows:
+                        conn.execute("DELETE FROM order_backups WHERE id = ?", (row["id"],))
+                    backup = create_backup(conn)
+                    conn.execute(
+                        "UPDATE order_backups SET label = ? WHERE id = ?",
+                        (f"auto-{today}", backup["id"]),
+                    )
+                    conn.commit()
+                last_backup_date = today
+                print(f"[backup] auto backup created for {today} (id={backup['id']}, orders={backup['orderCount']})")
+        except Exception as exc:
+            import sys as _sys
+            print(f"[backup] scheduled backup failed: {exc}", file=_sys.stderr)
+        time.sleep(60)
+
+
 if __name__ == "__main__":
     ensure_db()
+    threading.Thread(target=_run_scheduled_backup, daemon=True, name="scheduled-backup").start()
     server = ThreadingHTTPServer((HOST, PORT), OrderRequestHandler)
     print(f"Order API listening on http://{HOST}:{PORT}")
     server.serve_forever()

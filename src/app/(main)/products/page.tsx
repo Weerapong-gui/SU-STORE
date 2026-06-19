@@ -1,4 +1,5 @@
 import { ProductCard } from "@/components/ProductCard";
+import { ProductsEmptyState } from "@/components/ProductsEmptyState";
 import { Container } from "@/components/ui/Container";
 import { getAvailableProducts } from "@/lib/getProducts";
 
@@ -19,11 +20,15 @@ export default async function ProductsPage() {
           </h1>
         </div>
 
-        <div className="grid gap-5 md:grid-cols-2">
-          {products.map((product, index) => (
-            <ProductCard key={product.slug} product={product} priority={index === 0} />
-          ))}
-        </div>
+        {products.length === 0 ? (
+          <ProductsEmptyState />
+        ) : (
+          <div className="grid gap-5 md:grid-cols-2">
+            {products.map((product, index) => (
+              <ProductCard key={product.slug} product={product} priority={index === 0} />
+            ))}
+          </div>
+        )}
       </Container>
     </section>
   );

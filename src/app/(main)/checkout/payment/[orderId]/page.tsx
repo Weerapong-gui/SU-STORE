@@ -10,6 +10,7 @@ import {
   PAYMENT_ACCOUNT_NUMBER,
 } from "@/lib/paymentDetails";
 import { BankName } from "@/components/BankName";
+import { StoreClosedPaymentMessage } from "@/components/StoreClosedPaymentMessage";
 import { getOrderCustomerName, getOrderStatusLabel } from "@/lib/orderStatus";
 import { getOrderById, getPaymentSlipUploadAvailability } from "@/lib/orderStore";
 import { formatStoredProductSize } from "@/lib/productSizing";
@@ -82,10 +83,7 @@ export default async function CheckoutPaymentPage({ params }: CheckoutPaymentPag
             </div>
 
             {storeClosed ? (
-              <div className={INFO_CARD_CLASSES}>
-                <p className="text-sm font-semibold text-zinc-900">ปิดรับสั่งซื้อ</p>
-                <p className="mt-1 text-sm text-zinc-500">ขณะนี้ไม่รับคำสั่งซื้อ กรุณาติดต่อแอดมินหากมีคำถามเกี่ยวกับออเดอร์นี้</p>
-              </div>
+              <StoreClosedPaymentMessage />
             ) : (
               <>
                 <div className={INFO_CARD_CLASSES}>

@@ -69,6 +69,21 @@ export const translations = {
         description: "FRESHER PACKAGE 28TH",
       },
     } as Record<string, { shortName: string; description: string }>,
+    productsPage: {
+      closed: "Orders Closed",
+      closedThankYou: "Thank you for ordering Fresher Package 28th",
+      closedHint: "If you already have an order, you can check its status below",
+      checkOrderLink: "Check My Order",
+    },
+    configurePage: {
+      productClosed: "Not Available",
+      productClosedMessage: "This product is not currently available for purchase. Please check back later.",
+      viewOtherProducts: "View other products",
+    },
+    paymentPage: {
+      storeClosed: "Store Closed",
+      storeClosedMessage: "Orders are not currently being accepted. Please contact admin if you have questions about this order.",
+    },
     payment: {
       bankName: "Bangkok Bank",
     },
@@ -137,6 +152,21 @@ export const translations = {
         description: "FRESHER PACKAGE 28TH",
       },
     } as Record<string, { shortName: string; description: string }>,
+    productsPage: {
+      closed: "ปิดรับออเดอร์แล้ว",
+      closedThankYou: "ขอบคุณทุกคนที่สั่งซื้อสินค้า Fresher Package 28th",
+      closedHint: "หากมีออเดอร์อยู่แล้ว สามารถตรวจสอบสถานะได้ที่",
+      checkOrderLink: "ตรวจสอบออเดอร์",
+    },
+    configurePage: {
+      productClosed: "ปิดรับสั่งซื้อ",
+      productClosedMessage: "ขณะนี้ยังไม่เปิดรับคำสั่งซื้อสินค้านี้ กรุณากลับมาใหม่ในภายหลัง",
+      viewOtherProducts: "ดูสินค้าอื่น",
+    },
+    paymentPage: {
+      storeClosed: "ปิดรับสั่งซื้อ",
+      storeClosedMessage: "ขณะนี้ไม่รับคำสั่งซื้อ กรุณาติดต่อแอดมินหากมีคำถามเกี่ยวกับออเดอร์นี้",
+    },
     payment: {
       bankName: "ธนาคารกรุงเทพ",
     },
