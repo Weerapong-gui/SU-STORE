@@ -5,6 +5,7 @@ import Link from "next/link";
 import { FormEvent, useRef, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useCart } from "@/components/CartProvider";
+import { useLang } from "@/lib/i18n";
 import { BankAccountCopyField } from "@/components/BankAccountCopyField";
 import { BankName } from "@/components/BankName";
 import { products } from "@/data/products";
@@ -97,6 +98,7 @@ export function CheckoutPaymentForm({
   cartMode = false
 }: CheckoutPaymentFormProps) {
   const router = useRouter();
+  const { lang } = useLang();
   const { clearCart, hydrated, items: cartItems, removeItem } = useCart();
   const product = useMemo(
     () => getProductBySlug(defaultProduct ?? existingOrder?.product.slug),
@@ -379,7 +381,9 @@ export function CheckoutPaymentForm({
               <label className="space-y-1">
                 <span className="text-xs font-semibold tracking-[0.08em] text-zinc-600">STUDENT CODE</span>
                 <span className="block text-[11px] leading-relaxed text-zinc-400">
-                  บุคคลทั่วไปใช้เบอร์โทรแทนได้ · Non-students may use a phone number
+                  {lang === "th"
+                    ? "บุคคลทั่วไปที่ไม่มีรหัสนักศึกษาสามารถใช้หมายเลขโทรศัพท์ในการสั่งซื้อได้"
+                    : "For non-students, a phone number may be used for ordering."}
                 </span>
                 <input
                   name="studentCode"
@@ -392,6 +396,11 @@ export function CheckoutPaymentForm({
 
               <label className="space-y-1">
                 <span className="text-xs font-semibold tracking-[0.08em] text-zinc-600">EMAIL</span>
+                <span className="block text-[11px] leading-relaxed text-zinc-400">
+                  {lang === "th"
+                    ? "อีเมลที่สามารถติดต่อได้ สามารถใช้อีเมลส่วนตัวได้"
+                    : "Any reachable email — personal email is fine."}
+                </span>
                 <input
                   name="email"
                   type="email"
@@ -405,6 +414,9 @@ export function CheckoutPaymentForm({
 
               <label className="space-y-1 md:col-span-2">
                 <span className="text-xs font-semibold tracking-[0.08em] text-zinc-600">FULL NAME</span>
+                <span className="block text-[11px] leading-relaxed text-zinc-400">
+                  {lang === "th" ? "ชื่อ-สกุล" : "First and last name"}
+                </span>
                 <input
                   name="fullName"
                   required
@@ -416,6 +428,9 @@ export function CheckoutPaymentForm({
 
               <label className="space-y-1">
                 <span className="text-xs font-semibold tracking-[0.08em] text-zinc-600">PHONE NUMBER</span>
+                <span className="block text-[11px] leading-relaxed text-zinc-400">
+                  {lang === "th" ? "เบอร์มือถือส่วนตัว" : "Your personal mobile number"}
+                </span>
                 <input
                   name="phone"
                   required
@@ -427,6 +442,9 @@ export function CheckoutPaymentForm({
 
               <label className="space-y-1">
                 <span className="text-xs font-semibold tracking-[0.08em] text-zinc-600">PARENT PHONE</span>
+                <span className="block text-[11px] leading-relaxed text-zinc-400">
+                  {lang === "th" ? "เบอร์มือถือติดต่อผู้ปกครอง" : "Parent or guardian's mobile number"}
+                </span>
                 <input
                   name="parentPhone"
                   required
@@ -438,6 +456,9 @@ export function CheckoutPaymentForm({
 
               <label className="space-y-1 md:col-span-2">
                 <span className="text-xs font-semibold tracking-[0.08em] text-zinc-600">ENROLLED AT</span>
+                <span className="block text-[11px] leading-relaxed text-zinc-400">
+                  {lang === "th" ? "เลือกสำนักวิชา" : "Select your school / faculty"}
+                </span>
                 <select
                   name="school"
                   required
@@ -460,6 +481,9 @@ export function CheckoutPaymentForm({
 
           <div>
             <p className="text-xs font-semibold tracking-[0.12em] text-zinc-500">PAYMENT SLIP</p>
+            <p className="mt-1 text-[11px] text-zinc-400">
+              {lang === "th" ? "อัพโหลดสลิปของท่าน" : "Upload your payment slip"}
+            </p>
             <label className="mt-3 flex cursor-pointer flex-col items-center gap-2 rounded-3xl border-2 border-dashed border-zinc-200 bg-zinc-50/60 px-6 py-8 text-center transition hover:border-zinc-300 hover:bg-zinc-50">
               <input
                 ref={slipFileRef}
