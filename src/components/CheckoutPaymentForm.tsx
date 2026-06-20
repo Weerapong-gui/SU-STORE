@@ -108,6 +108,7 @@ export function CheckoutPaymentForm({
   const [submitState, setSubmitState] = useState<SubmitState>("idle");
   const [submitError, setSubmitError] = useState("");
   const slipFileRef = useRef<HTMLInputElement>(null);
+  const [slipFileName, setSlipFileName] = useState<string>("");
 
   const storedSize = defaultSize ?? existingOrder?.size ?? "";
   const defaultSingleQuantity = useMemo(() => {
@@ -254,7 +255,7 @@ export function CheckoutPaymentForm({
           Your cart is empty. Add products first, then come back to confirm your order.
         </p>
         <Link href="/products" className={`${PRIMARY_BUTTON_CLASSES} mt-6`}>
-          add more products
+          Browse products
         </Link>
       </div>
     );
@@ -272,8 +273,8 @@ export function CheckoutPaymentForm({
             <h1 className="mt-3 text-3xl font-semibold tracking-tight text-zinc-900 md:text-4xl">
               Confirm your order
             </h1>
-            <p className="mt-3 text-sm text-zinc-600">
-              Review your order, fill in your details, transfer payment, then attach your slip — all in one step.
+            <p className="mt-3 text-sm text-zinc-500">
+              Transfer the exact amount, fill in your details, and attach your slip to confirm.
             </p>
             {existingOrder ? (
               <div className="mt-4 space-y-2 text-sm text-zinc-600">
@@ -308,24 +309,26 @@ export function CheckoutPaymentForm({
                   </div>
 
                   <div className="mt-3 grid gap-x-6 gap-y-1 text-sm text-zinc-700 sm:grid-cols-[auto_1fr]">
-                    <p className="text-zinc-500">Size</p>
+                    <p className="text-zinc-400">Size</p>
                     <p>{formatStoredProductSize(item.productCategory, item.size).split(" / ")[0]}</p>
                     {item.size.includes(" / ") && (
                       <>
-                        <p className="text-zinc-500">Color</p>
+                        <p className="text-zinc-400">Color</p>
                         <p>{item.size.split(" / ")[1]}</p>
                       </>
                     )}
                     {item.school && (
                       <>
-                        <p className="text-zinc-500">{item.productCategory === "headband" ? "Print on Headband" : "School"}</p>
+                        <p className="text-zinc-400">{item.productCategory === "headband" ? "Print" : "School"}</p>
                         <p>{item.school}</p>
                       </>
                     )}
-                    <p className="text-zinc-500">Quantity</p>
-                    <p>{item.quantity}</p>
-                    <p className="text-zinc-500">Unit Price</p>
-                    <p>{formatPrice(item.unitPrice)}</p>
+                    {item.quantity > 1 && (
+                      <>
+                        <p className="text-zinc-400">Qty</p>
+                        <p>{item.quantity} × {formatPrice(item.unitPrice)}</p>
+                      </>
+                    )}
                   </div>
                 </div>
               ))}
@@ -339,8 +342,11 @@ export function CheckoutPaymentForm({
             </div>
           </div>
 
-          <Link href="/products" className={SECONDARY_LINK_CLASSES}>
-            add more products
+          <Link href="/products" className="inline-flex items-center gap-1.5 text-sm font-medium text-zinc-500 transition hover:text-zinc-900">
+            <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round" className="h-4 w-4" aria-hidden="true">
+              <path d="M10 12L6 8l4-4" />
+            </svg>
+            Browse products
           </Link>
         </div>
 
@@ -457,17 +463,39 @@ export function CheckoutPaymentForm({
 
           <div>
             <p className="text-xs font-semibold tracking-[0.12em] text-zinc-500">PAYMENT SLIP</p>
-            <p className="mt-2 text-sm text-zinc-600">Attach your transfer slip to complete the order.</p>
-            <label className="mt-3 block">
+            <label className="mt-3 flex cursor-pointer flex-col items-center gap-2 rounded-3xl border-2 border-dashed border-zinc-200 bg-zinc-50/60 px-6 py-8 text-center transition hover:border-zinc-300 hover:bg-zinc-50">
               <input
                 ref={slipFileRef}
                 type="file"
                 accept=".jpg,.jpeg,.png,.webp,.pdf"
                 required
-                className="block w-full rounded-2xl border border-zinc-300 bg-white px-4 py-3 text-sm text-zinc-700 file:mr-4 file:rounded-full file:border-0 file:bg-apple-blue file:px-4 file:py-2 file:text-sm file:font-medium file:text-white hover:file:bg-apple-blue-dark"
+                className="sr-only"
+                onChange={(e) => setSlipFileName(e.target.files?.[0]?.name ?? "")}
               />
+              {slipFileName ? (
+                <>
+                  <div className="flex h-10 w-10 items-center justify-center rounded-full bg-emerald-50 text-emerald-500">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round" className="h-5 w-5" aria-hidden="true">
+                      <path d="M4.5 12.75l6 6 9-13.5" />
+                    </svg>
+                  </div>
+                  <p className="max-w-[20ch] truncate text-sm font-medium text-zinc-700">{slipFileName}</p>
+                  <p className="text-xs text-zinc-400">Tap to change</p>
+                </>
+              ) : (
+                <>
+                  <div className="flex h-10 w-10 items-center justify-center rounded-full bg-zinc-100 text-zinc-400">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round" className="h-5 w-5" aria-hidden="true">
+                      <path d="M4 16v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2" />
+                      <polyline points="16 12 12 8 8 12" />
+                      <line x1="12" y1="8" x2="12" y2="21" />
+                    </svg>
+                  </div>
+                  <p className="text-sm font-medium text-zinc-700">Attach payment slip</p>
+                  <p className="text-xs text-zinc-400">JPG, PNG, WebP or PDF · max 10 MB</p>
+                </>
+              )}
             </label>
-            <p className="mt-2 text-xs text-zinc-500">JPG, PNG, WebP or PDF — max 10 MB</p>
           </div>
 
           {submitError ? (
@@ -484,10 +512,10 @@ export function CheckoutPaymentForm({
               className={`${PRIMARY_BUTTON_CLASSES} w-full`}
             >
               {submitState === "creating"
-                ? "CREATING ORDER..."
+                ? "Creating order..."
                 : submitState === "uploading"
-                  ? "UPLOADING SLIP..."
-                  : "CONFIRM ORDER & UPLOAD SLIP"}
+                  ? "Uploading slip..."
+                  : "Confirm Order"}
             </button>
           </div>
         </div>
