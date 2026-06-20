@@ -6,18 +6,21 @@ import { AdminNav } from "@/components/admin/AdminNav";
 import { formatPrice } from "@/lib/formatPrice";
 
 type OrderRow = {
-  id: string;
-  orderCode: string;
+  id: string;           // order_code e.g. "FP28001 1"
   status: string;
-  fullName: string;
-  studentCode: string;
-  school: string;
   totalAmount: number;
   createdAt: string;
-  productName: string;
-  slipPath?: string;
   khantokTicket?: boolean;
   khantokTicketValue?: number;
+  customer: {
+    fullName: string;
+    studentCode: string;
+    school: string;
+  };
+  product: {
+    name: string;
+  };
+  slip?: object | null;
 };
 
 type OrdersResponse = {
@@ -53,7 +56,12 @@ const STATUS_LABELS: Record<string, string> = {
 const ALL_STATUSES = Object.keys(STATUS_LABELS);
 
 function formatDate(iso: string) {
-  return new Date(iso + (iso.endsWith("Z") ? "" : "Z")).toLocaleString("th-TH", {
+  if (!iso) return "-";
+  // Normalize: SQLite stores "2026-06-09T03:05:00.000000+00:00" or "2026-06-09 03:05:00"
+  const normalized = iso.includes("T") ? iso : iso.replace(" ", "T");
+  const d = new Date(normalized);
+  if (isNaN(d.getTime())) return "-";
+  return d.toLocaleString("th-TH", {
     timeZone: "Asia/Bangkok",
     day: "2-digit",
     month: "short",
@@ -156,37 +164,37 @@ export default function AdminOrdersPage() {
                 </tr>
               ) : (
                 data?.orders.map((order) => (
-                  <tr key={order.orderCode} className="hover:bg-zinc-50">
+                  <tr key={order.id} className="hover:bg-zinc-50">
                     <td className="px-4 py-3">
-                      <p className="font-mono text-xs font-semibold text-zinc-900">{order.orderCode}</p>
-                      <p className="text-xs text-zinc-400">{order.studentCode}</p>
+                      <p className="font-mono text-xs font-semibold text-zinc-900">{order.id}</p>
+                      <p className="text-xs text-zinc-400">{order.customer.studentCode}</p>
                       {order.khantokTicket && (
                         <span className="mt-0.5 inline-block rounded-full bg-green-100 px-1.5 py-0.5 text-[10px] font-semibold text-green-700">
-                          🎟 ฿{order.khantokTicketValue}
+                          ticket ฿{order.khantokTicketValue}
                         </span>
                       )}
                     </td>
                     <td className="px-4 py-3">
-                      <p className="font-medium text-zinc-900">{order.fullName}</p>
-                      <p className="text-xs text-zinc-400">{order.school}</p>
+                      <p className="font-medium text-zinc-900">{order.customer.fullName}</p>
+                      <p className="text-xs text-zinc-400">{order.customer.school}</p>
                     </td>
-                    <td className="px-4 py-3 text-zinc-700">{order.productName}</td>
+                    <td className="px-4 py-3 text-zinc-700">{order.product.name}</td>
                     <td className="px-4 py-3 text-right font-medium text-zinc-900">{formatPrice(order.totalAmount)}</td>
                     <td className="px-4 py-3">
                       <span className={`inline-block rounded-full px-2 py-0.5 text-xs font-semibold ${STATUS_COLORS[order.status] ?? "bg-zinc-100 text-zinc-600"}`}>
                         {STATUS_LABELS[order.status] ?? order.status}
                       </span>
-                      {order.slipPath && (
+                      {order.slip && (
                         <span className="ml-1 inline-block rounded-full bg-zinc-100 px-1.5 py-0.5 text-[10px] text-zinc-500">slip</span>
                       )}
                     </td>
                     <td className="px-4 py-3 text-xs text-zinc-500">{formatDate(order.createdAt)}</td>
                     <td className="px-4 py-3">
                       <select
-                        disabled={changingStatus === order.orderCode}
+                        disabled={changingStatus === order.id}
                         defaultValue=""
                         onChange={(e) => {
-                          if (e.target.value) void changeStatus(order.orderCode, e.target.value);
+                          if (e.target.value) void changeStatus(order.id, e.target.value);
                           e.target.value = "";
                         }}
                         className="rounded-lg border border-zinc-200 bg-white px-2 py-1 text-xs text-zinc-700 outline-none disabled:opacity-50"
