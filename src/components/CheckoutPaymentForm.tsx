@@ -374,6 +374,10 @@ export function CheckoutPaymentForm({
             <div className="mt-4 grid gap-4 md:grid-cols-2" translate="no">
               <label className="space-y-1">
                 <span className="text-xs font-semibold tracking-[0.08em] text-zinc-600">STUDENT CODE</span>
+                <span className="block text-[11px] text-zinc-400">
+                  บุคคลทั่วไปที่ไม่มีรหัสนักศึกษาสามารถใช้หมายเลขโทรศัพท์แทนได้
+                  · Non-students may use a phone number
+                </span>
                 <input
                   name="studentCode"
                   required
