@@ -1,9 +1,42 @@
-.DS_Store
+# Runtime data — NOT needed in Docker build, mounted as volumes at runtime
+data/
+
+# Build artifacts — rebuilt inside Docker
+node_modules
+.next
+tsconfig.tsbuildinfo
+
+# Git / IDE / OS
 .git
 .gitignore
-.next
-node_modules
-npm-debug.log*
+.gitattributes
+.DS_Store
+.claude/
+
+# CI / config not needed at runtime
+.github/
+.pytest_cache/
+__pycache__/
+*.pyc
+
+# Test files
+src/__tests__/
+server/tests/
+
+# Docs / local config
+*.md
+render.yaml
+vercel.json
+
+# Deploy scripts (run on host, not inside container)
+deploy.sh
+deploy-api.sh
+
+# Env examples (actual .env loaded via docker-compose at runtime)
+.env.example
+.env.order-api.example
+
+# Logs
 *.log
-.env*
+npm-debug.log*
 coverage
