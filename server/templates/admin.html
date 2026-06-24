@@ -427,7 +427,8 @@
   <div class="tab-pane" id="tab-audit">
     <main>
       <div class="toolbar">
-        <input id="auditSearch" type="text" placeholder="Filter by order ID..." style="max-width:220px" />
+        <input id="auditSearch" type="text" placeholder="Order ID (e.g. FP28xxxx)" style="max-width:200px" />
+        <input id="auditStudentSearch" type="text" placeholder="Student code" style="max-width:160px" />
         <button class="primary" id="refreshAuditBtn">Refresh</button>
         <span id="auditNotice" style="color:var(--muted);font-size:13px"></span>
       </div>
@@ -1541,9 +1542,12 @@
       renderPagination();
     }
 
+    var editingOrderUpdatedAt = null;
+
     function openOrderEdit(order) {
       var c = order.customer || {};
       editingOrderId = order.id;
+      editingOrderUpdatedAt = order.updatedAt || null;
       var items = (order.items && order.items.length > 0)
         ? order.items
         : [{product: order.product || {}, size: order.size, quantity: order.quantity, school: null, unitPrice: (order.product||{}).price||0, totalAmount: order.totalAmount}];
@@ -1797,10 +1801,18 @@
         items: items,
         adminNote: document.querySelector("#oe_adminNote").value,
       };
+      if (editingOrderUpdatedAt) payload.expectedUpdatedAt = editingOrderUpdatedAt;
       try {
         var res = await fetch("/admin/orders/" + encodeURIComponent(editingOrderId), {
           method: "PATCH", headers: authHeaders(), body: JSON.stringify(payload)
         });
+        if (res.status === 409) {
+          notice.textContent = "";
+          await showDialog({type:"alert",icon:"warn",title:"ข้อมูลถูกแก้ไขโดยผู้ใช้อื่น",message:"ออเดอร์นี้ถูกบันทึกโดยผู้ใช้อื่นระหว่างที่คุณกำลังแก้ไข กรุณาปิดและเปิดใหม่เพื่อดูข้อมูลล่าสุด"});
+          closeOrderEdit();
+          await loadOrders();
+          return;
+        }
         if (!res.ok) throw new Error(await res.text());
         notice.textContent = "";
         closeOrderEdit();
@@ -1880,6 +1892,7 @@
           fetch("/admin/orders/" + encodeURIComponent(orderId) + "/slip-check", { headers: authHeaders }).catch(function() { return null; })
         ]);
         var slipRes = results[0], ocrRes = results[1];
+        if (slipRes.status === 404) throw new Error("ไม่พบสลิป — ออเดอร์นี้อาจถูกลบไปแล้วหรือยังไม่มีสลิป");
         if (!slipRes.ok) throw new Error(await slipRes.text());
         var blob = await slipRes.blob();
         var url = URL.createObjectURL(blob);
@@ -1976,7 +1989,7 @@
         var oid = editOrderBtn.dataset.oid;
         if (editingOrderId === oid) { closeOrderEdit(); return; }
         var order = allOrders.find(function(o) { return o.id === oid; });
-        if (order) openOrderEdit(order);
+        if (order) { loadOrders().then(function() { var fresh = allOrders.find(function(o) { return o.id === oid; }); openOrderEdit(fresh || order); }).catch(function() { openOrderEdit(order); }); }
         return;
       }
 
@@ -2716,7 +2729,10 @@
     async function loadAuditLog() {
       setAuditNotice("Loading...");
       var orderCode = (document.querySelector("#auditSearch").value || "").trim().toUpperCase();
-      var url = "/admin/audit-log?limit=200" + (orderCode ? "&orderCode=" + encodeURIComponent(orderCode) : "");
+      var studentCode = (document.querySelector("#auditStudentSearch").value || "").trim();
+      var url = "/admin/audit-log?limit=200" +
+        (orderCode ? "&orderCode=" + encodeURIComponent(orderCode) : "") +
+        (studentCode ? "&studentCode=" + encodeURIComponent(studentCode) : "");
       try {
         var res = await fetch(url, { headers: authHeaders(), cache: "no-store" });
         if (!res.ok) throw new Error(await res.text());
@@ -2738,6 +2754,12 @@
     });
     document.querySelector("#auditSearch").addEventListener("change", function() {
       loadAuditLog().catch(function(e) { setAuditNotice(e.message, true); });
+    });
+    document.querySelector("#auditStudentSearch").addEventListener("change", function() {
+      loadAuditLog().catch(function(e) { setAuditNotice(e.message, true); });
+    });
+    document.querySelector("#auditStudentSearch").addEventListener("keydown", function(e) {
+      if (e.key === "Enter") loadAuditLog().catch(function(err) { setAuditNotice(err.message, true); });
     });
 
     // ── BACKUP ────────────────────────────────────────────────────────────────

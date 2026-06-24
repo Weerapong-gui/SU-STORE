@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useState, useEffect, useCallback, Suspense } from "react";
+import { useState, useEffect, useCallback, useRef, Suspense } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import { Container } from "@/components/ui/Container";
 import { Search, Package, CheckCircle2, Clock, XCircle, Truck, AlertCircle, Ticket, Upload } from "lucide-react";
@@ -177,25 +177,35 @@ function OrderCard({ order }: { order: PublicOrder }) {
   );
 }
 
+const FINAL_STATUSES: OrderStatus[] = ["received", "cancelled", "rejected"];
+
 function CheckOrderContent() {
   const searchParams = useSearchParams();
   const router = useRouter();
   const { t } = useLang();
 
-  const [input, setInput] = useState(searchParams.get("studentCode") ?? "");
+  const initInput = searchParams.get("studentCode") ?? searchParams.get("code") ?? "";
+  const [input, setInput] = useState(initInput);
   const [orders, setOrders] = useState<PublicOrder[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [searched, setSearched] = useState(false);
+  const lastParamRef = useRef<string>("");
+
+  function isOrderCode(q: string) {
+    return /^[A-Za-z]/.test(q);
+  }
 
   const search = useCallback(async (value: string) => {
-    const q = value.trim();
+    const q = value.trim().toUpperCase();
     if (!q) return;
     setLoading(true);
     setError(null);
     setSearched(true);
 
-    const param = `studentCode=${encodeURIComponent(q)}`;
+    const useCode = isOrderCode(q);
+    const param = useCode ? `code=${encodeURIComponent(q)}` : `studentCode=${encodeURIComponent(q)}`;
+    lastParamRef.current = param;
     router.replace(`/check-order?${param}`, { scroll: false });
 
     try {
@@ -213,10 +223,31 @@ function CheckOrderContent() {
   }, [router, t.checkOrder.errorGeneric]);
 
   useEffect(() => {
-    const code = searchParams.get("studentCode");
-    if (code) search(code);
+    const sc = searchParams.get("studentCode");
+    const oc = searchParams.get("code");
+    if (sc) search(sc);
+    else if (oc) search(oc);
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // Poll every 15s while any displayed order has a non-final status
+  useEffect(() => {
+    if (orders.length === 0) return;
+    const hasLive = orders.some(o => !FINAL_STATUSES.includes(o.status));
+    if (!hasLive) return;
+    const param = lastParamRef.current;
+    if (!param) return;
+    const id = setInterval(async () => {
+      try {
+        const res = await fetch(`/api/check-order?${param}`, { cache: "no-store" });
+        if (!res.ok) return;
+        const data = await res.json();
+        const all = data.order ? [data.order] : (data.orders ?? []);
+        setOrders(all.filter((o: PublicOrder) => o.status !== "cancelled" && o.status !== "rejected"));
+      } catch {}
+    }, 15000);
+    return () => clearInterval(id);
+  }, [orders]);
 
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -239,7 +270,7 @@ function CheckOrderContent() {
                 type="text"
                 value={input}
                 onChange={(e) => setInput(e.target.value)}
-                placeholder="Student ID"
+                placeholder="Student ID / Order No."
                 className="h-12 w-full rounded-xl border border-black/[0.1] bg-white pl-10 pr-4 text-sm shadow-sm outline-none ring-apple-blue focus:border-apple-blue focus:ring-1"
               />
             </div>

@@ -153,7 +153,14 @@ _TEMPLATES_DIR = Path(__file__).parent / "templates"
 ADMIN_HTML = (_TEMPLATES_DIR / "admin.html").read_text(encoding="utf-8")
 ORDER_VIEW_HTML = (_TEMPLATES_DIR / "order_view.html").read_text(encoding="utf-8")
 CLAIM_STATION_HTML = (_TEMPLATES_DIR / "claim_station.html").read_text(encoding="utf-8")
+DISPLAY_HTML = (_TEMPLATES_DIR / "display.html").read_text(encoding="utf-8")
 RECEIPT_SVG = (_TEMPLATES_DIR / "receipt_template.svg").read_bytes()
+_FONT_PATH = _TEMPLATES_DIR / "fonts" / "SukhumvitSet.ttc"
+_slides_dir = Path(os.environ.get("ORDER_API_SLIDES_DIR", "/var/data/su-order-api/slides"))
+_slides_dir.mkdir(parents=True, exist_ok=True)
+
+# In-memory display state per claim-station user
+_display_state: dict[str, dict] = {}
 
 
 
@@ -1057,10 +1064,13 @@ def update_order_fields(
     connection: sqlite3.Connection,
     order_code: str,
     fields: dict[str, Any],
-) -> dict[str, Any] | None:
+    expected_updated_at: str | None = None,
+) -> dict[str, Any] | None | bool:
     existing = fetch_order_by_code(connection, order_code)
     if existing is None:
         return None
+    if expected_updated_at and str(existing.get("updated_at", "")) != str(expected_updated_at):
+        return False  # conflict — order was modified by someone else
 
     allowed: dict[str, Any] = {}
     str_fields = {
@@ -1887,6 +1897,7 @@ class OrderRequestHandler(BaseHTTPRequestHandler):
         self.send_response(status)
         self.send_header("Content-Type", "text/html; charset=utf-8")
         self.send_header("Content-Length", str(len(response_body)))
+        self.send_header("Cache-Control", "no-cache, no-store, must-revalidate")
         self.end_headers()
         self.wfile.write(response_body)
 
@@ -2082,6 +2093,66 @@ class OrderRequestHandler(BaseHTTPRequestHandler):
 
         if path == "/claim-station":
             self._send_html(HTTPStatus.OK, CLAIM_STATION_HTML)
+            return
+
+        if path == "/display1":
+            self._send_html(HTTPStatus.OK, DISPLAY_HTML)
+            return
+
+        _asset_match = re.fullmatch(r"/assets/(slides/[a-zA-Z0-9_.\-]+|[a-zA-Z0-9_.\-]+)", path)
+        if _asset_match:
+            _rel = _asset_match.group(1)
+            if _rel.startswith("slides/"):
+                _asset_file = _slides_dir / _rel[7:]
+            else:
+                _asset_file = _TEMPLATES_DIR / "assets" / _rel
+            if _asset_file.exists():
+                _ext = _asset_file.suffix.lower()
+                _mime = {"png": "image/png", "jpg": "image/jpeg", "jpeg": "image/jpeg", "webp": "image/webp", "svg": "image/svg+xml"}.get(_ext.lstrip("."), "application/octet-stream")
+                _data = _asset_file.read_bytes()
+                self.send_response(HTTPStatus.OK)
+                self.send_header("Content-Type", _mime)
+                self.send_header("Content-Length", str(len(_data)))
+                self.send_header("Cache-Control", "public, max-age=86400")
+                self.end_headers()
+                self.wfile.write(_data)
+            else:
+                self._send_json(HTTPStatus.NOT_FOUND, {"message": "not found"})
+            return
+
+        if path == "/fonts/SukhumvitSet.ttc":
+            if _FONT_PATH.exists():
+                data = _FONT_PATH.read_bytes()
+                self.send_response(HTTPStatus.OK)
+                self.send_header("Content-Type", "font/ttf")
+                self.send_header("Content-Length", str(len(data)))
+                self.send_header("Cache-Control", "public, max-age=86400")
+                self.send_header("Access-Control-Allow-Origin", "*")
+                self.end_headers()
+                self.wfile.write(data)
+            else:
+                self._send_json(HTTPStatus.NOT_FOUND, {"message": "font not found"})
+            return
+
+        if path == "/display1/users":
+            with _global_lock:
+                users = list(_display_state.keys())
+            self._send_json(HTTPStatus.OK, users)
+            return
+
+        if path == "/display1/state":
+            from urllib.parse import parse_qs as _pqs
+            _qs = _pqs(urlparse(self.path).query)
+            user = (_qs.get("user") or [""])[0].strip()
+            with _global_lock:
+                state = dict(_display_state.get(user, {"active": False}))
+            self._send_json(HTTPStatus.OK, state)
+            return
+
+        if path == "/display1/slides":
+            _ok_exts = {".png", ".jpg", ".jpeg", ".webp"}
+            _slide_files = sorted([f.name for f in _slides_dir.iterdir() if f.is_file() and f.suffix.lower() in _ok_exts])
+            self._send_json(HTTPStatus.OK, {"slides": [{"name": f, "url": f"/assets/slides/{f}"} for f in _slide_files]})
             return
 
         if path == "/claim-station/stats":
@@ -2543,12 +2614,21 @@ class OrderRequestHandler(BaseHTTPRequestHandler):
             from urllib.parse import parse_qs as _parse_qs2
             qs = _parse_qs2(urlparse(self.path).query)
             order_code = (qs.get("orderCode") or [""])[0].strip().upper()
+            student_code = (qs.get("studentCode") or [""])[0].strip()
             limit = min(max(1, int((qs.get("limit") or ["200"])[0])), 1000)
             with open_db() as connection:
                 if order_code:
                     rows = connection.execute(
                         "SELECT * FROM order_audit_log WHERE order_code = ? ORDER BY created_at DESC LIMIT ?",
                         (order_code, limit),
+                    ).fetchall()
+                elif student_code:
+                    rows = connection.execute(
+                        """SELECT al.* FROM order_audit_log al
+                           JOIN orders o ON o.order_code = al.order_code
+                           WHERE o.student_code = ?
+                           ORDER BY al.created_at DESC LIMIT ?""",
+                        (student_code, limit),
                     ).fetchall()
                 else:
                     rows = connection.execute(
@@ -2745,6 +2825,72 @@ class OrderRequestHandler(BaseHTTPRequestHandler):
                 "uploadedAt": uploaded_at,
                 "url": f"/admin/orders/{order_code}/extra-slips/{new_id}",
             })
+            return
+
+        if path == "/display1/update":
+            if not self._has_claim_station_authorization():
+                self._deny_unauthorized()
+                return
+            try:
+                payload = self._read_json()
+            except json.JSONDecodeError:
+                self._send_json(HTTPStatus.BAD_REQUEST, {"message": "invalid json"})
+                return
+            if isinstance(payload, dict):
+                username = str(payload.get("username") or "").strip()
+                if username:
+                    with _global_lock:
+                        _display_state[username] = payload
+            self._send_json(HTTPStatus.OK, {"ok": True})
+            return
+
+        if path == "/display1/slides/upload":
+            if not self._has_claim_station_authorization():
+                self._deny_unauthorized()
+                return
+            try:
+                payload = self._read_json()
+            except json.JSONDecodeError:
+                self._send_json(HTTPStatus.BAD_REQUEST, {"message": "invalid json"})
+                return
+            _sname = re.sub(r"[^a-zA-Z0-9_.\-]", "_", str(payload.get("name", "")).strip())
+            _sdata = str(payload.get("data", ""))
+            if not _sname or not _sdata:
+                self._send_json(HTTPStatus.BAD_REQUEST, {"message": "missing name or data"})
+                return
+            if not re.search(r"\.(png|jpe?g|webp)$", _sname, re.IGNORECASE):
+                self._send_json(HTTPStatus.BAD_REQUEST, {"message": "unsupported type"})
+                return
+            import base64 as _b64
+            try:
+                _raw = _b64.b64decode(_sdata)
+            except Exception:
+                self._send_json(HTTPStatus.BAD_REQUEST, {"message": "invalid base64"})
+                return
+            if len(_raw) > 10 * 1024 * 1024:
+                self._send_json(HTTPStatus.BAD_REQUEST, {"message": "file too large (max 10MB)"})
+                return
+            (_slides_dir / _sname).write_bytes(_raw)
+            self._send_json(HTTPStatus.OK, {"ok": True, "url": f"/assets/slides/{_sname}"})
+            return
+
+        if path == "/display1/slides/delete":
+            if not self._has_claim_station_authorization():
+                self._deny_unauthorized()
+                return
+            try:
+                payload = self._read_json()
+            except json.JSONDecodeError:
+                self._send_json(HTTPStatus.BAD_REQUEST, {"message": "invalid json"})
+                return
+            _dname = str(payload.get("name", "")).strip()
+            if not _dname or not re.fullmatch(r"[a-zA-Z0-9_.\-]+", _dname):
+                self._send_json(HTTPStatus.BAD_REQUEST, {"message": "invalid name"})
+                return
+            _dtarget = _slides_dir / _dname
+            if _dtarget.exists():
+                _dtarget.unlink()
+            self._send_json(HTTPStatus.OK, {"ok": True})
             return
 
         if path == "/claim-station/login":
@@ -3001,6 +3147,35 @@ class OrderRequestHandler(BaseHTTPRequestHandler):
             self._send_json(HTTPStatus.OK, {"order": serialize_order(updated)})
             return
 
+        claim_name_match = re.fullmatch(r"/claim-station/orders/([A-Z0-9-]+)/name", path)
+        if claim_name_match:
+            if not self._has_claim_station_authorization():
+                self._deny_unauthorized()
+                return
+            order_code = claim_name_match.group(1)
+            try:
+                payload = self._read_json()
+            except json.JSONDecodeError:
+                self._send_json(HTTPStatus.BAD_REQUEST, {"message": "invalid json"})
+                return
+            new_name = str((payload or {}).get("fullName", "")).strip() if isinstance(payload, dict) else ""
+            if not new_name:
+                self._send_json(HTTPStatus.BAD_REQUEST, {"message": "fullName required"})
+                return
+            with open_db() as connection:
+                ts = now_iso()
+                cursor = connection.execute(
+                    "UPDATE orders SET full_name=?, updated_at=? WHERE order_code=?",
+                    (new_name, ts, order_code),
+                )
+                if cursor.rowcount == 0:
+                    self._send_json(HTTPStatus.NOT_FOUND, {"message": "ไม่พบออเดอร์"})
+                    return
+                log_audit(connection, order_code, "claim_rename", f"name → {new_name}")
+                connection.commit()
+            self._send_json(HTTPStatus.OK, {"ok": True})
+            return
+
         status_match = re.fullmatch(r"/admin/orders/([A-Z0-9-]+)/status", path)
         if status_match:
             if not self._require_admin_authorization():
@@ -3036,10 +3211,14 @@ class OrderRequestHandler(BaseHTTPRequestHandler):
             if not isinstance(payload, dict):
                 self._send_json(HTTPStatus.BAD_REQUEST, {"message": "invalid payload"})
                 return
+            expected_updated_at = payload.pop("expectedUpdatedAt", None)
             with open_db() as connection:
-                order = update_order_fields(connection, order_edit_match.group(1), payload)
+                order = update_order_fields(connection, order_edit_match.group(1), payload, expected_updated_at)
                 if order is None:
                     self._send_json(HTTPStatus.NOT_FOUND, {"message": "order not found"})
+                    return
+                if order is False:
+                    self._send_json(HTTPStatus.CONFLICT, {"message": "ออเดอร์ถูกแก้ไขโดยผู้ใช้อื่นระหว่างที่คุณกำลังแก้ไข — กรุณารีโหลดและลองใหม่"})
                     return
                 connection.commit()
             self._send_json(HTTPStatus.OK, order)

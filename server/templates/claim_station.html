@@ -7,9 +7,14 @@
   <meta name="apple-mobile-web-app-capable" content="yes"/>
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent"/>
   <title>Claim Station</title>
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <style>
+    @font-face {
+      font-family: 'SukhumvitSet';
+      src: url('/fonts/SukhumvitSet.ttc') format('truetype');
+      font-weight: 100 900;
+      font-display: swap;
+    }
+  </style>
   <script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.min.js"></script>
   <style>
     *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
@@ -26,7 +31,7 @@
       :root{--bg:#0f172a;--card:#1e293b;--ink:#f1f5f9;--muted:#94a3b8;--border:#334155;
         --ok-bg:#052e16;--danger-bg:#450a0a;--warn-bg:#451a03;--purple-bg:#1e1040;--purple:#a78bfa;}
     }
-    body{font-family:'Sarabun',system-ui,-apple-system,sans-serif;background:var(--bg);color:var(--ink);min-height:100vh}
+    body{font-family:'SukhumvitSet','Sarabun',system-ui,-apple-system,sans-serif;background:var(--bg);color:var(--ink);min-height:100vh}
     input,button,textarea,select{font-family:inherit}
     /* Screen switching — explicit display values to avoid [hidden] CSS conflict */
     #loginScreen{display:flex;min-height:100vh;align-items:center;justify-content:center;padding:16px}
@@ -175,6 +180,74 @@
       #printReceipt { display:block!important; position:absolute; top:0; left:0; width:100% }
       @page { size:A4 portrait; margin:10mm 14mm }
     }
+    /* Receipt settings modal */
+    #rcptSettingsBackdrop{display:none;position:fixed;inset:0;background:rgba(0,0,0,.48);z-index:9998;align-items:center;justify-content:center;padding:12px;overflow-y:auto}
+    #rcptSettingsBackdrop.open{display:flex}
+    .rcpt-modal{position:relative;background:var(--card);border-radius:18px;width:min(960px,100%);margin:auto;box-shadow:0 12px 48px rgba(0,0,0,.22);overflow:hidden;display:flex;flex-direction:column;max-height:calc(100vh - 24px)}
+    .rcpt-modal-hdr{padding:18px 20px 0;border-bottom:1px solid var(--border);flex-shrink:0}
+    .rcpt-modal-title{font-size:15px;font-weight:800;color:var(--ink);margin-bottom:12px}
+    .rcpt-tabs{display:flex;gap:2px;margin-bottom:-1px}
+    .rcpt-tab{padding:7px 14px;font-size:13px;font-weight:600;color:var(--muted);border:none;background:none;cursor:pointer;border-bottom:2px solid transparent;transition:color .15s,border-color .15s}
+    .rcpt-tab.active{color:var(--primary);border-bottom-color:var(--primary)}
+    .rcpt-body-row{display:flex;flex:1;min-height:0}
+    .rcpt-form-col{width:340px;min-width:280px;display:flex;flex-direction:column;border-right:1px solid var(--border);flex-shrink:0}
+    .rcpt-form-scroll{flex:1;overflow-y:auto;padding:16px 20px}
+    .rcpt-preview-col{flex:1;min-width:0;background:var(--bg);display:flex;flex-direction:column;padding:14px}
+    .rcpt-preview-label{font-size:10px;font-weight:800;letter-spacing:.07em;text-transform:uppercase;color:var(--muted);margin-bottom:10px;flex-shrink:0}
+    .rcpt-preview-info{font-size:11px;color:var(--muted);margin-bottom:8px;flex-shrink:0}
+    #rcptPreviewContainer{flex:1;overflow:hidden;display:flex;align-items:center;justify-content:center;background:#fff;border-radius:10px;border:1px solid var(--border);min-height:200px}
+    #rcptPreviewContainer svg{width:100%;height:auto;display:block}
+    @media(max-width:640px){.rcpt-body-row{flex-direction:column}.rcpt-form-col{width:100%;border-right:none;border-bottom:1px solid var(--border)}.rcpt-preview-col{min-height:220px}}
+    .rcpt-section{display:none}.rcpt-section.active{display:block}
+    .rcpt-group{margin-bottom:16px}
+    .rcpt-group-title{font-size:10px;font-weight:800;letter-spacing:.07em;text-transform:uppercase;color:var(--muted);margin-bottom:8px}
+    .rcpt-row{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:6px}
+    .rcpt-row.cols3{grid-template-columns:1fr 1fr 1fr}
+    .rcpt-row.cols1{grid-template-columns:1fr}
+    .rcpt-field label{display:block;font-size:10px;font-weight:700;color:var(--muted);margin-bottom:3px;letter-spacing:.04em}
+    .rcpt-field input[type=number],.rcpt-field input[type=text]{width:100%;height:34px;border:1.5px solid var(--border);border-radius:8px;padding:0 8px;font-size:12px;color:var(--ink);background:var(--card);outline:none;transition:border-color .15s}
+    .rcpt-field input:focus{border-color:var(--primary)}
+    .rcpt-toggle-row{display:flex;align-items:center;justify-content:space-between;padding:9px 12px;background:var(--bg);border-radius:10px;margin-bottom:6px}
+    .rcpt-toggle-label{font-size:13px;font-weight:600;color:var(--ink)}
+    .rcpt-toggle-sub{font-size:11px;color:var(--muted);margin-top:1px}
+    .rcpt-toggle{position:relative;width:40px;height:24px;flex-shrink:0}
+    .rcpt-toggle input{opacity:0;width:0;height:0;position:absolute}
+    .rcpt-toggle-slider{position:absolute;inset:0;background:var(--border);border-radius:12px;cursor:pointer;transition:background .2s}
+    .rcpt-toggle-slider::before{content:'';position:absolute;width:18px;height:18px;left:3px;top:3px;background:#fff;border-radius:50%;transition:transform .2s;box-shadow:0 1px 4px rgba(0,0,0,.2)}
+    .rcpt-toggle input:checked + .rcpt-toggle-slider{background:var(--ok)}
+    .rcpt-toggle input:checked + .rcpt-toggle-slider::before{transform:translateX(16px)}
+    .rcpt-radio-group{display:flex;flex-direction:column;gap:6px;margin-bottom:8px}
+    .rcpt-radio-opt{display:flex;align-items:flex-start;gap:8px;padding:8px 12px;border:1.5px solid var(--border);border-radius:8px;cursor:pointer;transition:border-color .15s,background .15s}
+    .rcpt-radio-opt:has(input:checked){border-color:var(--primary);background:rgba(79,110,247,.06)}
+    .rcpt-radio-opt input[type=radio]{margin-top:2px;accent-color:var(--primary);flex-shrink:0}
+    .rcpt-radio-title{font-size:12px;font-weight:700;color:var(--ink)}
+    .rcpt-radio-sub{font-size:11px;color:var(--muted);margin-top:1px}
+    .rcpt-counter-box{display:flex;align-items:center;gap:8px;padding:8px 12px;background:var(--bg);border-radius:8px;border:1px solid var(--border);margin-top:6px}
+    .rcpt-counter-val{font-family:monospace;font-size:20px;font-weight:800;color:var(--ink);letter-spacing:.06em;flex:1}
+    .rcpt-counter-label{font-size:10px;color:var(--muted);font-weight:600;text-transform:uppercase;letter-spacing:.05em}
+    .rcpt-modal-ftr{padding:12px 20px;border-top:1px solid var(--border);display:flex;gap:8px;align-items:center;flex-shrink:0}
+    .rcpt-btn-save{flex:1;height:38px;background:var(--primary);color:#fff;border:none;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer;transition:opacity .15s}
+    .rcpt-btn-save:hover{opacity:.85}
+    .rcpt-btn-reset{height:38px;padding:0 14px;background:none;border:1.5px solid var(--border);border-radius:8px;font-size:12px;font-weight:600;color:var(--muted);cursor:pointer}
+    .rcpt-btn-reset:hover{border-color:var(--danger);color:var(--danger)}
+    .rcpt-close-btn{position:absolute;top:12px;right:14px;background:none;border:none;font-size:20px;color:var(--muted);cursor:pointer;line-height:1;z-index:1}
+    .rcpt-divider{height:1px;background:var(--border);margin:12px 0}
+    /* Edit name */
+    .edit-name-btn{background:none;border:none;cursor:pointer;color:var(--muted);padding:2px 5px;line-height:1;border-radius:4px;transition:color .15s;vertical-align:middle}
+    .edit-name-btn:hover{color:var(--primary)}
+    .edit-name-row{display:flex;align-items:center;gap:6px;flex-wrap:wrap}
+    .edit-name-inp{height:36px;border:2px solid var(--primary);border-radius:8px;padding:0 10px;font-size:17px;font-weight:700;color:var(--ink);background:var(--card);outline:none;flex:1;min-width:140px}
+    .edit-name-save{height:36px;padding:0 12px;background:var(--ok);color:#fff;border:none;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer;white-space:nowrap}
+    .edit-name-cancel{height:36px;padding:0 10px;background:none;border:1.5px solid var(--border);border-radius:8px;font-size:13px;font-weight:600;color:var(--muted);cursor:pointer;white-space:nowrap}
+    /* Name display panel */
+    #nameDisplayPanel{display:none;position:fixed;bottom:24px;right:24px;width:360px;background:var(--card);border:3px solid var(--primary);border-radius:16px;box-shadow:0 8px 40px rgba(0,0,0,.28);z-index:7000;overflow:hidden}
+    #nameDisplayPanel.ndp-active{display:block}
+    .ndp-hdr{background:var(--primary);color:#fff;padding:7px 14px;font-size:10px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;display:flex;align-items:center;justify-content:space-between}
+    .ndp-close{background:none;border:none;color:#fff;cursor:pointer;font-size:18px;line-height:1;padding:0 2px}
+    .ndp-body{padding:20px 22px;min-height:72px;display:flex;align-items:center}
+    .ndp-text{font-size:28px;font-weight:800;color:var(--ink);word-break:break-all;line-height:1.25}
+    .ndp-cursor{display:inline-block;width:2px;height:30px;background:var(--primary);margin-left:3px;vertical-align:middle;animation:ndpBlink 1s step-end infinite}
+    @keyframes ndpBlink{0%,100%{opacity:1}50%{opacity:0}}
   </style>
 </head>
 <body>
@@ -209,6 +282,7 @@
       <span class="top-bar-user" id="userLabel"></span>
       <button id="soundBtn" class="btn-icon" title="เปิด/ปิดเสียง"><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><path d="M15.54 8.46a5 5 0 0 1 0 7.07"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14"/></svg></button>
       <button id="fullscreenBtn" class="btn-fs" title="เต็มจอ"><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 3 21 3 21 9"/><polyline points="9 21 3 21 3 15"/><line x1="21" y1="3" x2="14" y2="10"/><line x1="3" y1="21" x2="10" y2="14"/></svg></button>
+      <button class="btn-icon" onclick="openReceiptSettings()" title="ตั้งค่าใบเสร็จ"><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg></button>
       <button id="logoutBtn" class="btn-logout">ออกจากระบบ</button>
     </div>
     <div id="statsPanel">
@@ -274,6 +348,7 @@
     var currentStation = '';
     var lastOrder = null;
     var statsInterval = null;
+    var orderRefreshInterval = null;
     var scanCooldown = false;
     var cameraStream = null;
     var animFrame = null;
@@ -298,6 +373,7 @@
     var IC_PHONE = '<svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07A19.5 19.5 0 0 1 4.69 12 19.79 19.79 0 0 1 1.61 3.35a2 2 0 0 1 1.99-2.18h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L7.91 8.5a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 14.92z"/></svg>';
     var IC_TICKET = '<svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M2 9a3 3 0 0 1 0 6v2a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-2a3 3 0 0 1 0-6V7a2 2 0 0 0-2-2H4a2 2 0 0 0-2 2z"/><line x1="9" y1="10" x2="15" y2="10"/><line x1="9" y1="14" x2="15" y2="14"/></svg>';
     var IC_CHKSQ = '<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 11 12 14 22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>';
+    var IC_REFRESH = '<svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>';
     var IC_SND_ON  = '<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><path d="M15.54 8.46a5 5 0 0 1 0 7.07"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14"/></svg>';
     var IC_SND_OFF = '<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><line x1="23" y1="9" x2="17" y2="15"/><line x1="17" y1="9" x2="23" y2="15"/></svg>';
 
@@ -374,6 +450,8 @@
 
     /* ── Init ── */
     (function init() {
+      loadReceiptConfig();
+      loadReceiptCounter();
       var tok = localStorage.getItem('csToken') || sessionStorage.getItem('csToken');
       var usr = localStorage.getItem('csUser') || sessionStorage.getItem('csUser');
       var stn = localStorage.getItem('csStation') || sessionStorage.getItem('csStation') || '';
@@ -405,6 +483,7 @@
         startCamera();
       }
       resetIdle();
+      pushDisplay({active: false, username: currentUser, slideImages: getSlideshowImages(), slideInterval: getSlideInterval(), fontSize: parseInt(localStorage.getItem('csDisplayFontSize') || '100', 10), slideTransition: getSlideTransition()});
     }
     function loadStats() {
       fetch('/claim-station/stats', {headers: {'Authorization': 'Claim ' + currentToken}})
@@ -570,8 +649,8 @@
       }
       setScanStatus('กำลังขอสิทธิ์กล้อง...');
       var constraints = deviceId
-        ? {video: {deviceId: {exact: deviceId}, width:{ideal:1280}, height:{ideal:720}}}
-        : {video: {facingMode: {ideal:'environment'}, width:{ideal:1280}, height:{ideal:720}}};
+        ? {video: {deviceId: {exact: deviceId}, width:{ideal:1920}, height:{ideal:1080}, advanced:[{focusMode:'continuous'}]}}
+        : {video: {facingMode: {ideal:'environment'}, width:{ideal:1920}, height:{ideal:1080}, advanced:[{focusMode:'continuous'}]}};
       navigator.mediaDevices.getUserMedia(constraints).then(function(stream) {
         cameraStream = stream;
         trySetupTorch(stream);
@@ -594,17 +673,24 @@
       if (animFrame) { cancelAnimationFrame(animFrame); animFrame = null; }
       if (cameraStream) { cameraStream.getTracks().forEach(function(t) { t.stop(); }); cameraStream = null; }
       torchTrack = null; torchOn = false;
+      _scanCtx = null;
     }
 
+    var _lastScanMs = 0;
+    var _scanCtx = null;
     function scanTick() {
       if (!cameraStream) return;
+      var now = Date.now();
+      if (now - _lastScanMs < 150) { animFrame = requestAnimationFrame(scanTick); return; }
+      _lastScanMs = now;
       var vid = document.getElementById('scanVideo');
       var can = document.getElementById('scanCanvas');
       if (vid.readyState === vid.HAVE_ENOUGH_DATA && !scanCooldown && typeof jsQR !== 'undefined') {
         can.height = vid.videoHeight; can.width = vid.videoWidth;
-        can.getContext('2d').drawImage(vid, 0, 0);
-        var img = can.getContext('2d').getImageData(0, 0, can.width, can.height);
-        var code = jsQR(img.data, img.width, img.height, {inversionAttempts:'dontInvert'});
+        if (!_scanCtx) _scanCtx = can.getContext('2d', {willReadFrequently: true});
+        _scanCtx.drawImage(vid, 0, 0);
+        var img = _scanCtx.getImageData(0, 0, can.width, can.height);
+        var code = jsQR(img.data, img.width, img.height, {inversionAttempts:'attemptBoth'});
         if (code && code.data) {
           var raw = code.data.trim();
           if (raw) {
@@ -724,7 +810,9 @@
 
     var ST_TH = {pending_payment:'รอสลิป',waiting_confirm:'รอยืนยัน',paid:'ชำระแล้ว',preparing:'กำลังเตรียมของ',shipped:'พร้อมรับ',received:'รับแล้ว',cancelled:'ยกเลิก',rejected:'ปฏิเสธ'};
 
-    function showOrderCard(order) {
+    function showOrderCard(order, opts) {
+      var silent = !!(opts && opts.silent);
+      var prevStatus = lastOrder ? lastOrder.status : null;
       lastOrder = order;
       var st = order.status || '';
       var stLabel = ST_TH[st] || st;
@@ -732,7 +820,7 @@
       var canReceive = st === 'shipped';
       var alreadyReceived = st === 'received';
       var items = (order.items && order.items.length) ? order.items : [{product: order.product, size: order.size, quantity: order.quantity}];
-      var needChecklist = canReceive && items.length > 1;
+      var needChecklist = false;
       var itemsHtml = '';
       for (var i = 0; i < items.length; i++) {
         var itm = items[i]; var p = itm.product || {};
@@ -769,12 +857,12 @@
         banner = '<div class="banner received-banner" style="display:flex;align-items:center;gap:6px">' + IC_CHECK + ' รับสินค้าแล้ว' +
           (order.receivedAt ? ' เมื่อ ' + esc(fmt(order.receivedAt)) : '') +
           (order.receivedBy ? ' โดย ' + esc(order.receivedBy) : '') + '</div>';
-        beepWarn();
+        if (!silent || prevStatus !== st) beepWarn();
       } else if (!canReceive) {
         banner = '<div class="banner warn-banner" style="display:flex;align-items:center;gap:6px">' + IC_WARN + ' ยังไม่พร้อมรับ &mdash; สถานะ: ' + esc(stLabel) + '</div>';
-        beepWarn();
+        if (!silent || prevStatus !== st) beepWarn();
       } else {
-        beepSuccess(); vibrate(80);
+        if (!silent || prevStatus !== st) { beepSuccess(); vibrate(80); }
       }
       var action = '';
       if (canReceive) {
@@ -880,8 +968,11 @@
       if (order.khantokTicket) {
         khantok = '<div class="khantok-badge" style="display:flex;align-items:center;gap:4px">' + IC_TICKET + ' บัตรขันโตก' + (order.khantokTicketValue ? ' ฿' + order.khantokTicketValue : '') + khantokClaimedLine + '</div>';
       }
+      var nowTs = new Date();
+      var refreshStamp = String(nowTs.getHours()).padStart(2,'0') + ':' + String(nowTs.getMinutes()).padStart(2,'0') + ':' + String(nowTs.getSeconds()).padStart(2,'0');
       var infoColHtml =
-        '<div class="order-hdr"><span class="order-code">' + esc(order.id || '') + '</span><span class="st-badge ' + esc(st) + '">' + esc(stLabel) + '</span></div>' +
+        '<div class="order-hdr"><span class="order-code">' + esc(order.id || '') + '</span><div style="display:flex;align-items:center;gap:6px"><span class="st-badge ' + esc(st) + '">' + esc(stLabel) + '</span><button onclick="refreshCurrentOrder()" title="รีเฟรชข้อมูล" style="background:none;border:1.5px solid var(--border);border-radius:6px;padding:3px 7px;cursor:pointer;color:var(--muted);display:inline-flex;align-items:center" id="refreshOrderBtn">' + IC_REFRESH + '</button></div></div>' +
+        '<div style="font-size:11px;color:var(--muted);padding:2px 14px 4px;text-align:right" id="orderRefreshStamp">เช็คล่าสุด ' + refreshStamp + '</div>' +
         '<div class="meta-row">' +
           (createdAtLabel ? '<span class="meta-item">สั่งเมื่อ <b>' + esc(createdAtLabel) + '</b></span>' : '') +
           (paymentStatusLabel ? '<span class="meta-item">ชำระ: <b>' + esc(paymentStatusLabel) + '</b></span>' : '') +
@@ -889,7 +980,7 @@
         '</div>' +
         adminNoteHtml +
         banner +
-        '<div class="cust-block"><div class="cust-name">' + esc(cust.fullName || '') + (order.roundNumber ? '<span style="margin-left:8px;font-size:12px;font-weight:600;padding:2px 8px;border-radius:5px;background:var(--primary);color:#fff;vertical-align:middle">Phase ' + esc(String(order.roundNumber)) + '</span>' : '') + '</div>' +
+        '<div class="cust-block"><div class="cust-name edit-name-row" id="custNameDisplay"><span id="custNameText">' + esc(cust.fullName || '') + '</span>' + (order.roundNumber ? '<span style="margin-left:8px;font-size:12px;font-weight:600;padding:2px 8px;border-radius:5px;background:var(--primary);color:#fff;vertical-align:middle">Phase ' + esc(String(order.roundNumber)) + '</span>' : '') + '<button class="edit-name-btn" onclick="startEditName()" title="แก้ไขชื่อ"><svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg></button></div>' +
           '<div class="cust-meta">' +
           (cust.studentCode ? '<span>' + esc(cust.studentCode) + '</span>' : '') +
           (cust.school ? '<span>' + esc(cust.school) + '</span>' : '') +
@@ -912,7 +1003,39 @@
       sec.innerHTML = html;
       if (order.slip && order.slip.uploadedAt) { loadSlipImage(order.id || ''); }
       sec.scrollIntoView({behavior:'smooth', block:'start'});
+      startOrderRefresh(order);
+      pushDisplay(order, false);
     }
+
+    function startOrderRefresh(order) {
+      if (orderRefreshInterval) { clearInterval(orderRefreshInterval); orderRefreshInterval = null; }
+      var st = order ? order.status : null;
+      if (!st || st === 'received' || st === 'cancelled' || st === 'rejected') return;
+      var ms = st === 'shipped' ? 10000 : 20000;
+      orderRefreshInterval = setInterval(refreshCurrentOrder, ms);
+    }
+
+    function refreshCurrentOrder() {
+      if (!lastOrder || !lastOrder.id || !currentToken) return;
+      var btn = document.getElementById('refreshOrderBtn');
+      if (btn) btn.style.opacity = '0.4';
+      fetch('/claim-station/orders/' + encodeURIComponent(lastOrder.id), {
+        headers: {'Authorization': 'Claim ' + currentToken}
+      }).then(function(r) {
+        if (r.status === 401) { doLogout(); return null; }
+        return r.json().then(function(d) { return {ok: r.ok, d: d}; });
+      }).then(function(r) {
+        if (btn) btn.style.opacity = '';
+        if (!r || !r.ok || !r.d || !r.d.order) return;
+        showOrderCard(r.d.order, {silent: true});
+      }).catch(function() { if (btn) btn.style.opacity = ''; });
+    }
+
+    document.addEventListener('visibilitychange', function() {
+      if (!document.hidden && lastOrder && currentToken) {
+        refreshCurrentOrder();
+      }
+    });
 
     function loadSlipImage(orderId) {
       fetch('/claim-station/orders/' + encodeURIComponent(orderId) + '/slip', {
@@ -971,6 +1094,8 @@
     }
 
     function clearResult() {
+      if (orderRefreshInterval) { clearInterval(orderRefreshInterval); orderRefreshInterval = null; }
+      lastOrder = null;
       document.getElementById('resultCol').style.display = 'none';
       document.getElementById('resultSection').innerHTML = '';
       document.getElementById('manualInput').value = '';
@@ -980,6 +1105,7 @@
       if (rc) rc.style.display = '';
       setScanStatus('กำลังสแกน QR Code...');
       scanCooldown = false;
+      pushDisplay({active: false, username: currentUser, slideImages: getSlideshowImages(), slideInterval: getSlideInterval(), fontSize: parseInt(localStorage.getItem('csDisplayFontSize') || '100', 10), slideTransition: getSlideTransition()});
     }
     function _showResultMode() {
       var sc = document.querySelector('.scan-col');
@@ -990,7 +1116,21 @@
 
     async function doReceive(code) {
       var btn = document.getElementById('confirmBtn');
-      if (btn) { btn.disabled = true; btn.textContent = 'กำลังบันทึก...'; }
+      if (btn) { btn.disabled = true; btn.textContent = 'กำลังตรวจสอบ...'; }
+      try {
+        var chk = await fetch('/claim-station/orders/' + encodeURIComponent(code), {
+          headers: {'Authorization': 'Claim ' + currentToken}
+        });
+        if (chk.status === 401) { doLogout(); return; }
+        if (chk.ok) {
+          var chkData = await chk.json();
+          if (chkData.order && chkData.order.status !== 'shipped') {
+            showOrderCard(chkData.order, {silent: false});
+            return;
+          }
+        }
+      } catch(e) { /* network issue — let server be the guard */ }
+      if (btn) { btn.textContent = 'กำลังบันทึก...'; }
       try {
         var r = await fetch('/claim-station/orders/' + encodeURIComponent(code) + '/received', {
           method: 'PATCH',
@@ -1015,6 +1155,7 @@
         addRecentPickup(d.order);
         showOrderCard(d.order);
         setScanStatus('บันทึกแล้ว — พร้อมสแกนต่อ', 'success');
+        if (receiptConfig.autoPrint) { setTimeout(printReceipt, 400); }
       } catch(e) {
         beepError();
         await showCsDialog({type:'alert',icon:'danger',title:'เชื่อมต่อไม่ได้',message:'ไม่สามารถเชื่อมต่อได้'});
@@ -1074,6 +1215,80 @@
     }
 
     /* ── Print receipt ── */
+    function fmtReceiptDate(iso) {
+      if (!iso) return "";
+      var s = String(iso).replace(" ", "T");
+      if (!/Z$|[+-]\d{2}:\d{2}$/.test(s)) s += "Z";
+      var d = new Date(new Date(s).getTime() + 7 * 3600000);
+      function p(n) { return n < 10 ? "0" + n : "" + n; }
+      return p(d.getUTCDate()) + "/" + p(d.getUTCMonth() + 1) + "/" + (d.getUTCFullYear() + 543);
+    }
+    function buildPFromCfg(cfg) {
+      var rowYs = [];
+      for (var ri = 0; ri < 8; ri++) rowYs.push(cfg.rowFirstY + ri * cfg.rowSpacing);
+      return {
+        font: "'Sarabun','TH Sarabun New','Sukhumvit Set',Arial,sans-serif",
+        ink: "#10122e",
+        rightCopyOffset: cfg.rightCopyOffset,
+        date:      { x: cfg.dateX,      y: cfg.dateY,      size: cfg.dateSize,      weight: "500", anchor: "end" },
+        receiptNo: { x: cfg.receiptNoX, y: cfg.receiptNoY, size: cfg.receiptNoSize, weight: "500", anchor: "end" },
+        customer:  { x: cfg.customerX,  y: cfg.customerY,  size: cfg.customerSize,  weight: "600" },
+        studentId: { x: cfg.customerX,  y: cfg.studentIdY, size: cfg.studentIdSize, weight: "600" },
+        school:    { x: cfg.customerX,  y: cfg.schoolY,    size: cfg.schoolSize,    weight: "600" },
+        rowYs: rowYs, rowSize: cfg.rowSize,
+        colNo: cfg.colNo, colName: cfg.colName, colQty: cfg.colQty, colPrice: cfg.colPrice, colAmount: cfg.colAmount,
+        subtotal: { x: cfg.subtotalX, y: cfg.subtotalY, size: cfg.subtotalSize, weight: "700", anchor: "end" },
+        total:    { x: cfg.totalX,    y: cfg.totalY,    size: cfg.totalSize,    weight: "700", anchor: "end" },
+        words:    { x: cfg.wordsX,    y: cfg.wordsY,    size: cfg.wordsSize,                  anchor: "middle" },
+      };
+    }
+    function injectReceiptData(svg, ox, P, dateStr, receiptNo, order) {
+      var c = order.customer || {};
+      var orderItems = (order.items && order.items.length > 0)
+        ? order.items
+        : [{ product: order.product || {}, size: order.size, quantity: order.quantity, unitPrice: ((order.product || {}).price || 0), totalAmount: order.totalAmount }];
+      var totalAmount = Number(order.totalAmount) || 0;
+      var school = c.school || (orderItems[0] && orderItems[0].school) || "";
+      var bahtText = "(" + toBahtText(totalAmount) + ")";
+      function mk(x, y, val, opts) {
+        opts = opts || {};
+        var el = document.createElementNS("http://www.w3.org/2000/svg", "text");
+        el.setAttribute("x", x); el.setAttribute("y", y);
+        el.setAttribute("font-family", P.font);
+        el.setAttribute("font-size", opts.size || P.rowSize);
+        el.setAttribute("fill", opts.fill || P.ink);
+        if (opts.anchor) el.setAttribute("text-anchor", opts.anchor);
+        if (opts.weight) el.setAttribute("font-weight", opts.weight);
+        el.textContent = String(val == null ? "" : val);
+        return el;
+      }
+      svg.appendChild(mk(ox + P.date.x,      P.date.y,      dateStr,          P.date));
+      svg.appendChild(mk(ox + P.receiptNo.x, P.receiptNo.y, receiptNo,        P.receiptNo));
+      svg.appendChild(mk(ox + P.customer.x,  P.customer.y,  (c.fullName || "") + (c.phone ? " (" + c.phone + ")" : ""),    P.customer));
+      svg.appendChild(mk(ox + P.studentId.x, P.studentId.y, c.studentCode || "", P.studentId));
+      svg.appendChild(mk(ox + P.school.x,    P.school.y,    school,              P.school));
+      orderItems.forEach(function(item, idx) {
+        if (idx >= P.rowYs.length) return;
+        var ip = item.product || {};
+        var isHb = ((ip.category || ip.slug || "").toLowerCase().indexOf("headband") >= 0);
+        var name = ip.name || "-";
+        if (isHb) { if (item.school && item.school.trim()) name += " (" + item.school + ")"; }
+        else { if (item.size && item.size !== "-" && item.size !== "") name += " (" + item.size + ")"; }
+        var up = Number(item.unitPrice) || Number(ip.price) || 0;
+        var qty = Number(item.quantity) || 0;
+        var lt = Number(item.totalAmount) || (up * qty);
+        var y = P.rowYs[idx], sz = P.rowSize, fo = { minimumFractionDigits: 2, maximumFractionDigits: 2 };
+        svg.appendChild(mk(ox + P.colNo,     y, idx + 1,                          { anchor: "middle", size: sz }));
+        svg.appendChild(mk(ox + P.colName,   y, name,                             { size: sz }));
+        svg.appendChild(mk(ox + P.colQty,    y, qty,                              { anchor: "middle", size: sz }));
+        svg.appendChild(mk(ox + P.colPrice,  y, up.toLocaleString("th-TH", fo),  { anchor: "start", size: sz }));
+        svg.appendChild(mk(ox + P.colAmount, y, lt.toLocaleString("th-TH", fo),  { anchor: "start", size: sz }));
+      });
+      var tf = totalAmount.toLocaleString("th-TH", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+      svg.appendChild(mk(ox + P.subtotal.x, P.subtotal.y, tf,       P.subtotal));
+      svg.appendChild(mk(ox + P.total.x,    P.total.y,    tf,       P.total));
+      svg.appendChild(mk(ox + P.words.x,    P.words.y,    bahtText, P.words));
+    }
     function rcptUnit(itm) {
       var p = itm.product || {};
       var cat = (p.category || '').toLowerCase();
@@ -1106,116 +1321,236 @@
     }
     function printReceipt() {
       if (!lastOrder) return;
+      var cfg = receiptConfig && Object.keys(receiptConfig).length ? receiptConfig : RCPT_DEFAULTS;
+      var P = buildPFromCfg(cfg);
       var order = lastOrder;
-      var c = order.customer || {};
-      var orderItems = (order.items && order.items.length > 0)
-        ? order.items
-        : [{ product: order.product || {}, size: order.size, quantity: order.quantity, unitPrice: ((order.product || {}).price || 0), totalAmount: order.totalAmount }];
-
-      var P = {
-        font: "'Sarabun','TH Sarabun New','Sukhumvit Set',Arial,sans-serif",
-        ink: "#10122e",
-        rightCopyOffset: 421.19,
-        date:      { x: 384, y: 35,  size: 9.5, weight: "500", anchor: "end" },
-        receiptNo: { x: 384, y: 56,  size: 9.5, weight: "500", anchor: "end" },
-        customer:  { x: 261, y: 93,  size: 8,   weight: "600" },
-        studentId: { x: 261, y: 112, size: 8,   weight: "600" },
-        school:    { x: 261, y: 131, size: 8,   weight: "600" },
-        rowYs: [197, 222, 247, 272, 297, 322, 347, 372],
-        rowSize: 7.5,
-        colNo: 11, colName: 25, colQty: 278, colPrice: 315, colAmount: 356,
-        subtotal: { x: 374, y: 399, size: 9, weight: "700", anchor: "end" },
-        total:    { x: 374, y: 429, size: 9, weight: "700", anchor: "end" },
-        words:    { x: 128, y: 399, size: 7,                anchor: "middle" },
-      };
-
-      function fmtReceiptDate(iso) {
-        if (!iso) return "";
-        var s = String(iso).replace(" ", "T");
-        if (!/Z$|[+-]\d{2}:\d{2}$/.test(s)) s += "Z";
-        var d = new Date(new Date(s).getTime() + 7 * 3600000);
-        function p(n) { return n < 10 ? "0" + n : "" + n; }
-        return p(d.getUTCDate()) + "/" + p(d.getUTCMonth() + 1) + "/" + (d.getUTCFullYear() + 543);
+      var dateStr = cfg.dateMode === 'print'
+        ? fmtReceiptDate(new Date().toISOString())
+        : fmtReceiptDate(order.createdAt || order.updatedAt);
+      var seqNum = cfg.receiptRunMode === 'local'
+        ? receiptLocalCounter + 1
+        : (Number(order.sequenceNumber) || 0) + (cfg.receiptOffset || 0);
+      var receiptNo = (cfg.receiptPrefix || '') + String(seqNum).padStart(4, "0");
+      function doPrint(svgText) {
+        var parser = new DOMParser();
+        var doc = parser.parseFromString(svgText, "image/svg+xml");
+        var svg = doc.documentElement;
+        injectReceiptData(svg, 0, P, dateStr, receiptNo, order);
+        injectReceiptData(svg, P.rightCopyOffset, P, dateStr, receiptNo, order);
+        var serialized = new XMLSerializer().serializeToString(svg);
+        var w = window.open("", "_blank");
+        if (!w) { alert("กรุณาอนุญาต Popup เพื่อพิมพ์ใบเสร็จ"); return; }
+        w.document.write('<!DOCTYPE html><html lang="th"><head><meta charset="utf-8">' +
+          '<link rel="preconnect" href="https://fonts.googleapis.com">' +
+          '<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>' +
+          '<link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@400;500;600;700&display=swap" rel="stylesheet">' +
+          '<title>ใบเสร็จ ' + (order.id || "") + '</title>' +
+          '<style>@page{size:A4 landscape;margin:0}html,body{margin:0;padding:0;width:297mm;height:210mm;overflow:hidden}svg{display:block;width:297mm;height:210mm}' +
+          '@media print{body{-webkit-print-color-adjust:exact;print-color-adjust:exact}}</style>' +
+          '</head><body>' + serialized +
+          '<script>window.onload=function(){window.print();window.addEventListener("afterprint",function(){window.close();});}<\/script></body></html>');
+        w.document.close();
+        if (cfg.receiptRunMode === 'local') saveReceiptCounter(seqNum);
       }
-
-      var totalAmount = Number(order.totalAmount) || 0;
-      var dateStr = fmtReceiptDate(order.createdAt || order.updatedAt);
-      var school = c.school || (orderItems[0] && orderItems[0].school) || "";
-      var receiptNo = String(order.sequenceNumber || 0).padStart(4, "0");
-      var bahtText = "(" + toBahtText(totalAmount) + ")";
-
-      function mkText(x, y, val, opts) {
-        opts = opts || {};
-        var el = document.createElementNS("http://www.w3.org/2000/svg", "text");
-        el.setAttribute("x", x);
-        el.setAttribute("y", y);
-        el.setAttribute("font-family", P.font);
-        el.setAttribute("font-size", opts.size || P.rowSize);
-        el.setAttribute("fill", opts.fill || P.ink);
-        if (opts.anchor) el.setAttribute("text-anchor", opts.anchor);
-        if (opts.weight) el.setAttribute("font-weight", opts.weight);
-        el.textContent = String(val == null ? "" : val);
-        return el;
+      if (receiptPreviewSvgText) {
+        doPrint(receiptPreviewSvgText);
+      } else {
+        fetch("/admin/receipt-template")
+          .then(function(r) { return r.text(); })
+          .then(function(t) { receiptPreviewSvgText = t; doPrint(t); })
+          .catch(function(err) { alert("ไม่สามารถโหลด receipt template: " + err.message); });
       }
-
-      function injectData(svg, ox) {
-        svg.appendChild(mkText(ox + P.date.x,      P.date.y,      dateStr,   P.date));
-        svg.appendChild(mkText(ox + P.receiptNo.x, P.receiptNo.y, receiptNo, P.receiptNo));
-        svg.appendChild(mkText(ox + P.customer.x,  P.customer.y,  c.fullName || "",    P.customer));
-        svg.appendChild(mkText(ox + P.studentId.x, P.studentId.y, c.studentCode || "", P.studentId));
-        svg.appendChild(mkText(ox + P.school.x,    P.school.y,    school,              P.school));
-        orderItems.forEach(function(item, idx) {
-          if (idx >= P.rowYs.length) return;
-          var ip = item.product || {};
-          var isHeadband = ((ip.category || ip.slug || "").toLowerCase().indexOf("headband") >= 0);
-          var name = ip.name || "-";
-          if (isHeadband) {
-            if (item.school && item.school.trim()) name += " (" + item.school + ")";
-          } else {
-            if (item.size && item.size !== "-" && item.size !== "") name += " (" + item.size + ")";
-          }
-          var unitPrice = Number(item.unitPrice) || Number(ip.price) || 0;
-          var qty = Number(item.quantity) || 0;
-          var lineTotal = Number(item.totalAmount) || (unitPrice * qty);
-          var y = P.rowYs[idx];
-          var sz = P.rowSize;
-          svg.appendChild(mkText(ox + P.colNo,     y, idx + 1,                           { anchor: "middle", size: sz }));
-          svg.appendChild(mkText(ox + P.colName,   y, name,                              { size: sz }));
-          svg.appendChild(mkText(ox + P.colQty,    y, qty,                               { anchor: "middle", size: sz }));
-          var fmtOpts = { minimumFractionDigits: 2, maximumFractionDigits: 2 };
-          svg.appendChild(mkText(ox + P.colPrice,  y, unitPrice.toLocaleString("th-TH", fmtOpts), { anchor: "start", size: sz }));
-          svg.appendChild(mkText(ox + P.colAmount, y, lineTotal.toLocaleString("th-TH", fmtOpts), { anchor: "start", size: sz }));
-        });
-        var totalFmt = totalAmount.toLocaleString("th-TH", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-        svg.appendChild(mkText(ox + P.subtotal.x, P.subtotal.y, totalFmt, P.subtotal));
-        svg.appendChild(mkText(ox + P.total.x,    P.total.y,    totalFmt, P.total));
-        svg.appendChild(mkText(ox + P.words.x,    P.words.y,    bahtText,                            P.words));
-      }
-
-      fetch("/admin/receipt-template")
-        .then(function(r) { return r.text(); })
-        .then(function(svgText) {
-          var parser = new DOMParser();
-          var doc = parser.parseFromString(svgText, "image/svg+xml");
-          var svg = doc.documentElement;
-          injectData(svg, 0);
-          injectData(svg, P.rightCopyOffset);
-          var serialized = new XMLSerializer().serializeToString(svg);
-          var w = window.open("", "_blank");
-          if (!w) { alert("กรุณาอนุญาต Popup เพื่อพิมพ์ใบเสร็จ"); return; }
-          w.document.write('<!DOCTYPE html><html lang="th"><head><meta charset="utf-8">' +
-            '<link rel="preconnect" href="https://fonts.googleapis.com">' +
-            '<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>' +
-            '<link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@400;500;600;700&display=swap" rel="stylesheet">' +
-            '<title>ใบเสร็จ ' + (order.id || "") + '</title>' +
-            '<style>@page{size:A4 landscape;margin:0}html,body{margin:0;padding:0;width:297mm;height:210mm;overflow:hidden}svg{display:block;width:297mm;height:210mm}' +
-            '@media print{body{-webkit-print-color-adjust:exact;print-color-adjust:exact}}</style>' +
-            '</head><body>' + serialized +
-            '<script>window.onload=function(){window.print();window.addEventListener("afterprint",function(){window.close();});}<\/script></body></html>');
-          w.document.close();
-        })
-        .catch(function(err) { alert("ไม่สามารถโหลด receipt template: " + err.message); });
     }
+
+    /* ── Receipt settings ── */
+    var RCPT_DEFAULTS = {
+      autoPrint: false,
+      dateMode: 'order',
+      receiptRunMode: 'sequence',
+      receiptPrefix: '',
+      receiptOffset: 0,
+      rightCopyOffset: 421.19,
+      dateX: 384, dateY: 35, dateSize: 9.5,
+      receiptNoX: 384, receiptNoY: 56, receiptNoSize: 9.5,
+      customerX: 261, customerY: 93, customerSize: 8,
+      studentIdY: 112, studentIdSize: 8,
+      schoolY: 131, schoolSize: 8,
+      rowFirstY: 197, rowSpacing: 25, rowSize: 7.5,
+      colNo: 11, colName: 25, colQty: 278, colPrice: 315, colAmount: 356,
+      subtotalX: 374, subtotalY: 399, subtotalSize: 9,
+      totalX: 374, totalY: 429, totalSize: 9,
+      wordsX: 128, wordsY: 399, wordsSize: 7
+    };
+    var receiptConfig = {};
+    var receiptPreviewSvgText = null;
+    var receiptLocalCounter = 0;
+    var _previewDebounce = null;
+
+    function loadReceiptConfig() {
+      try {
+        var saved = JSON.parse(localStorage.getItem('csReceiptConfig') || '{}');
+        receiptConfig = Object.assign({}, RCPT_DEFAULTS, saved);
+      } catch(e) { receiptConfig = Object.assign({}, RCPT_DEFAULTS); }
+    }
+    function loadReceiptCounter() {
+      receiptLocalCounter = parseInt(localStorage.getItem('csReceiptCounter') || '0') || 0;
+    }
+    function saveReceiptCounter(n) {
+      receiptLocalCounter = n;
+      localStorage.setItem('csReceiptCounter', String(n));
+      updateCounterDisplay();
+    }
+    function resetReceiptCounter() {
+      if (!confirm('รีเซ็ตเลขที่ใบเสร็จกลับเป็น 0000?\nการกระทำนี้ไม่สามารถยกเลิกได้')) return;
+      saveReceiptCounter(0);
+    }
+    function updateCounterDisplay() {
+      var el = document.getElementById('rcptCounterVal');
+      if (el) el.textContent = String(receiptLocalCounter).padStart(4, '0');
+      var next = document.getElementById('rcptNextNumPreview');
+      var pfxEl = document.getElementById('rcptPrefixLocal');
+      var pfx = pfxEl ? (pfxEl.value || '') : '';
+      if (next) next.textContent = pfx + String(receiptLocalCounter + 1).padStart(4, '0');
+    }
+
+    function getFormConfig() {
+      function gN(id) { var el = document.getElementById(id); return el ? (parseFloat(el.value) || 0) : 0; }
+      function gS(id) { var el = document.getElementById(id); return el ? (el.value || '') : ''; }
+      function gB(id) { var el = document.getElementById(id); return el ? el.checked : false; }
+      function gR(name, def) { var el = document.querySelector('input[name="' + name + '"]:checked'); return el ? el.value : (def || ''); }
+      return {
+        autoPrint: gB('rcptAutoPrint'),
+        dateMode: gR('rcptDateMode', 'order'),
+        receiptRunMode: gR('rcptRunMode', 'sequence'),
+        receiptPrefix: gS('rcptPrefix'),
+        receiptOffset: parseInt(gS('rcptOffset')) || 0,
+        rightCopyOffset: gN('rcptRightCopy'),
+        dateX: gN('rcptDateX'), dateY: gN('rcptDateY'), dateSize: gN('rcptDateSz'),
+        receiptNoX: gN('rcptNoX'), receiptNoY: gN('rcptNoY'), receiptNoSize: gN('rcptNoSz'),
+        customerX: gN('rcptCustX'), customerY: gN('rcptCustY'), customerSize: gN('rcptCustSz'),
+        studentIdY: gN('rcptStuY'), studentIdSize: gN('rcptStuSz'),
+        schoolY: gN('rcptSchY'), schoolSize: gN('rcptSchSz'),
+        rowFirstY: gN('rcptRowY'), rowSpacing: gN('rcptRowSp'), rowSize: gN('rcptRowSz'),
+        colNo: gN('rcptColNo'), colName: gN('rcptColName'), colQty: gN('rcptColQty'),
+        colPrice: gN('rcptColPrice'), colAmount: gN('rcptColAmt'),
+        subtotalX: gN('rcptSubX'), subtotalY: gN('rcptSubY'), subtotalSize: gN('rcptSubSz'),
+        totalX: gN('rcptTotX'), totalY: gN('rcptTotY'), totalSize: gN('rcptTotSz'),
+        wordsX: gN('rcptWrdX'), wordsY: gN('rcptWrdY'), wordsSize: gN('rcptWrdSz')
+      };
+    }
+
+    function schedulePreviewUpdate() {
+      clearTimeout(_previewDebounce);
+      _previewDebounce = setTimeout(updateReceiptPreview, 150);
+    }
+    function updateReceiptPreview() {
+      var container = document.getElementById('rcptPreviewContainer');
+      if (!container) return;
+      if (!receiptPreviewSvgText) {
+        container.innerHTML = '<div style="font-size:12px;color:var(--muted);padding:16px;text-align:center">กำลังโหลด template...</div>';
+        return;
+      }
+      var cfg = getFormConfig();
+      receiptConfig = cfg;
+      var P = buildPFromCfg(cfg);
+      var previewOrder = lastOrder || {
+        id: 'FP28-0042', sequenceNumber: 42, totalAmount: 843,
+        createdAt: new Date().toISOString(), updatedAt: new Date().toISOString(),
+        customer: { fullName: 'สมชาย ใจดี', studentCode: '6831501178', school: 'สำนักวิชาวิทยาศาสตร์' },
+        items: [
+          { product: { name: 'POLO SHIRT', slug: 'single', category: 'shirt'   }, size: 'L', quantity: 1, unitPrice: 158, totalAmount: 158 },
+          { product: { name: 'JACKET',     slug: 'jacket', category: 'jacket'  }, size: 'M', quantity: 1, unitPrice: 685, totalAmount: 685 }
+        ]
+      };
+      var dateStr = cfg.dateMode === 'print'
+        ? fmtReceiptDate(new Date().toISOString())
+        : fmtReceiptDate(previewOrder.createdAt || previewOrder.updatedAt);
+      var seqNum = cfg.receiptRunMode === 'local'
+        ? receiptLocalCounter + 1
+        : (Number(previewOrder.sequenceNumber) || 0) + (cfg.receiptOffset || 0);
+      var receiptNo = (cfg.receiptPrefix || '') + String(seqNum).padStart(4, '0');
+      var parser = new DOMParser();
+      var doc = parser.parseFromString(receiptPreviewSvgText, 'image/svg+xml');
+      var svg = doc.documentElement;
+      injectReceiptData(svg, 0, P, dateStr, receiptNo, previewOrder);
+      svg.setAttribute('viewBox', '0 0 421.19 597.12');
+      svg.removeAttribute('width'); svg.removeAttribute('height');
+      container.innerHTML = new XMLSerializer().serializeToString(svg);
+      var infoEl = document.getElementById('rcptPreviewInfo');
+      if (infoEl) infoEl.textContent = lastOrder ? 'ใช้ข้อมูลออเดอร์ล่าสุด: ' + (lastOrder.id || '') : 'ใช้ข้อมูลตัวอย่าง (สแกนออเดอร์เพื่อดูข้อมูลจริง)';
+    }
+
+    function openReceiptSettings() {
+      loadReceiptConfig();
+      loadReceiptCounter();
+      var c = receiptConfig;
+      function sV(id, val) { var el = document.getElementById(id); if (el) el.value = val; }
+      function sC(id, val) { var el = document.getElementById(id); if (el) el.checked = !!val; }
+      function sR(name, val) { var el = document.querySelector('input[name="' + name + '"][value="' + val + '"]'); if (el) el.checked = true; }
+      sC('rcptAutoPrint', c.autoPrint);
+      sR('rcptDateMode', c.dateMode || 'order');
+      sR('rcptRunMode', c.receiptRunMode || 'sequence');
+      sV('rcptPrefix', c.receiptPrefix); sV('rcptOffset', c.receiptOffset);
+      sV('rcptPrefixLocal', c.receiptPrefix);
+      sV('rcptRightCopy', c.rightCopyOffset);
+      sV('rcptDateX', c.dateX); sV('rcptDateY', c.dateY); sV('rcptDateSz', c.dateSize);
+      sV('rcptNoX', c.receiptNoX); sV('rcptNoY', c.receiptNoY); sV('rcptNoSz', c.receiptNoSize);
+      sV('rcptCustX', c.customerX); sV('rcptCustY', c.customerY); sV('rcptCustSz', c.customerSize);
+      sV('rcptStuY', c.studentIdY); sV('rcptStuSz', c.studentIdSize);
+      sV('rcptSchY', c.schoolY); sV('rcptSchSz', c.schoolSize);
+      sV('rcptRowY', c.rowFirstY); sV('rcptRowSp', c.rowSpacing); sV('rcptRowSz', c.rowSize);
+      sV('rcptColNo', c.colNo); sV('rcptColName', c.colName); sV('rcptColQty', c.colQty);
+      sV('rcptColPrice', c.colPrice); sV('rcptColAmt', c.colAmount);
+      sV('rcptSubX', c.subtotalX); sV('rcptSubY', c.subtotalY); sV('rcptSubSz', c.subtotalSize);
+      sV('rcptTotX', c.totalX); sV('rcptTotY', c.totalY); sV('rcptTotSz', c.totalSize);
+      sV('rcptWrdX', c.wordsX); sV('rcptWrdY', c.wordsY); sV('rcptWrdSz', c.wordsSize);
+      updateCounterDisplay();
+      toggleRunModeSection();
+      switchReceiptTab('general');
+      document.getElementById('rcptSettingsBackdrop').classList.add('open');
+      if (!receiptPreviewSvgText) {
+        fetch('/admin/receipt-template')
+          .then(function(r) { return r.text(); })
+          .then(function(t) { receiptPreviewSvgText = t; updateReceiptPreview(); })
+          .catch(function() {
+            var c2 = document.getElementById('rcptPreviewContainer');
+            if (c2) c2.innerHTML = '<div style="font-size:12px;color:var(--danger);padding:16px;text-align:center">ไม่สามารถโหลด template</div>';
+          });
+      } else {
+        updateReceiptPreview();
+      }
+    }
+    function closeReceiptSettings() {
+      document.getElementById('rcptSettingsBackdrop').classList.remove('open');
+    }
+    function switchReceiptTab(tab) {
+      document.querySelectorAll('.rcpt-tab').forEach(function(el) { el.classList.toggle('active', el.dataset.tab === tab); });
+      document.querySelectorAll('.rcpt-section').forEach(function(el) { el.classList.toggle('active', el.dataset.section === tab); });
+      if (tab === 'slideshow') initSlideSettings();
+      schedulePreviewUpdate();
+    }
+    function toggleRunModeSection() {
+      var el = document.querySelector('input[name="rcptRunMode"]:checked');
+      var mode = el ? el.value : 'sequence';
+      var localSec = document.getElementById('rcptLocalSection');
+      var seqSec = document.getElementById('rcptSequenceSection');
+      if (localSec) localSec.style.display = mode === 'local' ? '' : 'none';
+      if (seqSec) seqSec.style.display = mode === 'sequence' ? '' : 'none';
+    }
+    function saveReceiptSettings() {
+      var cfg = getFormConfig();
+      receiptConfig = cfg;
+      localStorage.setItem('csReceiptConfig', JSON.stringify(cfg));
+      closeReceiptSettings();
+    }
+    function resetReceiptSettings() {
+      receiptConfig = Object.assign({}, RCPT_DEFAULTS);
+      localStorage.removeItem('csReceiptConfig');
+      openReceiptSettings();
+    }
+    document.addEventListener('click', function(e) {
+      if (e.target.id === 'rcptSettingsBackdrop') closeReceiptSettings();
+    });
 
     /* ── Custom dialog ── */
     var _csDlgResolve = null;
@@ -1250,6 +1585,260 @@
       else if (id === 'csDlgCancelBtn' || id === 'csDlgCloseBtn') _csDlgClose(false);
       else if (id === 'csDlgBackdrop') _csDlgClose(false);
     });
+
+    /* ── Edit name ── */
+    var IC_EDIT_SM = '<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>';
+
+    function _nameEditRoundBadge() {
+      return (lastOrder && lastOrder.roundNumber)
+        ? '<span style="margin-left:8px;font-size:12px;font-weight:600;padding:2px 8px;border-radius:5px;background:var(--primary);color:#fff;vertical-align:middle">Phase ' + esc(String(lastOrder.roundNumber)) + '</span>'
+        : '';
+    }
+
+    function startEditName() {
+      var row = document.getElementById('custNameDisplay');
+      if (!row) return;
+      var current = (lastOrder && lastOrder.customer) ? (lastOrder.customer.fullName || '') : '';
+      row.innerHTML =
+        '<input id="editNameInp" class="edit-name-inp" type="text" value="' + esc(current) + '" oninput="onEditNameInput(this.value)" onkeydown="if(event.key===\'Enter\')saveEditName();if(event.key===\'Escape\')cancelEditName();" autofocus>' +
+        '<button class="edit-name-save" onclick="saveEditName()">บันทึก</button>' +
+        '<button class="edit-name-cancel" onclick="cancelEditName()">ยกเลิก</button>';
+      var inp = document.getElementById('editNameInp');
+      if (inp) { inp.focus(); inp.select(); showNameDisplay(current); }
+    }
+
+    function onEditNameInput(val) {
+      showNameDisplay(val);
+      if (lastOrder) {
+        var s = _buildDisplayState(lastOrder, false);
+        s.name = val; s.typing = true;
+        pushDisplay(s);
+      }
+    }
+
+    function showNameDisplay(val) {
+      var panel = document.getElementById('nameDisplayPanel');
+      var txt = document.getElementById('ndpText');
+      if (!panel || !txt) return;
+      panel.classList.add('ndp-active');
+      txt.innerHTML = esc(val) + '<span class="ndp-cursor"></span>';
+    }
+
+    function closeNameDisplay() {
+      var panel = document.getElementById('nameDisplayPanel');
+      if (panel) panel.classList.remove('ndp-active');
+    }
+
+    /* ── Slideshow settings ── */
+    var _slideAllImages = []; // [{name, url}] loaded from server
+
+    function initSlideSettings() {
+      var intEl = document.getElementById('slideIntervalInp');
+      if (intEl) intEl.value = parseInt(localStorage.getItem('csSlideInterval') || '4', 10);
+      var fsEl = document.getElementById('slideFontSize');
+      if (fsEl) fsEl.value = parseInt(localStorage.getItem('csDisplayFontSize') || '100', 10);
+      var trEl = document.getElementById('slideTransitionSel');
+      if (trEl) trEl.value = localStorage.getItem('csSlideTransition') || 'kenburns';
+      _loadSlideImages();
+    }
+
+    function _loadSlideImages() {
+      var grid = document.getElementById('slideImageGrid');
+      if (!grid) return;
+      grid.innerHTML = '<div style="color:var(--muted);font-size:12px;padding:8px">กำลังโหลด...</div>';
+      fetch('/display1/slides', {headers: {'Authorization': 'Claim ' + currentToken}})
+        .then(function(r) { return r.json(); })
+        .then(function(d) {
+          _slideAllImages = d.slides || [];
+          var saved = JSON.parse(localStorage.getItem('csSlideSelected') || 'null');
+          if (saved === null && _slideAllImages.length) {
+            saved = _slideAllImages.map(function(s) { return s.name; });
+            localStorage.setItem('csSlideSelected', JSON.stringify(saved));
+          }
+          _renderSlideGrid();
+        })
+        .catch(function() {
+          var grid2 = document.getElementById('slideImageGrid');
+          if (grid2) grid2.innerHTML = '<div style="color:var(--danger);font-size:12px">โหลดไม่ได้</div>';
+        });
+    }
+
+    function _renderSlideGrid() {
+      var grid = document.getElementById('slideImageGrid');
+      if (!grid) return;
+      var saved = JSON.parse(localStorage.getItem('csSlideSelected') || '[]');
+      if (!_slideAllImages.length) {
+        grid.innerHTML = '<div style="color:var(--muted);font-size:12px;padding:8px">ยังไม่มีรูป — อัปโหลดด้านบน</div>';
+        return;
+      }
+      var html = '';
+      for (var i = 0; i < _slideAllImages.length; i++) {
+        var s = _slideAllImages[i];
+        var checked = saved.indexOf(s.name) >= 0;
+        html += '<div id="slideCard_' + i + '" onclick="toggleSlideCard(' + i + ')" style="position:relative;cursor:pointer;border:2px solid ' + (checked ? 'var(--primary)' : 'var(--border)') + ';border-radius:12px;overflow:hidden;width:100px;flex-shrink:0;transition:border-color .15s">' +
+          '<img src="' + s.url + '" style="width:100%;aspect-ratio:1;object-fit:cover;display:block" />' +
+          '<div style="padding:4px 6px;font-size:10px;font-weight:700;color:var(--ink);word-break:break-all;line-height:1.2">' + s.name + '</div>' +
+          '<button onclick="event.stopPropagation();deleteSlideImage(' + i + ')" style="position:absolute;top:4px;right:4px;width:20px;height:20px;border-radius:50%;background:rgba(220,38,38,.85);border:none;color:#fff;font-size:12px;line-height:1;cursor:pointer;display:flex;align-items:center;justify-content:center">&times;</button>' +
+          '<input type="checkbox" id="slideChk_' + i + '" style="display:none"' + (checked ? ' checked' : '') + '>' +
+          '</div>';
+      }
+      grid.innerHTML = html;
+    }
+
+    function toggleSlideCard(idx) {
+      var chk = document.getElementById('slideChk_' + idx);
+      var card = document.getElementById('slideCard_' + idx);
+      if (!chk || !card) return;
+      chk.checked = !chk.checked;
+      card.style.borderColor = chk.checked ? 'var(--primary)' : 'var(--border)';
+    }
+
+    function deleteSlideImage(idx) {
+      var img = _slideAllImages[idx];
+      if (!img) return;
+      if (!confirm('ลบรูป "' + img.name + '" ?')) return;
+      fetch('/display1/slides/delete', {
+        method: 'POST',
+        headers: {'Authorization': 'Claim ' + currentToken, 'Content-Type': 'application/json'},
+        body: JSON.stringify({name: img.name}),
+      }).then(function() {
+        var saved = JSON.parse(localStorage.getItem('csSlideSelected') || '[]');
+        var idx2 = saved.indexOf(img.name);
+        if (idx2 >= 0) saved.splice(idx2, 1);
+        localStorage.setItem('csSlideSelected', JSON.stringify(saved));
+        pushDisplay({active: false, username: currentUser, slideImages: getSlideshowImages(), slideInterval: getSlideInterval(), fontSize: parseInt(localStorage.getItem('csDisplayFontSize') || '100', 10), slideTransition: getSlideTransition()});
+        _loadSlideImages();
+      }).catch(function() {});
+    }
+
+    function handleSlideUpload(files) {
+      if (!files || !files.length) return;
+      var statusEl = document.getElementById('slideUploadStatus');
+      var fileList = Array.from(files);
+      var pending = fileList.length;
+      var done = 0;
+      var uploadedNames = [];
+      if (statusEl) statusEl.textContent = 'กำลังอัปโหลด...';
+      fileList.forEach(function(file) {
+        var reader = new FileReader();
+        reader.onload = function(e) {
+          var b64 = e.target.result.split(',')[1];
+          fetch('/display1/slides/upload', {
+            method: 'POST',
+            headers: {'Authorization': 'Claim ' + currentToken, 'Content-Type': 'application/json'},
+            body: JSON.stringify({name: file.name, data: b64}),
+          }).then(function() {
+            uploadedNames.push(file.name);
+            done++;
+            if (statusEl) statusEl.textContent = done < pending ? ('อัปโหลด ' + done + '/' + pending + '...') : 'อัปโหลดเสร็จ';
+            if (done === pending) {
+              setTimeout(function() { if (statusEl) statusEl.textContent = ''; }, 2000);
+              var saved = JSON.parse(localStorage.getItem('csSlideSelected') || '[]');
+              uploadedNames.forEach(function(n) { if (saved.indexOf(n) < 0) saved.push(n); });
+              localStorage.setItem('csSlideSelected', JSON.stringify(saved));
+              pushDisplay({active: false, username: currentUser, slideImages: getSlideshowImages(), slideInterval: getSlideInterval(), fontSize: parseInt(localStorage.getItem('csDisplayFontSize') || '100', 10), slideTransition: getSlideTransition()});
+              _loadSlideImages();
+            }
+          }).catch(function() {
+            if (statusEl) statusEl.textContent = 'อัปโหลดล้มเหลว';
+          });
+        };
+        reader.readAsDataURL(file);
+      });
+    }
+
+    function getSlideshowImages() {
+      var saved = JSON.parse(localStorage.getItem('csSlideSelected') || '[]');
+      return saved.map(function(name) { return '/assets/slides/' + name; });
+    }
+
+    function getSlideInterval() {
+      return parseInt(localStorage.getItem('csSlideInterval') || '4', 10);
+    }
+
+    function getSlideTransition() {
+      return localStorage.getItem('csSlideTransition') || 'kenburns';
+    }
+
+    function saveSlideSettings() {
+      var selected = [];
+      for (var i = 0; i < _slideAllImages.length; i++) {
+        var chk = document.getElementById('slideChk_' + i);
+        if (chk && chk.checked) selected.push(_slideAllImages[i].name);
+      }
+      var intEl = document.getElementById('slideIntervalInp');
+      var interval = intEl ? Math.max(1, parseInt(intEl.value, 10) || 4) : 4;
+      var fsEl = document.getElementById('slideFontSize');
+      var fontSize = fsEl ? Math.min(200, Math.max(50, parseInt(fsEl.value, 10) || 100)) : 100;
+      var trEl = document.getElementById('slideTransitionSel');
+      var transition = trEl ? trEl.value : 'kenburns';
+      localStorage.setItem('csSlideSelected', JSON.stringify(selected));
+      localStorage.setItem('csSlideInterval', String(interval));
+      localStorage.setItem('csDisplayFontSize', String(fontSize));
+      localStorage.setItem('csSlideTransition', transition);
+      pushDisplay({active: false, username: currentUser, slideImages: getSlideshowImages(), slideInterval: interval, fontSize: fontSize, slideTransition: transition});
+      closeReceiptSettings();
+    }
+
+    /* ── Display1 push ── */
+    function _buildDisplayState(order, typing) {
+      if (!order) return {active: false, username: currentUser};
+      var items = (order.items && order.items.length) ? order.items : [{product: order.product, size: order.size, quantity: order.quantity, totalAmount: order.totalAmount}];
+      var mappedItems = items.map(function(it) {
+        var p = it.product || {};
+        return {name: p.name || p.shortName || '', size: it.size || '', qty: it.quantity || 1, total: it.totalAmount || 0, school: it.school || ''};
+      });
+      return {
+        active: true,
+        username: currentUser,
+        orderId: order.id || '',
+        name: (order.customer && order.customer.fullName) || '',
+        typing: !!typing,
+        status: order.status || '',
+        items: mappedItems,
+        total: order.totalAmount || 0,
+      };
+    }
+    function pushDisplay(stateOrOrder, typing) {
+      var state = (stateOrOrder && stateOrOrder.active !== undefined) ? stateOrOrder : _buildDisplayState(stateOrOrder, typing);
+      if (!state.username) state.username = currentUser;
+      fetch('/display1/update', {
+        method: 'POST',
+        headers: {'Authorization': 'Claim ' + currentToken, 'Content-Type': 'application/json'},
+        body: JSON.stringify(state),
+      }).catch(function() {});
+    }
+
+    function saveEditName() {
+      var inp = document.getElementById('editNameInp');
+      if (!inp) return;
+      var newName = inp.value.trim();
+      if (!newName) { inp.focus(); return; }
+      if (lastOrder && lastOrder.customer) lastOrder.customer.fullName = newName;
+      closeNameDisplay();
+      var row = document.getElementById('custNameDisplay');
+      if (row) {
+        row.innerHTML = '<span id="custNameText">' + esc(newName) + '</span>' + _nameEditRoundBadge() +
+          '<button class="edit-name-btn" onclick="startEditName()" title="แก้ไขชื่อ">' + IC_EDIT_SM + '</button>';
+      }
+      pushDisplay(lastOrder, false);
+      if (lastOrder && lastOrder.id) {
+        fetch('/claim-station/orders/' + encodeURIComponent(lastOrder.id) + '/name', {
+          method: 'PATCH',
+          headers: {'Authorization': 'Claim ' + currentToken, 'Content-Type': 'application/json'},
+          body: JSON.stringify({fullName: newName}),
+        }).catch(function() {});
+      }
+    }
+
+    function cancelEditName() {
+      var row = document.getElementById('custNameDisplay');
+      if (!row) return;
+      closeNameDisplay();
+      var current = (lastOrder && lastOrder.customer) ? (lastOrder.customer.fullName || '') : '';
+      row.innerHTML = '<span id="custNameText">' + esc(current) + '</span>' + _nameEditRoundBadge() +
+        '<button class="edit-name-btn" onclick="startEditName()" title="แก้ไขชื่อ">' + IC_EDIT_SM + '</button>';
+    }
   </script>
 
   <div id="idleOverlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.85);z-index:8000;align-items:center;justify-content:center;flex-direction:column;gap:16px;color:#fff">
@@ -1267,6 +1856,270 @@
       <div style="display:flex;gap:10px">
         <button id="csDlgConfirmBtn" style="flex:1;height:44px;border:none;border-radius:10px;font-size:15px;font-weight:700;color:#fff;cursor:pointer;transition:opacity .15s"></button>
         <button id="csDlgCancelBtn" style="flex:1;height:44px;border:1.5px solid var(--border);border-radius:10px;font-size:15px;font-weight:600;background:none;color:var(--muted);cursor:pointer">ยกเลิก</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="rcptSettingsBackdrop">
+    <div class="rcpt-modal" oninput="schedulePreviewUpdate()" onchange="schedulePreviewUpdate()">
+      <button class="rcpt-close-btn" onclick="closeReceiptSettings()">&#215;</button>
+      <div class="rcpt-modal-hdr">
+        <div class="rcpt-modal-title">ตั้งค่าใบเสร็จ</div>
+        <div class="rcpt-tabs">
+          <button class="rcpt-tab active" data-tab="general" onclick="switchReceiptTab('general')">ทั่วไป</button>
+          <button class="rcpt-tab" data-tab="positions" onclick="switchReceiptTab('positions')">ตำแหน่ง</button>
+          <button class="rcpt-tab" data-tab="fonts" onclick="switchReceiptTab('fonts')">ขนาดอักษร</button>
+          <button class="rcpt-tab" data-tab="slideshow" onclick="switchReceiptTab('slideshow')">สไลด์โชว์</button>
+        </div>
+      </div>
+
+      <div class="rcpt-body-row">
+        <!-- Settings form -->
+        <div class="rcpt-form-col">
+          <div class="rcpt-form-scroll">
+
+            <!-- General -->
+            <div class="rcpt-section active" data-section="general">
+              <div class="rcpt-group">
+                <div class="rcpt-group-title">การพิมพ์</div>
+                <div class="rcpt-toggle-row">
+                  <div>
+                    <div class="rcpt-toggle-label">พิมพ์อัตโนมัติ</div>
+                    <div class="rcpt-toggle-sub">พิมพ์ทันทีหลังยืนยันรับสินค้า</div>
+                  </div>
+                  <label class="rcpt-toggle">
+                    <input type="checkbox" id="rcptAutoPrint" />
+                    <span class="rcpt-toggle-slider"></span>
+                  </label>
+                </div>
+              </div>
+              <div class="rcpt-divider"></div>
+              <div class="rcpt-group">
+                <div class="rcpt-group-title">วันที่บนใบเสร็จ</div>
+                <div class="rcpt-radio-group">
+                  <label class="rcpt-radio-opt">
+                    <input type="radio" name="rcptDateMode" value="order" />
+                    <div><div class="rcpt-radio-title">วันที่สั่งซื้อ</div><div class="rcpt-radio-sub">ใช้วันที่ที่ลูกค้าสร้างออเดอร์</div></div>
+                  </label>
+                  <label class="rcpt-radio-opt">
+                    <input type="radio" name="rcptDateMode" value="print" />
+                    <div><div class="rcpt-radio-title">วันที่ออกใบเสร็จ</div><div class="rcpt-radio-sub">ใช้วันที่ปัจจุบัน ณ เวลาพิมพ์</div></div>
+                  </label>
+                </div>
+              </div>
+              <div class="rcpt-divider"></div>
+              <div class="rcpt-group">
+                <div class="rcpt-group-title">รูปแบบเลขที่ใบเสร็จ</div>
+                <div class="rcpt-radio-group">
+                  <label class="rcpt-radio-opt">
+                    <input type="radio" name="rcptRunMode" value="sequence" onclick="toggleRunModeSection()" />
+                    <div><div class="rcpt-radio-title">ตามเลขออเดอร์</div><div class="rcpt-radio-sub">ใช้ลำดับออเดอร์ในระบบ + offset</div></div>
+                  </label>
+                  <label class="rcpt-radio-opt">
+                    <input type="radio" name="rcptRunMode" value="local" onclick="toggleRunModeSection()" />
+                    <div><div class="rcpt-radio-title">รันแยก (Local)</div><div class="rcpt-radio-sub">รันเลขใบเสร็จแยกต่างหาก เริ่มที่ 0001</div></div>
+                  </label>
+                </div>
+                <div id="rcptSequenceSection" style="margin-top:8px">
+                  <div class="rcpt-row">
+                    <div class="rcpt-field">
+                      <label>Prefix</label>
+                      <input type="text" id="rcptPrefix" placeholder="เช่น 68- หรือ ว่าง" />
+                    </div>
+                    <div class="rcpt-field">
+                      <label>Offset (บวกเพิ่ม)</label>
+                      <input type="number" id="rcptOffset" step="1" placeholder="0" />
+                    </div>
+                  </div>
+                </div>
+                <div id="rcptLocalSection" style="display:none;margin-top:8px">
+                  <div class="rcpt-field" style="margin-bottom:6px">
+                    <label>Prefix</label>
+                    <input type="text" id="rcptPrefixLocal" placeholder="เช่น 68- หรือ ว่าง" oninput="document.getElementById('rcptPrefix').value=this.value;schedulePreviewUpdate()" />
+                  </div>
+                  <div class="rcpt-counter-box">
+                    <div>
+                      <div class="rcpt-counter-label">รันอยู่ที่</div>
+                      <div class="rcpt-counter-val" id="rcptCounterVal">0000</div>
+                    </div>
+                    <div style="display:flex;flex-direction:column;gap:4px">
+                      <button onclick="resetReceiptCounter()" style="height:28px;padding:0 10px;background:none;border:1.5px solid var(--danger);border-radius:6px;font-size:11px;font-weight:700;color:var(--danger);cursor:pointer">รีเซ็ต</button>
+                    </div>
+                  </div>
+                  <p style="font-size:11px;color:var(--muted);margin-top:6px">ใบเสร็จถัดไปจะใช้เลขที่ <b id="rcptNextNumPreview">0001</b></p>
+                </div>
+              </div>
+              <div class="rcpt-divider"></div>
+              <div class="rcpt-group">
+                <div class="rcpt-group-title">เลย์เอาต์</div>
+                <div class="rcpt-row cols1">
+                  <div class="rcpt-field">
+                    <label>ระยะ offset สำเนาขวา (X เริ่มต้นสำเนาที่ 2)</label>
+                    <input type="number" id="rcptRightCopy" step="0.01" />
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Positions -->
+            <div class="rcpt-section" data-section="positions">
+              <div class="rcpt-group">
+                <div class="rcpt-group-title">วันที่ และ เลขที่ใบเสร็จ</div>
+                <div class="rcpt-row">
+                  <div class="rcpt-field"><label>วันที่ X</label><input type="number" id="rcptDateX" step="0.5" /></div>
+                  <div class="rcpt-field"><label>วันที่ Y</label><input type="number" id="rcptDateY" step="0.5" /></div>
+                </div>
+                <div class="rcpt-row">
+                  <div class="rcpt-field"><label>เลขที่ X</label><input type="number" id="rcptNoX" step="0.5" /></div>
+                  <div class="rcpt-field"><label>เลขที่ Y</label><input type="number" id="rcptNoY" step="0.5" /></div>
+                </div>
+              </div>
+              <div class="rcpt-divider"></div>
+              <div class="rcpt-group">
+                <div class="rcpt-group-title">ข้อมูลลูกค้า</div>
+                <div class="rcpt-row">
+                  <div class="rcpt-field"><label>ชื่อ X</label><input type="number" id="rcptCustX" step="0.5" /></div>
+                  <div class="rcpt-field"><label>ชื่อ Y</label><input type="number" id="rcptCustY" step="0.5" /></div>
+                </div>
+                <div class="rcpt-row">
+                  <div class="rcpt-field"><label>รหัส นศ. Y</label><input type="number" id="rcptStuY" step="0.5" /></div>
+                  <div class="rcpt-field"><label>สำนักวิชา Y</label><input type="number" id="rcptSchY" step="0.5" /></div>
+                </div>
+                <p style="font-size:10px;color:var(--muted)">รหัส นศ./สำนักวิชาใช้ X เดียวกับชื่อ</p>
+              </div>
+              <div class="rcpt-divider"></div>
+              <div class="rcpt-group">
+                <div class="rcpt-group-title">แถวสินค้า</div>
+                <div class="rcpt-row">
+                  <div class="rcpt-field"><label>Y แถวแรก</label><input type="number" id="rcptRowY" step="0.5" /></div>
+                  <div class="rcpt-field"><label>ระยะห่างแถว</label><input type="number" id="rcptRowSp" step="0.5" /></div>
+                </div>
+                <div class="rcpt-group-title" style="margin-top:10px">คอลัมน์ X</div>
+                <div class="rcpt-row cols3">
+                  <div class="rcpt-field"><label>ลำดับ</label><input type="number" id="rcptColNo" step="0.5" /></div>
+                  <div class="rcpt-field"><label>ชื่อสินค้า</label><input type="number" id="rcptColName" step="0.5" /></div>
+                  <div class="rcpt-field"><label>จำนวน</label><input type="number" id="rcptColQty" step="0.5" /></div>
+                </div>
+                <div class="rcpt-row">
+                  <div class="rcpt-field"><label>ราคา/หน่วย</label><input type="number" id="rcptColPrice" step="0.5" /></div>
+                  <div class="rcpt-field"><label>จำนวนเงิน</label><input type="number" id="rcptColAmt" step="0.5" /></div>
+                </div>
+              </div>
+              <div class="rcpt-divider"></div>
+              <div class="rcpt-group">
+                <div class="rcpt-group-title">ยอดรวม</div>
+                <div class="rcpt-row">
+                  <div class="rcpt-field"><label>ยอดรวม X</label><input type="number" id="rcptSubX" step="0.5" /></div>
+                  <div class="rcpt-field"><label>ยอดรวม Y</label><input type="number" id="rcptSubY" step="0.5" /></div>
+                </div>
+                <div class="rcpt-row">
+                  <div class="rcpt-field"><label>ยอดชำระ X</label><input type="number" id="rcptTotX" step="0.5" /></div>
+                  <div class="rcpt-field"><label>ยอดชำระ Y</label><input type="number" id="rcptTotY" step="0.5" /></div>
+                </div>
+                <div class="rcpt-row">
+                  <div class="rcpt-field"><label>จำนวนเงิน(อักษร) X</label><input type="number" id="rcptWrdX" step="0.5" /></div>
+                  <div class="rcpt-field"><label>จำนวนเงิน(อักษร) Y</label><input type="number" id="rcptWrdY" step="0.5" /></div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Font sizes -->
+            <div class="rcpt-section" data-section="fonts">
+              <div class="rcpt-group">
+                <div class="rcpt-group-title">หัวใบเสร็จ</div>
+                <div class="rcpt-row">
+                  <div class="rcpt-field"><label>วันที่</label><input type="number" id="rcptDateSz" step="0.5" /></div>
+                  <div class="rcpt-field"><label>เลขที่ใบเสร็จ</label><input type="number" id="rcptNoSz" step="0.5" /></div>
+                </div>
+              </div>
+              <div class="rcpt-divider"></div>
+              <div class="rcpt-group">
+                <div class="rcpt-group-title">ข้อมูลลูกค้า</div>
+                <div class="rcpt-row cols3">
+                  <div class="rcpt-field"><label>ชื่อ</label><input type="number" id="rcptCustSz" step="0.5" /></div>
+                  <div class="rcpt-field"><label>รหัส นศ.</label><input type="number" id="rcptStuSz" step="0.5" /></div>
+                  <div class="rcpt-field"><label>สำนักวิชา</label><input type="number" id="rcptSchSz" step="0.5" /></div>
+                </div>
+              </div>
+              <div class="rcpt-divider"></div>
+              <div class="rcpt-group">
+                <div class="rcpt-group-title">รายการสินค้า</div>
+                <div class="rcpt-row cols1">
+                  <div class="rcpt-field"><label>ขนาดตัวอักษรแถว</label><input type="number" id="rcptRowSz" step="0.5" /></div>
+                </div>
+              </div>
+              <div class="rcpt-divider"></div>
+              <div class="rcpt-group">
+                <div class="rcpt-group-title">ยอดรวม</div>
+                <div class="rcpt-row cols3">
+                  <div class="rcpt-field"><label>ยอดรวม</label><input type="number" id="rcptSubSz" step="0.5" /></div>
+                  <div class="rcpt-field"><label>ยอดชำระ</label><input type="number" id="rcptTotSz" step="0.5" /></div>
+                  <div class="rcpt-field"><label>จำนวนเงิน(อักษร)</label><input type="number" id="rcptWrdSz" step="0.5" /></div>
+                </div>
+              </div>
+            </div>
+
+            <div class="rcpt-section" data-section="slideshow">
+              <div class="rcpt-group">
+                <div class="rcpt-group-title" style="margin-bottom:6px">อัปโหลดรูปสไลด์โชว์</div>
+                <div style="font-size:12px;color:var(--muted);margin-bottom:10px">รูปจะแสดงเต็มจอบนหน้าจอลูกค้าขณะ idle — รองรับ PNG, JPG, WEBP (สูงสุด 10MB)</div>
+                <label id="slideDropZone" style="display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;border:2px dashed var(--border);border-radius:12px;padding:20px;cursor:pointer;transition:border-color .15s;text-align:center"
+                  ondragover="event.preventDefault();this.style.borderColor='var(--primary)'"
+                  ondragleave="this.style.borderColor='var(--border)'"
+                  ondrop="event.preventDefault();this.style.borderColor='var(--border)';handleSlideUpload(event.dataTransfer.files)">
+                  <svg xmlns="http://www.w3.org/2000/svg" width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style="color:var(--muted)"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+                  <span style="font-size:13px;font-weight:600;color:var(--ink)">Drag &amp; drop หรือ คลิกเพื่อเลือกรูป</span>
+                  <span style="font-size:11px;color:var(--muted)">เลือกได้หลายรูปพร้อมกัน</span>
+                  <input type="file" accept="image/png,image/jpeg,image/webp" multiple style="display:none" onchange="handleSlideUpload(this.files)">
+                </label>
+                <div id="slideUploadStatus" style="font-size:12px;color:var(--primary);min-height:18px;margin-top:6px"></div>
+              </div>
+              <div class="rcpt-divider"></div>
+              <div class="rcpt-group">
+                <div class="rcpt-group-title" style="margin-bottom:8px">รูปที่อัปโหลดแล้ว — คลิกเพื่อเลือก/ยกเลิก</div>
+                <div id="slideImageGrid" style="display:flex;flex-wrap:wrap;gap:10px;min-height:40px"></div>
+              </div>
+              <div class="rcpt-divider"></div>
+              <div class="rcpt-group">
+                <div style="display:flex;flex-direction:column;gap:10px">
+                  <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap">
+                    <label style="font-size:13px;color:var(--ink);min-width:160px">เปลี่ยนรูปทุก (วินาที)</label>
+                    <input type="number" id="slideIntervalInp" min="1" max="60" step="1" value="4" style="width:70px;padding:6px 10px;border:1px solid var(--border);border-radius:8px;font-size:13px;background:var(--bg);color:var(--ink)" />
+                  </div>
+                  <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap">
+                    <label style="font-size:13px;color:var(--ink);min-width:160px">สไตล์การเปลี่ยนรูป</label>
+                    <select id="slideTransitionSel" style="padding:6px 10px;border:1px solid var(--border);border-radius:8px;font-size:13px;background:var(--bg);color:var(--ink);font-family:inherit">
+                      <option value="kenburns">Ken Burns (ซูม + แพน)</option>
+                      <option value="fade">Fade (ค่อยๆ เปลี่ยน)</option>
+                      <option value="slide">Slide (เลื่อนซ้าย)</option>
+                    </select>
+                  </div>
+                  <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap">
+                    <label style="font-size:13px;color:var(--ink);min-width:160px">ขนาดอักษร Display (%)</label>
+                    <input type="number" id="slideFontSize" min="50" max="200" step="5" value="100" style="width:80px;padding:6px 10px;border:1px solid var(--border);border-radius:8px;font-size:13px;background:var(--bg);color:var(--ink)" />
+                  </div>
+                </div>
+              </div>
+              <div style="margin-top:12px">
+                <button class="rcpt-btn-save" onclick="saveSlideSettings()">บันทึกสไลด์โชว์</button>
+              </div>
+            </div>
+
+          </div>
+          <div class="rcpt-modal-ftr">
+            <button class="rcpt-btn-reset" onclick="resetReceiptSettings()">คืนค่าเริ่มต้น</button>
+            <button class="rcpt-btn-save" onclick="saveReceiptSettings()">บันทึก</button>
+          </div>
+        </div>
+
+        <!-- Live preview -->
+        <div class="rcpt-preview-col">
+          <div class="rcpt-preview-label">ตัวอย่างใบเสร็จ (สำเนาซ้าย)</div>
+          <div class="rcpt-preview-info" id="rcptPreviewInfo">กำลังโหลด...</div>
+          <div id="rcptPreviewContainer">
+            <div style="font-size:12px;color:var(--muted);padding:20px;text-align:center">กำลังโหลด template...</div>
+          </div>
+        </div>
       </div>
     </div>
   </div>
@@ -1373,6 +2226,17 @@
 
       <!-- hidden compat element -->
       <span id="rcptReceiverName" style="display:none"></span>
+    </div>
+  </div>
+
+  <!-- Real-time name display panel -->
+  <div id="nameDisplayPanel">
+    <div class="ndp-hdr">
+      <span>กำลังพิมพ์ชื่อ</span>
+      <button class="ndp-close" onclick="closeNameDisplay()" title="ปิด">&times;</button>
+    </div>
+    <div class="ndp-body">
+      <div id="ndpText" class="ndp-text"><span class="ndp-cursor"></span></div>
     </div>
   </div>
 </body>

@@ -8,6 +8,7 @@ ENV ORDER_API_HOST=0.0.0.0
 ENV ORDER_API_PORT=10000
 ENV ORDER_API_DB_PATH=/var/data/su-order-api/orders.db
 ENV ORDER_API_SLIPS_DIR=/var/data/su-order-api/slips
+ENV ORDER_API_SLIDES_DIR=/var/data/su-order-api/slides
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
     tesseract-ocr tesseract-ocr-tha tesseract-ocr-eng \

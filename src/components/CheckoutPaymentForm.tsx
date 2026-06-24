@@ -183,22 +183,31 @@ export function CheckoutPaymentForm({
     };
 
     try {
-      // Step 1 — create order
-      setSubmitState("creating");
-      const orderRes = await fetch("/api/order", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
-        signal: AbortSignal.timeout(15000)
-      });
-      const orderResult = (await orderRes.json().catch(() => null)) as { message?: string; orderId?: string } | null;
-      if (!orderRes.ok || !orderResult?.orderId) {
-        setSubmitError(orderResult?.message ?? "Unable to save your order right now.");
-        setSubmitState("idle");
-        return;
-      }
+      const pendingKey = `pendingSlip_${payload.studentCode}`;
+      let orderId: string;
 
-      const orderId = orderResult.orderId;
+      const existingOrderId = typeof window !== "undefined" ? sessionStorage.getItem(pendingKey) : null;
+      if (existingOrderId) {
+        // Step 1 already succeeded on a previous attempt — skip to slip upload
+        orderId = existingOrderId;
+      } else {
+        // Step 1 — create order
+        setSubmitState("creating");
+        const orderRes = await fetch("/api/order", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload),
+          signal: AbortSignal.timeout(15000)
+        });
+        const orderResult = (await orderRes.json().catch(() => null)) as { message?: string; orderId?: string } | null;
+        if (!orderRes.ok || !orderResult?.orderId) {
+          setSubmitError(orderResult?.message ?? "Unable to save your order right now.");
+          setSubmitState("idle");
+          return;
+        }
+        orderId = orderResult.orderId;
+        try { sessionStorage.setItem(pendingKey, orderId); } catch {}
+      }
 
       // Step 2 — upload slip
       setSubmitState("uploading");
@@ -218,6 +227,8 @@ export function CheckoutPaymentForm({
         setSubmitState("idle");
         return;
       }
+
+      try { sessionStorage.removeItem(`pendingSlip_${payload.studentCode}`); } catch {}
 
       if (cartMode) {
         clearCart();
@@ -378,9 +389,9 @@ export function CheckoutPaymentForm({
             <p className="text-xs font-semibold tracking-[0.12em] text-zinc-500">PERSONAL DETAILS</p>
 
             <div className="mt-4 grid gap-4 md:grid-cols-2" translate="no">
-              <label className="space-y-1">
+              <label className="flex flex-col gap-1">
                 <span className="text-xs font-semibold tracking-[0.08em] text-zinc-600">STUDENT CODE</span>
-                <span className="block text-[11px] leading-relaxed text-zinc-400">
+                <span className="grow text-[11px] leading-relaxed text-zinc-400">
                   {lang === "th"
                     ? "บุคคลทั่วไปที่ไม่มีรหัสนักศึกษาสามารถใช้หมายเลขโทรศัพท์ในการสั่งซื้อได้"
                     : "For non-students, a phone number may be used for ordering."}
@@ -394,9 +405,9 @@ export function CheckoutPaymentForm({
                 />
               </label>
 
-              <label className="space-y-1">
+              <label className="flex flex-col gap-1">
                 <span className="text-xs font-semibold tracking-[0.08em] text-zinc-600">EMAIL</span>
-                <span className="block text-[11px] leading-relaxed text-zinc-400">
+                <span className="grow text-[11px] leading-relaxed text-zinc-400">
                   {lang === "th"
                     ? "อีเมลที่สามารถติดต่อได้ สามารถใช้อีเมลส่วนตัวได้"
                     : "Any reachable email — personal email is fine."}
@@ -412,9 +423,9 @@ export function CheckoutPaymentForm({
                 />
               </label>
 
-              <label className="space-y-1 md:col-span-2">
+              <label className="flex flex-col gap-1 md:col-span-2">
                 <span className="text-xs font-semibold tracking-[0.08em] text-zinc-600">FULL NAME</span>
-                <span className="block text-[11px] leading-relaxed text-zinc-400">
+                <span className="text-[11px] leading-relaxed text-zinc-400">
                   {lang === "th" ? "ชื่อ-สกุล" : "First and last name"}
                 </span>
                 <input
@@ -426,9 +437,9 @@ export function CheckoutPaymentForm({
                 />
               </label>
 
-              <label className="space-y-1">
+              <label className="flex flex-col gap-1">
                 <span className="text-xs font-semibold tracking-[0.08em] text-zinc-600">PHONE NUMBER</span>
-                <span className="block text-[11px] leading-relaxed text-zinc-400">
+                <span className="grow text-[11px] leading-relaxed text-zinc-400">
                   {lang === "th" ? "เบอร์มือถือส่วนตัว" : "Your personal mobile number"}
                 </span>
                 <input
@@ -440,9 +451,9 @@ export function CheckoutPaymentForm({
                 />
               </label>
 
-              <label className="space-y-1">
+              <label className="flex flex-col gap-1">
                 <span className="text-xs font-semibold tracking-[0.08em] text-zinc-600">PARENT PHONE</span>
-                <span className="block text-[11px] leading-relaxed text-zinc-400">
+                <span className="grow text-[11px] leading-relaxed text-zinc-400">
                   {lang === "th" ? "เบอร์มือถือติดต่อผู้ปกครอง" : "Parent or guardian's mobile number"}
                 </span>
                 <input
@@ -454,9 +465,9 @@ export function CheckoutPaymentForm({
                 />
               </label>
 
-              <label className="space-y-1 md:col-span-2">
+              <label className="flex flex-col gap-1 md:col-span-2">
                 <span className="text-xs font-semibold tracking-[0.08em] text-zinc-600">ENROLLED AT</span>
-                <span className="block text-[11px] leading-relaxed text-zinc-400">
+                <span className="text-[11px] leading-relaxed text-zinc-400">
                   {lang === "th" ? "เลือกสำนักวิชา" : "Select your school / faculty"}
                 </span>
                 <select
