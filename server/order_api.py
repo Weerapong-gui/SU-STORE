@@ -3031,6 +3031,51 @@ class OrderRequestHandler(BaseHTTPRequestHandler):
             self._send_json(HTTPStatus.OK, {"ok": True})
             return
 
+        if path == "/display2/pick":
+            if not self._has_claim_station_authorization():
+                self._deny_unauthorized()
+                return
+            try:
+                payload = self._read_json()
+            except json.JSONDecodeError:
+                self._send_json(HTTPStatus.BAD_REQUEST, {"message": "invalid json"})
+                return
+            pick_id = (payload or {}).get("pick_id") if isinstance(payload, dict) else None
+            if not isinstance(pick_id, int):
+                self._send_json(HTTPStatus.BAD_REQUEST, {"message": "pick_id required"})
+                return
+            picker = self._get_claim_station_user() or "staff"
+            ts = now_iso()
+            with open_db() as connection:
+                cursor = connection.execute(
+                    "UPDATE display2_picks SET picked_at=?, picked_by=? "
+                    "WHERE id=? AND picked_at IS NULL",
+                    (ts, picker, pick_id),
+                )
+                if cursor.rowcount == 0:
+                    row = connection.execute(
+                        "SELECT picked_by, order_code, station FROM display2_picks WHERE id=?",
+                        (pick_id,),
+                    ).fetchone()
+                    if row is None:
+                        self._send_json(HTTPStatus.NOT_FOUND, {"message": "pick not found"})
+                    else:
+                        self._send_json(HTTPStatus.CONFLICT, {
+                            "ok": False,
+                            "reason": "already_picked",
+                            "pickedBy": row["picked_by"] or "",
+                        })
+                    return
+                row = connection.execute(
+                    "SELECT order_code, station FROM display2_picks WHERE id=?",
+                    (pick_id,),
+                ).fetchone()
+                log_audit(connection, row["order_code"], "display2_picked",
+                          f"station={row['station']} by={picker}")
+                connection.commit()
+            self._send_json(HTTPStatus.OK, {"ok": True})
+            return
+
         if path == "/claim-station/login":
             try:
                 payload = self._read_json()
