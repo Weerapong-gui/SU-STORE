@@ -2293,6 +2293,50 @@ class OrderRequestHandler(BaseHTTPRequestHandler):
             self._send_json(HTTPStatus.OK, {"items": items})
             return
 
+        if path == "/display2/history":
+            if not self._has_claim_station_authorization():
+                self._deny_unauthorized()
+                return
+            from urllib.parse import parse_qs as _pqs
+            _qs = _pqs(urlparse(self.path).query)
+            station = (_qs.get("station") or [""])[0].strip().lower()
+            q = (_qs.get("q") or [""])[0].strip()
+            if station not in {"polo", "jacket", "headband"}:
+                self._send_json(HTTPStatus.BAD_REQUEST, {"message": "invalid station"})
+                return
+            like = f"%{q}%"
+            with open_db() as connection:
+                rows = connection.execute(
+                    """SELECT id, order_code, size, nickname, student_code,
+                              picked_at, picked_by, undone_at
+                         FROM display2_picks
+                        WHERE station = ?
+                          AND picked_at IS NOT NULL
+                          AND DATE(picked_at, '+7 hours') = DATE('now', '+7 hours')
+                          AND (? = ''
+                               OR order_code LIKE ?
+                               OR student_code LIKE ?
+                               OR nickname LIKE ?)
+                        ORDER BY picked_at DESC
+                        LIMIT 200""",
+                    (station, q, like, like, like),
+                ).fetchall()
+            items = [
+                {
+                    "id": r["id"],
+                    "orderCode": r["order_code"],
+                    "size": r["size"],
+                    "nickname": r["nickname"],
+                    "studentCode": r["student_code"],
+                    "pickedAt": r["picked_at"],
+                    "pickedBy": r["picked_by"],
+                    "undone": r["undone_at"] is not None,
+                }
+                for r in rows
+            ]
+            self._send_json(HTTPStatus.OK, {"items": items})
+            return
+
         if path == "/claim-station/stats":
             if not self._has_claim_station_authorization():
                 self._deny_unauthorized()
