@@ -2083,6 +2083,18 @@ class OrderRequestHandler(BaseHTTPRequestHandler):
             row = conn.execute("SELECT 1 FROM admin_users WHERE claim_token=?", (token,)).fetchone()
         return row is not None
 
+    def _get_claim_station_user(self):
+        incoming = self.headers.get("Authorization", "")
+        if not incoming.startswith("Claim "):
+            return None
+        token = incoming[6:]
+        with open_db() as conn:
+            row = conn.execute(
+                "SELECT username FROM admin_users WHERE claim_token=?",
+                (token,),
+            ).fetchone()
+        return row["username"] if row else None
+
     def _has_superadmin_authorization(self) -> bool:
         incoming = self.headers.get("Authorization", "")
         if not incoming.startswith("Superadmin "):
@@ -3225,8 +3237,15 @@ class OrderRequestHandler(BaseHTTPRequestHandler):
                             self._send_json(HTTPStatus.BAD_REQUEST, {"message": f"ออเดอร์มีสถานะ '{st}' ยังไม่พร้อมรับ"})
                     return
                 log_audit(connection, order_code, "claim_received", f"received by {received_by or 'staff'}")
+                updated_row = fetch_order_by_code(connection, order_code)
+                claim_user = self._get_claim_station_user() or received_by or "staff"
+                try:
+                    enqueue_display2(connection, updated_row, claim_user)
+                except Exception as exc:
+                    log_audit(connection, order_code,
+                              "display2_enqueue_failed", f"{type(exc).__name__}: {exc}")
                 connection.commit()
-                updated = fetch_order_by_code(connection, order_code)
+                updated = updated_row
             self._send_json(HTTPStatus.OK, {"order": serialize_order(updated)})
             return
 

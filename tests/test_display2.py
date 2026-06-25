@@ -160,5 +160,23 @@ class EnqueueDisplay2Test(unittest.TestCase):
         self.assertEqual(count, 1)
 
 
+class ReceivedHookEnqueuesTest(unittest.TestCase):
+    """Direct call confirming the helper produces the row the handler expects."""
+
+    def test_received_triggers_enqueue(self):
+        conn = _make_conn()
+        items = [{"slug": "single", "size": "M", "quantity": 1}]
+        row = _insert_order(conn, "FP280010", items)
+
+        count = order_api.enqueue_display2(conn, row, "park2")
+
+        self.assertEqual(count, 1)
+        queued = conn.execute(
+            "SELECT queued_by FROM display2_picks WHERE order_code=?",
+            ("FP280010",),
+        ).fetchone()
+        self.assertEqual(queued["queued_by"], "park2")
+
+
 if __name__ == "__main__":
     unittest.main()
