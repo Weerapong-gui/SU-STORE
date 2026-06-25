@@ -97,8 +97,8 @@ html, body {
   background: var(--surface); border: 1px solid var(--border);
   border-radius: var(--radius); padding: 18px; display: grid;
   grid-template-columns: auto 1fr auto; gap: 18px; align-items: center;
-  animation: slideIn .25s ease-out;
 }
+.q-card.is-new { animation: slideIn .25s ease-out; }
 .q-card.undone { border-color: var(--amber); }
 @keyframes slideIn { from { opacity: 0; transform: translateY(-8px) } to { opacity: 1; transform: none } }
 .q-size {
@@ -375,6 +375,7 @@ html, body {
   var pollTimer = null;
   var pollDelay = 2000;
   var lastIds = new Set();
+  var lastSig = '';
 
   function toast(msg, kind){
     var t = document.getElementById('toast');
@@ -396,12 +397,12 @@ html, body {
       .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
   }
 
-  function renderCard(it){
+  function renderCard(it, isNew){
     var undone = it.undone
       ? '<span class="undone-tag"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-2px"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"/></svg> undo</span>'
       : '';
     return '' +
-      '<div class="q-card' + (it.undone ? ' undone' : '') + '" data-id="' + it.id + '">' +
+      '<div class="q-card' + (it.undone ? ' undone' : '') + (isNew ? ' is-new' : '') + '" data-id="' + it.id + '">' +
         '<div class="q-size">' + escapeHtml(it.size || '-') + '</div>' +
         '<div class="q-info">' +
           '<div class="nick">' + escapeHtml(it.nickname || '-') + '</div>' +
@@ -427,17 +428,22 @@ html, body {
       list.innerHTML = '';
       empty.classList.add('active');
       lastIds = new Set();
+      lastSig = '';
       return;
     }
     empty.classList.remove('active');
     var newIds = new Set(items.map(function(i){ return i.id; }));
-    list.innerHTML = items.map(renderCard).join('');
+    var sig = items.map(function(i){ return i.id + ':' + (i.undone ? '1' : '0'); }).join('|');
+    if (sig === lastSig) { lastIds = newIds; return; }
+    var html = items.map(function(i){ return renderCard(i, !lastIds.has(i.id)); }).join('');
+    list.innerHTML = html;
     list.querySelectorAll('.btn-check').forEach(function(btn){
       btn.addEventListener('click', onCheck);
     });
     var anyNew = items.some(function(i){ return !lastIds.has(i.id); });
     if (anyNew && lastIds.size > 0) chime();
     lastIds = newIds;
+    lastSig = sig;
   }
 
   function poll(){
