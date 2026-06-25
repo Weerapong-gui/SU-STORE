@@ -169,6 +169,20 @@ STATION_BY_SLUG = {
 }
 
 
+TZ_BANGKOK = timezone(timedelta(hours=7))
+
+
+def now_iso() -> str:
+    return datetime.now(TZ_BANGKOK).replace(microsecond=0).isoformat()
+
+
+def log_audit(connection: sqlite3.Connection, order_code: str, event: str, detail: str = "") -> None:
+    connection.execute(
+        "INSERT INTO order_audit_log (order_code, event, detail, created_at) VALUES (?, ?, ?, ?)",
+        (order_code, event, detail, now_iso()),
+    )
+
+
 def enqueue_display2(connection, order_row, claim_user):
     """Insert one display2_picks row per item in the order, mapped by product_slug.
     Idempotent on (order_internal_id, item_index). Returns count of new rows."""
@@ -213,20 +227,6 @@ def enqueue_display2(connection, order_row, claim_user):
         log_audit(connection, order_row["order_code"],
                   "display2_enqueued", f"station={station} item={idx}")
     return inserted
-
-
-TZ_BANGKOK = timezone(timedelta(hours=7))
-
-
-def now_iso() -> str:
-    return datetime.now(TZ_BANGKOK).replace(microsecond=0).isoformat()
-
-
-def log_audit(connection: sqlite3.Connection, order_code: str, event: str, detail: str = "") -> None:
-    connection.execute(
-        "INSERT INTO order_audit_log (order_code, event, detail, created_at) VALUES (?, ?, ?, ?)",
-        (order_code, event, detail, now_iso()),
-    )
 
 
 def ensure_db() -> None:
