@@ -186,7 +186,17 @@ html, body {
     </div>
     <div class="q-meta">
       <span id="qUser">—</span>
-      <button class="btn-ghost" id="qHistoryBtn">ประวัติวันนี้</button>
+      <button class="btn-ghost" id="qHistoryBtn">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-3px;margin-right:4px"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+        ประวัติวันนี้
+      </button>
+      <button class="btn-ghost" id="qMuteBtn" aria-label="mute">
+        <svg id="qMuteIcon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/>
+          <line x1="23" y1="9" x2="17" y2="15"/>
+          <line x1="17" y1="9" x2="23" y2="15"/>
+        </svg>
+      </button>
       <button class="btn-ghost" id="qLogoutBtn">ออก</button>
     </div>
   </header>
@@ -225,6 +235,41 @@ html, body {
     sessionStorage.removeItem(STATION_KEY);
   }
 
+  var MUTE_KEY = 'display2Mute';
+  var audioCtx = null;
+
+  function isMuted(){ return localStorage.getItem(MUTE_KEY) === '1'; }
+  function setMuted(m){
+    if (m) localStorage.setItem(MUTE_KEY, '1'); else localStorage.removeItem(MUTE_KEY);
+    updateMuteIcon();
+  }
+  function updateMuteIcon(){
+    var icon = $('qMuteIcon');
+    if (!icon) return;
+    icon.innerHTML = isMuted()
+      ? '<polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><line x1="23" y1="9" x2="17" y2="15"/><line x1="17" y1="9" x2="23" y2="15"/>'
+      : '<polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14M15.54 8.46a5 5 0 0 1 0 7.07"/>';
+  }
+  function chime(){
+    if (isMuted() || !audioCtx) return;
+    var t = audioCtx.currentTime;
+    var osc = audioCtx.createOscillator();
+    var gain = audioCtx.createGain();
+    osc.connect(gain).connect(audioCtx.destination);
+    osc.type = 'sine';
+    osc.frequency.setValueAtTime(880, t);
+    osc.frequency.exponentialRampToValueAtTime(440, t + 0.18);
+    gain.gain.setValueAtTime(0.0001, t);
+    gain.gain.exponentialRampToValueAtTime(0.25, t + 0.02);
+    gain.gain.exponentialRampToValueAtTime(0.0001, t + 0.25);
+    osc.start(t); osc.stop(t + 0.3);
+  }
+  function unlockAudio(){
+    if (!audioCtx) {
+      try { audioCtx = new (window.AudioContext || window.webkitAudioContext)(); } catch(e){}
+    }
+  }
+
   function authHeaders(){ return { 'Authorization': 'Claim ' + getToken() }; }
   window.__display2 = { authHeaders: authHeaders, getStation: getStation, getUser: getUser };
 
@@ -258,6 +303,7 @@ html, body {
   document.querySelectorAll('.picker-card').forEach(function(card){
     card.addEventListener('click', function(){
       sessionStorage.setItem(STATION_KEY, card.dataset.station);
+      unlockAudio();
       enterQueue();
     });
   });
@@ -290,7 +336,9 @@ html, body {
   }
 
   function renderCard(it){
-    var undone = it.undone ? '<span class="undone-tag">↺ undo</span>' : '';
+    var undone = it.undone
+      ? '<span class="undone-tag"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-2px"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"/></svg> undo</span>'
+      : '';
     return '' +
       '<div class="q-card' + (it.undone ? ' undone' : '') + '" data-id="' + it.id + '">' +
         '<div class="q-size">' + escapeHtml(it.size || '-') + '</div>' +
@@ -303,7 +351,10 @@ html, body {
             undone +
           '</div>' +
         '</div>' +
-        '<button class="btn-check" data-id="' + it.id + '">✓ เช็ค</button>' +
+        '<button class="btn-check" data-id="' + it.id + '">' +
+          '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-4px;margin-right:6px"><polyline points="20 6 9 17 4 12"/></svg>' +
+          'เช็ค' +
+        '</button>' +
       '</div>';
   }
 
@@ -323,6 +374,8 @@ html, body {
     list.querySelectorAll('.btn-check').forEach(function(btn){
       btn.addEventListener('click', onCheck);
     });
+    var anyNew = items.some(function(i){ return !lastIds.has(i.id); });
+    if (anyNew && lastIds.size > 0) chime();
     lastIds = newIds;
   }
 
@@ -352,11 +405,37 @@ html, body {
 
   function stopPoll(){ if (pollTimer) { clearTimeout(pollTimer); pollTimer = null; } }
 
-  function onCheck(e){ /* Implemented in Task 9. */ }
+  function onCheck(e){
+    var btn = e.currentTarget;
+    var id = parseInt(btn.dataset.id, 10);
+    if (!id || btn.disabled) return;
+    btn.disabled = true;
+    fetch('/display2/pick', {
+      method: 'POST',
+      headers: Object.assign({ 'Content-Type': 'application/json' }, authHeaders()),
+      body: JSON.stringify({ pick_id: id }),
+    }).then(function(r){
+      if (r.status === 401) { clearAll(); show('login'); return null; }
+      if (r.status === 409) return r.json().then(function(j){ throw { conflict: true, j: j }; });
+      if (!r.ok) throw new Error('http_' + r.status);
+      return r.json();
+    }).then(function(j){
+      if (j && j.ok) { poll(); }
+    }).catch(function(err){
+      if (err && err.conflict) {
+        toast('หยิบไปแล้วโดย ' + (err.j.pickedBy || '?'), 'warn');
+        poll();
+      } else {
+        toast('เกิดข้อผิดพลาด', 'err');
+        btn.disabled = false;
+      }
+    });
+  }
 
   $('qLogoutBtn').addEventListener('click', function(){
     stopPoll(); clearAll(); show('login');
   });
+  $('qMuteBtn').addEventListener('click', function(){ setMuted(!isMuted()); });
   $('qHistoryBtn').addEventListener('click', function(){
     /* Implemented in Task 10. */
   });
@@ -367,6 +446,7 @@ html, body {
     $('qUser').textContent = getUser();
     stopPoll();
     poll();
+    updateMuteIcon();
   }
 
   if (getToken()) goAfterLogin(); else show('login');
