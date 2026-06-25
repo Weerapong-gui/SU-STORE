@@ -165,8 +165,11 @@ _display_state: dict[str, dict] = {}
 
 STATION_BY_SLUG = {
     "single": "polo",
+    "single-shirt": "polo",
     "jacket": "jacket",
+    "fresh-jacket": "jacket",
     "headband": "headband",
+    "fresh-headband": "headband",
 }
 
 
@@ -201,7 +204,14 @@ def enqueue_display2(connection, order_row, claim_user):
     inserted = 0
     now = now_iso()
     for idx, item in enumerate(items):
-        slug = (item.get("slug") or "").lower()
+        product = item.get("product") or {}
+        slug = (item.get("slug") or product.get("slug") or "").lower()
+        if not slug:
+            cat = (product.get("category") or item.get("category") or "").lower()
+            if cat == "shirt":
+                slug = "single"
+            elif cat in ("single", "jacket", "headband"):
+                slug = cat
         station = STATION_BY_SLUG.get(slug)
         if not station:
             log_audit(connection, order_row["order_code"],
@@ -220,7 +230,8 @@ def enqueue_display2(connection, order_row, claim_user):
                 student_code, nickname, full_name, queued_at, queued_by)
                VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)""",
             (order_row["internal_id"], order_row["order_code"], idx, station,
-             slug, item.get("name", ""), item.get("size", ""), int(item.get("quantity", 1) or 1),
+             slug, item.get("name") or product.get("name", ""),
+             item.get("size", ""), int(item.get("quantity", 1) or 1),
              order_row["student_code"], order_row["nickname"], order_row["full_name"],
              now, claim_user),
         )
