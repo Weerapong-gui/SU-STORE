@@ -4,8 +4,182 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>SU STORE — Display2</title>
+<style>
+@font-face {
+  font-family: 'SukhumvitSet';
+  src: url('/fonts/SukhumvitSet.ttc') format('truetype');
+  font-weight: 100 900;
+  font-display: swap;
+}
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+:root {
+  --bg: #0b1220;
+  --surface: #131b2e;
+  --surface-2: #1a2540;
+  --border: rgba(255,255,255,.08);
+  --accent: #4f6ef7;
+  --accent-bg: rgba(79,110,247,.12);
+  --text: #f1f5f9;
+  --muted: #94a3b8;
+  --green: #16a34a;
+  --red: #dc2626;
+  --amber: #d97706;
+  --radius: 16px;
+}
+html, body {
+  height: 100%; width: 100%;
+  background: var(--bg); color: var(--text);
+  font-family: 'SukhumvitSet','Sarabun','Noto Sans Thai',system-ui,sans-serif;
+  font-weight: 500;
+}
+.screen { position: fixed; inset: 0; display: none; flex-direction: column; }
+.screen.active { display: flex; }
+.center { align-items: center; justify-content: center; gap: 24px; }
+
+#loginCard {
+  background: var(--surface); padding: 28px; border-radius: var(--radius);
+  width: min(380px, 90vw); display: flex; flex-direction: column; gap: 14px;
+  border: 1px solid var(--border);
+}
+#loginCard h2 { font-size: 22px; font-weight: 800; }
+#loginCard input {
+  padding: 12px 14px; border-radius: 10px; border: 1px solid var(--border);
+  background: var(--surface-2); color: var(--text); font-size: 16px;
+  font-family: inherit;
+}
+#loginCard button {
+  padding: 14px; border-radius: 10px; border: none; background: var(--accent);
+  color: #fff; font-weight: 700; font-size: 16px; cursor: pointer;
+}
+#loginCard button:disabled { opacity: .5; cursor: not-allowed; }
+.err { color: var(--red); font-size: 14px; min-height: 18px; }
+
+#picker .picker-title { font-size: clamp(24px, 3vw, 36px); font-weight: 800; }
+.picker-grid { display: flex; gap: 22px; flex-wrap: wrap; justify-content: center; }
+.picker-card {
+  width: 220px; height: 220px; border-radius: 20px;
+  background: var(--surface); border: 2px solid var(--border);
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  gap: 16px; cursor: pointer; transition: transform .12s, border-color .12s;
+}
+.picker-card:hover { transform: translateY(-3px); border-color: var(--accent); }
+.picker-card img { width: 110px; height: 110px; object-fit: contain; }
+.picker-card .label { font-size: 20px; font-weight: 800; }
+#picker .footer-row { display: flex; gap: 14px; }
+.btn-ghost {
+  padding: 10px 18px; border-radius: 10px; border: 1px solid var(--border);
+  background: transparent; color: var(--muted); cursor: pointer; font-family: inherit;
+}
+.btn-ghost:hover { color: var(--text); border-color: var(--accent); }
+</style>
 </head>
 <body>
-<h1>display2 placeholder</h1>
+
+<section id="login" class="screen center">
+  <div id="loginCard">
+    <h2>SU STORE — Display2</h2>
+    <input id="loginUser" type="text" placeholder="username" autocomplete="username">
+    <input id="loginPass" type="password" placeholder="password" autocomplete="current-password">
+    <div class="err" id="loginErr"></div>
+    <button id="loginBtn">เข้าสู่ระบบ</button>
+  </div>
+</section>
+
+<section id="picker" class="screen center">
+  <div class="picker-title">เลือก Station</div>
+  <div class="picker-grid">
+    <div class="picker-card" data-station="polo">
+      <img src="/assets/polo.png" alt="">
+      <div class="label">POLO</div>
+    </div>
+    <div class="picker-card" data-station="jacket">
+      <img src="/assets/jacket.png" alt="">
+      <div class="label">JACKET</div>
+    </div>
+    <div class="picker-card" data-station="headband">
+      <img src="/assets/headband.png" alt="">
+      <div class="label">HEADBAND</div>
+    </div>
+  </div>
+  <div class="footer-row">
+    <button class="btn-ghost" id="logoutBtn">ออกจากระบบ</button>
+  </div>
+</section>
+
+<section id="queue" class="screen"></section>
+
+<script>
+(function(){
+  var TOKEN_KEY = 'display2Token';
+  var USER_KEY  = 'display2User';
+  var STATION_KEY = 'display2Station';
+
+  function $(id){ return document.getElementById(id); }
+  function show(id){
+    ['login','picker','queue'].forEach(function(s){
+      $(s).classList.toggle('active', s === id);
+    });
+  }
+
+  function getToken(){ return sessionStorage.getItem(TOKEN_KEY) || ''; }
+  function getUser(){ return sessionStorage.getItem(USER_KEY) || ''; }
+  function getStation(){ return sessionStorage.getItem(STATION_KEY) || ''; }
+  function setAuth(tok, user){
+    sessionStorage.setItem(TOKEN_KEY, tok);
+    sessionStorage.setItem(USER_KEY, user);
+  }
+  function clearAll(){
+    sessionStorage.removeItem(TOKEN_KEY);
+    sessionStorage.removeItem(USER_KEY);
+    sessionStorage.removeItem(STATION_KEY);
+  }
+
+  function authHeaders(){ return { 'Authorization': 'Claim ' + getToken() }; }
+  window.__display2 = { authHeaders: authHeaders, getStation: getStation, getUser: getUser };
+
+  $('loginBtn').addEventListener('click', doLogin);
+  $('loginPass').addEventListener('keydown', function(e){ if (e.key === 'Enter') doLogin(); });
+
+  function doLogin(){
+    var u = $('loginUser').value.trim();
+    var p = $('loginPass').value;
+    var btn = $('loginBtn');
+    var err = $('loginErr');
+    err.textContent = '';
+    if (!u || !p) { err.textContent = 'กรอก username และ password'; return; }
+    btn.disabled = true;
+    fetch('/claim-station/login', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ username: u, password: p }),
+    }).then(function(r){
+      if (!r.ok) throw new Error('login_failed');
+      return r.json();
+    }).then(function(j){
+      setAuth(j.token, j.username);
+      $('loginPass').value = '';
+      goAfterLogin();
+    }).catch(function(){
+      err.textContent = 'ชื่อผู้ใช้หรือรหัสผ่านไม่ถูกต้อง';
+    }).finally(function(){ btn.disabled = false; });
+  }
+
+  document.querySelectorAll('.picker-card').forEach(function(card){
+    card.addEventListener('click', function(){
+      sessionStorage.setItem(STATION_KEY, card.dataset.station);
+      enterQueue();
+    });
+  });
+  $('logoutBtn').addEventListener('click', function(){ clearAll(); show('login'); });
+
+  function goAfterLogin(){ if (getStation()) enterQueue(); else show('picker'); }
+  function enterQueue(){
+    show('queue');
+    $('queue').textContent = 'station = ' + getStation();
+  }
+
+  if (getToken()) goAfterLogin(); else show('login');
+})();
+</script>
 </body>
 </html>
