@@ -2273,7 +2273,7 @@ class OrderRequestHandler(BaseHTTPRequestHandler):
             from urllib.parse import parse_qs as _pqs
             _qs = _pqs(urlparse(self.path).query)
             station = (_qs.get("station") or [""])[0].strip().lower()
-            if station not in {"polo", "jacket", "headband"}:
+            if station not in {"polo", "jacket", "headband", "khantok"}:
                 self._send_json(HTTPStatus.BAD_REQUEST, {"message": "invalid station"})
                 return
             with open_db() as connection:
@@ -2320,7 +2320,7 @@ class OrderRequestHandler(BaseHTTPRequestHandler):
             _qs = _pqs(urlparse(self.path).query)
             station = (_qs.get("station") or [""])[0].strip().lower()
             q = (_qs.get("q") or [""])[0].strip()
-            if station not in {"polo", "jacket", "headband"}:
+            if station not in {"polo", "jacket", "headband", "khantok"}:
                 self._send_json(HTTPStatus.BAD_REQUEST, {"message": "invalid station"})
                 return
             like = f"%{q}%"
