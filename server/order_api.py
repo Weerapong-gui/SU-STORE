@@ -162,6 +162,57 @@ _slides_dir.mkdir(parents=True, exist_ok=True)
 # In-memory display state per claim-station user
 _display_state: dict[str, dict] = {}
 
+STATION_BY_SLUG = {
+    "single": "polo",
+    "jacket": "jacket",
+    "headband": "headband",
+}
+
+
+def enqueue_display2(connection, order_row, claim_user):
+    """Insert one display2_picks row per item in the order, mapped by product_slug.
+    Idempotent on (order_internal_id, item_index). Returns count of new rows."""
+    try:
+        items = json.loads(order_row["items_json"] or "[]")
+    except (TypeError, json.JSONDecodeError):
+        items = []
+    if not items:
+        items = [{
+            "slug": order_row["product_slug"],
+            "name": order_row["product_name"],
+            "size": order_row["size"],
+            "quantity": order_row["quantity"],
+        }]
+    inserted = 0
+    now = now_iso()
+    for idx, item in enumerate(items):
+        slug = (item.get("slug") or "").lower()
+        station = STATION_BY_SLUG.get(slug)
+        if not station:
+            log_audit(connection, order_row["order_code"],
+                      "display2_skipped", f"slug={slug} item={idx}")
+            continue
+        exists = connection.execute(
+            "SELECT 1 FROM display2_picks WHERE order_internal_id=? AND item_index=?",
+            (order_row["internal_id"], idx),
+        ).fetchone()
+        if exists:
+            continue
+        connection.execute(
+            """INSERT INTO display2_picks
+               (order_internal_id, order_code, item_index, station,
+                product_slug, product_name, size, quantity,
+                student_code, nickname, full_name, queued_at, queued_by)
+               VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)""",
+            (order_row["internal_id"], order_row["order_code"], idx, station,
+             slug, item.get("name", ""), item.get("size", ""), int(item.get("quantity", 1) or 1),
+             order_row["student_code"], order_row["nickname"], order_row["full_name"],
+             now, claim_user),
+        )
+        inserted += 1
+        log_audit(connection, order_row["order_code"],
+                  "display2_enqueued", f"station={station} item={idx}")
+    return inserted
 
 
 TZ_BANGKOK = timezone(timedelta(hours=7))
@@ -356,6 +407,38 @@ def ensure_db() -> None:
       )
       connection.execute("CREATE INDEX IF NOT EXISTS idx_audit_order_code ON order_audit_log(order_code)")
       connection.execute("CREATE INDEX IF NOT EXISTS idx_audit_created_at ON order_audit_log(created_at)")
+      connection.execute(
+          """
+          CREATE TABLE IF NOT EXISTS display2_picks (
+              id INTEGER PRIMARY KEY AUTOINCREMENT,
+              order_internal_id INTEGER NOT NULL,
+              order_code TEXT NOT NULL,
+              item_index INTEGER NOT NULL,
+              station TEXT NOT NULL,
+              product_slug TEXT NOT NULL,
+              product_name TEXT NOT NULL,
+              size TEXT NOT NULL,
+              quantity INTEGER NOT NULL,
+              student_code TEXT NOT NULL,
+              nickname TEXT NOT NULL,
+              full_name TEXT NOT NULL,
+              queued_at TEXT NOT NULL,
+              queued_by TEXT NOT NULL,
+              picked_at TEXT,
+              picked_by TEXT,
+              undone_at TEXT,
+              FOREIGN KEY (order_internal_id) REFERENCES orders(internal_id)
+          )
+          """
+      )
+      connection.execute(
+          "CREATE INDEX IF NOT EXISTS idx_display2_picks_station_active "
+          "ON display2_picks(station, picked_at)"
+      )
+      connection.execute(
+          "CREATE INDEX IF NOT EXISTS idx_display2_picks_order "
+          "ON display2_picks(order_internal_id)"
+      )
       connection.execute(
           """
           CREATE TABLE IF NOT EXISTS slip_ocr_results (
