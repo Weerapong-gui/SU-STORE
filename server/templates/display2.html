@@ -83,7 +83,9 @@ html, body {
   background: var(--accent-bg); color: var(--accent);
   padding: 4px 14px; border-radius: 999px; font-weight: 800; font-size: 18px;
 }
+#qCounter { font-size: 26px; padding: 6px 18px; box-shadow: 0 0 0 2px rgba(79,110,247,.25); }
 .q-counter-label { color: var(--muted); font-size: 13px; font-weight: 600; }
+.q-title-row .q-counter-label { font-size: 15px; font-weight: 700; color: var(--text); opacity: .8; }
 .q-meta { display: flex; align-items: center; gap: 12px; color: var(--muted); }
 .q-banner {
   display: none; padding: 10px 24px; background: rgba(220,38,38,.15);
@@ -112,6 +114,11 @@ html, body {
 .q-info .meta { font-size: 14px; color: var(--muted); display: flex; gap: 14px; flex-wrap: wrap; }
 .q-info .order { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
 .q-info .undone-tag { color: var(--amber); font-weight: 700; }
+.q-info .label { color: var(--muted); font-size: 11px; text-transform: uppercase; letter-spacing: .04em; opacity: .7; margin-right: -8px; }
+.q-info .qty-one { color: var(--muted); font-size: 14px; font-weight: 500; margin-left: 8px; opacity: .55; }
+.q-info .qty-warn { color: var(--amber); font-size: clamp(20px, 2vw, 26px); font-weight: 900; margin-left: 10px;
+  background: rgba(217,119,6,.15); padding: 2px 12px; border-radius: 999px; }
+.q-card.multi { border-color: var(--amber); }
 .btn-check {
   padding: 18px 26px; border-radius: 14px; border: none; background: var(--green);
   color: #fff; font-weight: 800; font-size: 18px; cursor: pointer; font-family: inherit;
@@ -144,6 +151,20 @@ html, body {
   opacity: 0; transition: opacity .2s; pointer-events: none;
 }
 #toast.show { opacity: 1; }
+#undoSnack {
+  position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%);
+  background: var(--surface); color: var(--text); padding: 14px 22px; border-radius: 12px;
+  font-weight: 700; box-shadow: 0 10px 30px rgba(0,0,0,.45); z-index: 9999;
+  display: none; align-items: center; gap: 16px; border: 1px solid var(--border);
+}
+#undoSnack.show { display: flex; }
+#undoSnack .snack-msg { color: var(--muted); font-weight: 600; }
+#undoSnack button {
+  background: transparent; border: 1px solid var(--amber); color: var(--amber);
+  padding: 8px 16px; border-radius: 10px; font-family: inherit; font-weight: 800;
+  cursor: pointer; font-size: 14px;
+}
+#undoSnack button:hover { background: rgba(217,119,6,.12); }
 #qTodayCount { background: rgba(22,163,74,.15); color: var(--green); }
 .modal { display: none; position: fixed; inset: 0; background: rgba(0,0,0,.55); z-index: 1000; align-items: center; justify-content: center; padding: 24px; }
 .modal.active { display: flex; }
@@ -272,6 +293,10 @@ html, body {
   </div>
 </div>
 <div id="toast"></div>
+<div id="undoSnack">
+  <span class="snack-msg" id="undoSnackMsg">เช็คแล้ว</span>
+  <button id="undoSnackBtn">↺ คืน</button>
+</div>
 
 <script>
 (function(){
@@ -404,15 +429,18 @@ html, body {
     var undone = it.undone
       ? '<span class="undone-tag"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-2px"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"/></svg> undo</span>'
       : '';
+    var qty = it.quantity || 1;
+    var qtyHtml = qty > 1
+      ? '<span class="qty-warn">×' + qty + '</span>'
+      : '<span class="qty-one">×1</span>';
     return '' +
-      '<div class="q-card' + (it.undone ? ' undone' : '') + (isNew ? ' is-new' : '') + '" data-id="' + it.id + '">' +
+      '<div class="q-card' + (it.undone ? ' undone' : '') + (isNew ? ' is-new' : '') + (qty > 1 ? ' multi' : '') + '" data-id="' + it.id + '">' +
         '<div class="q-size">' + escapeHtml(it.size || '-') + '</div>' +
         '<div class="q-info">' +
-          '<div class="nick">' + escapeHtml(it.nickname || '-') + '</div>' +
+          '<div class="nick">' + escapeHtml(it.nickname || '-') + ' ' + qtyHtml + '</div>' +
           '<div class="meta">' +
-            '<span class="order">' + escapeHtml(it.orderCode) + '</span>' +
-            '<span>รหัส: ' + escapeHtml(it.studentCode || '-') + '</span>' +
-            '<span>x' + (it.quantity || 1) + '</span>' +
+            '<span class="label">ออเดอร์</span><span class="order">' + escapeHtml(it.orderCode) + '</span>' +
+            '<span class="label">รหัส นศ</span><span>' + escapeHtml(it.studentCode || '-') + '</span>' +
             undone +
           '</div>' +
         '</div>' +
@@ -491,7 +519,7 @@ html, body {
       if (!r.ok) throw new Error('http_' + r.status);
       return r.json();
     }).then(function(j){
-      if (j && j.ok) { stopPoll(); poll(); }
+      if (j && j.ok) { showUndoSnack(id); stopPoll(); poll(); }
     }).catch(function(err){
       if (err && err.conflict) {
         toast('หยิบไปแล้วโดย ' + (err.j.pickedBy || '?'), 'warn');
@@ -510,6 +538,37 @@ html, body {
   $('qFsBtn').addEventListener('click', function(){
     if (document.fullscreenElement) document.exitFullscreen();
     else document.documentElement.requestFullscreen().catch(function(){});
+  });
+
+  var undoSnackTimer = null;
+  var undoSnackId = null;
+  function showUndoSnack(id){
+    undoSnackId = id;
+    var s = $('undoSnack');
+    s.classList.add('show');
+    clearTimeout(undoSnackTimer);
+    undoSnackTimer = setTimeout(hideUndoSnack, 5000);
+  }
+  function hideUndoSnack(){
+    $('undoSnack').classList.remove('show');
+    undoSnackId = null;
+    clearTimeout(undoSnackTimer);
+  }
+  $('undoSnackBtn').addEventListener('click', function(){
+    var id = undoSnackId;
+    hideUndoSnack();
+    if (!id) return;
+    fetch('/display2/undo', {
+      method: 'POST',
+      headers: Object.assign({ 'Content-Type': 'application/json' }, authHeaders()),
+      body: JSON.stringify({ pick_id: id }),
+    }).then(function(r){
+      if (r.status === 422) { toast('เกินเวลา undo (1 ชม)', 'warn'); return null; }
+      if (!r.ok) throw new Error('http_' + r.status);
+      return r.json();
+    }).then(function(j){
+      if (j && j.ok) { toast('คืนเข้าคิวแล้ว', 'warn'); stopPoll(); poll(); }
+    }).catch(function(){ toast('เกิดข้อผิดพลาด', 'err'); });
   });
 
   var histDebounce = null;
