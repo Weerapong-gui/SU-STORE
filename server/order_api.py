@@ -3160,7 +3160,7 @@ class OrderRequestHandler(BaseHTTPRequestHandler):
                           SET undone_at=?, picked_at=NULL, picked_by=NULL
                         WHERE id=?
                           AND picked_at IS NOT NULL
-                          AND picked_at >= datetime('now', '-1 hour')""",
+                          AND julianday(picked_at) >= julianday('now', '-1 hour')""",
                     (ts, pick_id),
                 )
                 if cursor.rowcount == 0:

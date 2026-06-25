@@ -474,11 +474,11 @@ html, body {
       if (!r.ok) throw new Error('http_' + r.status);
       return r.json();
     }).then(function(j){
-      if (j && j.ok) { poll(); }
+      if (j && j.ok) { stopPoll(); poll(); }
     }).catch(function(err){
       if (err && err.conflict) {
         toast('หยิบไปแล้วโดย ' + (err.j.pickedBy || '?'), 'warn');
-        poll();
+        stopPoll(); poll();
       } else {
         toast('เกิดข้อผิดพลาด', 'err');
         btn.disabled = false;
@@ -575,7 +575,7 @@ html, body {
       if (j && j.ok) {
         toast('คืนเข้าคิวแล้ว', 'warn');
         loadHistory();
-        poll();
+        stopPoll(); poll();
       }
     }).catch(function(){ toast('เกิดข้อผิดพลาด', 'err'); });
   }
