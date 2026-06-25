@@ -83,6 +83,7 @@ html, body {
   background: var(--accent-bg); color: var(--accent);
   padding: 4px 14px; border-radius: 999px; font-weight: 800; font-size: 18px;
 }
+.q-counter-label { color: var(--muted); font-size: 13px; font-weight: 600; }
 .q-meta { display: flex; align-items: center; gap: 12px; color: var(--muted); }
 .q-banner {
   display: none; padding: 10px 24px; background: rgba(220,38,38,.15);
@@ -221,10 +222,12 @@ html, body {
   <header class="q-header">
     <div class="q-title-row">
       <span class="q-title" id="qStationLabel">—</span>
+      <span class="q-counter-label">รอหยิบ</span>
       <span class="q-counter" id="qCounter">0</span>
     </div>
     <div class="q-meta">
       <span id="qUser">—</span>
+      <span class="q-counter-label">หยิบแล้ววันนี้</span>
       <span class="q-counter" id="qTodayCount" title="วันนี้หยิบไปแล้ว">0</span>
       <button class="btn-ghost" id="qFsBtn" aria-label="fullscreen">
         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
