@@ -154,6 +154,7 @@ ADMIN_HTML = (_TEMPLATES_DIR / "admin.html").read_text(encoding="utf-8")
 ORDER_VIEW_HTML = (_TEMPLATES_DIR / "order_view.html").read_text(encoding="utf-8")
 CLAIM_STATION_HTML = (_TEMPLATES_DIR / "claim_station.html").read_text(encoding="utf-8")
 DISPLAY_HTML = (_TEMPLATES_DIR / "display.html").read_text(encoding="utf-8")
+DISPLAY2_HTML = (_TEMPLATES_DIR / "display2.html").read_text(encoding="utf-8")
 RECEIPT_SVG = (_TEMPLATES_DIR / "receipt_template.svg").read_bytes()
 _FONT_PATH = _TEMPLATES_DIR / "fonts" / "SukhumvitSet.ttc"
 _slides_dir = Path(os.environ.get("ORDER_API_SLIDES_DIR", "/var/data/su-order-api/slides"))
@@ -2194,6 +2195,10 @@ class OrderRequestHandler(BaseHTTPRequestHandler):
             self._send_html(HTTPStatus.OK, DISPLAY_HTML)
             return
 
+        if path == "/display2":
+            self._send_html(HTTPStatus.OK, DISPLAY2_HTML)
+            return
+
         _asset_match = re.fullmatch(r"/assets/(slides/[a-zA-Z0-9_.\-]+|[a-zA-Z0-9_.\-]+)", path)
         if _asset_match:
             _rel = _asset_match.group(1)
@@ -2248,6 +2253,44 @@ class OrderRequestHandler(BaseHTTPRequestHandler):
             _ok_exts = {".png", ".jpg", ".jpeg", ".webp"}
             _slide_files = sorted([f.name for f in _slides_dir.iterdir() if f.is_file() and f.suffix.lower() in _ok_exts])
             self._send_json(HTTPStatus.OK, {"slides": [{"name": f, "url": f"/assets/slides/{f}"} for f in _slide_files]})
+            return
+
+        if path == "/display2/queue":
+            if not self._has_claim_station_authorization():
+                self._deny_unauthorized()
+                return
+            from urllib.parse import parse_qs as _pqs
+            _qs = _pqs(urlparse(self.path).query)
+            station = (_qs.get("station") or [""])[0].strip().lower()
+            if station not in {"polo", "jacket", "headband"}:
+                self._send_json(HTTPStatus.BAD_REQUEST, {"message": "invalid station"})
+                return
+            with open_db() as connection:
+                rows = connection.execute(
+                    """SELECT id, order_code, size, quantity, student_code,
+                              nickname, full_name, queued_at, queued_by, undone_at
+                         FROM display2_picks
+                        WHERE station = ? AND picked_at IS NULL
+                        ORDER BY queued_at ASC
+                        LIMIT 50""",
+                    (station,),
+                ).fetchall()
+            items = [
+                {
+                    "id": r["id"],
+                    "orderCode": r["order_code"],
+                    "size": r["size"],
+                    "quantity": r["quantity"],
+                    "studentCode": r["student_code"],
+                    "nickname": r["nickname"],
+                    "fullName": r["full_name"],
+                    "queuedAt": r["queued_at"],
+                    "queuedBy": r["queued_by"],
+                    "undone": r["undone_at"] is not None,
+                }
+                for r in rows
+            ]
+            self._send_json(HTTPStatus.OK, {"items": items})
             return
 
         if path == "/claim-station/stats":
