@@ -247,6 +247,21 @@ html, body {
   </div>
 </section>
 
+<div id="historyModal" class="modal">
+  <div class="modal-card">
+    <header class="modal-head">
+      <div class="modal-title">ประวัติวันนี้ — <span id="histStation">—</span></div>
+      <button class="btn-ghost" id="histCloseBtn">ปิด</button>
+    </header>
+    <div class="modal-search">
+      <input id="histSearch" type="search" placeholder="ค้นหา: รหัสนักศึกษา / ออเดอร์ / ชื่อเล่น">
+    </div>
+    <main class="modal-list" id="histList"></main>
+    <div class="modal-empty" id="histEmpty">ไม่มีรายการวันนี้</div>
+  </div>
+</div>
+<div id="toast"></div>
+
 <script>
 (function(){
   var TOKEN_KEY = 'display2Token';
@@ -577,19 +592,5 @@ html, body {
   if (getToken()) goAfterLogin(); else show('login');
 })();
 </script>
-<div id="toast"></div>
-<div id="historyModal" class="modal">
-  <div class="modal-card">
-    <header class="modal-head">
-      <div class="modal-title">ประวัติวันนี้ — <span id="histStation">—</span></div>
-      <button class="btn-ghost" id="histCloseBtn">ปิด</button>
-    </header>
-    <div class="modal-search">
-      <input id="histSearch" type="search" placeholder="ค้นหา: รหัสนักศึกษา / ออเดอร์ / ชื่อเล่น">
-    </div>
-    <main class="modal-list" id="histList"></main>
-    <div class="modal-empty" id="histEmpty">ไม่มีรายการวันนี้</div>
-  </div>
-</div>
 </body>
 </html>
