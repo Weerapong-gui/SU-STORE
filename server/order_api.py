@@ -2290,7 +2290,15 @@ class OrderRequestHandler(BaseHTTPRequestHandler):
                 }
                 for r in rows
             ]
-            self._send_json(HTTPStatus.OK, {"items": items})
+            with open_db() as conn2:
+                today_count = conn2.execute(
+                    """SELECT COUNT(*) AS c FROM display2_picks
+                        WHERE station = ?
+                          AND picked_at IS NOT NULL
+                          AND DATE(picked_at, '+7 hours') = DATE('now', '+7 hours')""",
+                    (station,),
+                ).fetchone()["c"]
+            self._send_json(HTTPStatus.OK, {"items": items, "todayPicked": today_count})
             return
 
         if path == "/display2/history":

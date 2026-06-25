@@ -143,6 +143,7 @@ html, body {
   opacity: 0; transition: opacity .2s; pointer-events: none;
 }
 #toast.show { opacity: 1; }
+#qTodayCount { background: rgba(22,163,74,.15); color: var(--green); }
 .modal { display: none; position: fixed; inset: 0; background: rgba(0,0,0,.55); z-index: 1000; align-items: center; justify-content: center; padding: 24px; }
 .modal.active { display: flex; }
 .modal-card {
@@ -216,6 +217,13 @@ html, body {
     </div>
     <div class="q-meta">
       <span id="qUser">—</span>
+      <span class="q-counter" id="qTodayCount" title="วันนี้หยิบไปแล้ว">0</span>
+      <button class="btn-ghost" id="qFsBtn" aria-label="fullscreen">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <polyline points="3 9 3 3 9 3"/><polyline points="21 9 21 3 15 3"/>
+          <polyline points="3 15 3 21 9 21"/><polyline points="21 15 21 21 15 21"/>
+        </svg>
+      </button>
       <button class="btn-ghost" id="qHistoryBtn">
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-3px;margin-right:4px"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
         ประวัติวันนี้
@@ -421,6 +429,7 @@ html, body {
       .then(function(j){
         setBanner('');
         pollDelay = 2000;
+        $('qTodayCount').textContent = (j.todayPicked != null ? j.todayPicked : 0);
         renderQueue(j.items || []);
       })
       .catch(function(e){
@@ -466,6 +475,10 @@ html, body {
     stopPoll(); clearAll(); show('login');
   });
   $('qMuteBtn').addEventListener('click', function(){ setMuted(!isMuted()); });
+  $('qFsBtn').addEventListener('click', function(){
+    if (document.fullscreenElement) document.exitFullscreen();
+    else document.documentElement.requestFullscreen().catch(function(){});
+  });
 
   var histDebounce = null;
 
