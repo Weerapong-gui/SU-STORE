@@ -1168,6 +1168,7 @@ def update_order_status(
     if existing_order is None:
         return None
 
+    prev_status = existing_order["status"]
     payment_status = PAYMENT_STATUS_BY_ORDER_STATUS[status]
     connection.execute(
         """
@@ -1177,7 +1178,16 @@ def update_order_status(
         """,
         (status, payment_status, now_iso(), order_code),
     )
-    log_audit(connection, order_code, "status_changed", f"{existing_order['status']} → {status}")
+    log_audit(connection, order_code, "status_changed", f"{prev_status} → {status}")
+    if prev_status == "received" and status == "shipped":
+        reset = connection.execute(
+            "UPDATE display2_picks SET picked_at=NULL, picked_by=NULL, undone_at=NULL"
+            " WHERE order_internal_id=? AND picked_at IS NOT NULL",
+            (existing_order["internal_id"],),
+        ).rowcount
+        if reset:
+            log_audit(connection, order_code, "display2_reopened",
+                      f"rollback received→shipped, reset {reset} picks")
     row = fetch_order_by_code(connection, order_code)
     assert row is not None
     return serialize_order(row)
