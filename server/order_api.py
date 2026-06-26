@@ -1192,8 +1192,10 @@ def update_order_fields(
     existing = fetch_order_by_code(connection, order_code)
     if existing is None:
         return None
-    if expected_updated_at and str(existing.get("updated_at", "")) != str(expected_updated_at):
-        return False  # conflict — order was modified by someone else
+    if expected_updated_at:
+        existing_updated = existing["updated_at"] if "updated_at" in existing.keys() else ""
+        if str(existing_updated or "") != str(expected_updated_at):
+            return False  # conflict — order was modified by someone else
 
     allowed: dict[str, Any] = {}
     str_fields = {
