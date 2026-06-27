@@ -1999,8 +1999,16 @@
       var receiptBtn = e.target.closest(".receiptBtn");
       if (receiptBtn) {
         var oid = receiptBtn.dataset.oid;
-        var order = allOrders.find(function(o) { return o.id === oid; });
-        if (order) printReceipt(order);
+        receiptBtn.disabled = true;
+        loadOrders().then(function() {
+          var fresh = allOrders.find(function(o) { return o.id === oid; });
+          if (fresh) printReceipt(fresh);
+          else setOrdersNotice("ไม่พบออเดอร์ — อาจถูกลบ", true);
+        }).catch(function(err) {
+          setOrdersNotice("โหลดข้อมูลล่าสุดล้มเหลว: " + err.message, true);
+          var stale = allOrders.find(function(o) { return o.id === oid; });
+          if (stale) printReceipt(stale);
+        }).finally(function() { receiptBtn.disabled = false; });
         return;
       }
 
