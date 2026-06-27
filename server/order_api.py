@@ -1180,14 +1180,13 @@ def update_order_status(
     )
     log_audit(connection, order_code, "status_changed", f"{prev_status} → {status}")
     if prev_status == "received" and status == "shipped":
-        reset = connection.execute(
-            "UPDATE display2_picks SET picked_at=NULL, picked_by=NULL, undone_at=NULL"
-            " WHERE order_internal_id=? AND picked_at IS NOT NULL",
+        removed = connection.execute(
+            "DELETE FROM display2_picks WHERE order_internal_id=?",
             (existing_order["internal_id"],),
         ).rowcount
-        if reset:
-            log_audit(connection, order_code, "display2_reopened",
-                      f"rollback received→shipped, reset {reset} picks")
+        if removed:
+            log_audit(connection, order_code, "display2_cleared",
+                      f"rollback received→shipped, removed {removed} picks")
     row = fetch_order_by_code(connection, order_code)
     assert row is not None
     return serialize_order(row)
