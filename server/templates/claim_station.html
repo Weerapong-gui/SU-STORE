@@ -1264,7 +1264,7 @@
       }
       svg.appendChild(mk(ox + P.date.x,      P.date.y,      dateStr,          P.date));
       svg.appendChild(mk(ox + P.receiptNo.x, P.receiptNo.y, receiptNo,        P.receiptNo));
-      svg.appendChild(mk(ox + P.customer.x,  P.customer.y,  (c.fullName || "") + (c.phone ? " (" + c.phone + ")" : ""),    P.customer));
+      svg.appendChild(mk(ox + P.customer.x,  P.customer.y,  c.fullName || "",    P.customer));
       svg.appendChild(mk(ox + P.studentId.x, P.studentId.y, c.studentCode || "", P.studentId));
       svg.appendChild(mk(ox + P.school.x,    P.school.y,    school,              P.school));
       orderItems.forEach(function(item, idx) {
@@ -1526,8 +1526,13 @@
     function switchReceiptTab(tab) {
       document.querySelectorAll('.rcpt-tab').forEach(function(el) { el.classList.toggle('active', el.dataset.tab === tab); });
       document.querySelectorAll('.rcpt-section').forEach(function(el) { el.classList.toggle('active', el.dataset.section === tab); });
+      var previewCol = document.querySelector('.rcpt-preview-col');
+      var formCol = document.querySelector('.rcpt-form-col');
+      var showPreview = (tab === 'positions' || tab === 'fonts');
+      if (previewCol) previewCol.style.display = showPreview ? '' : 'none';
+      if (formCol) formCol.style.flex = showPreview ? '' : '1 1 100%';
       if (tab === 'slideshow') initSlideSettings();
-      schedulePreviewUpdate();
+      if (showPreview) schedulePreviewUpdate();
     }
     function toggleRunModeSection() {
       var el = document.querySelector('input[name="rcptRunMode"]:checked');
