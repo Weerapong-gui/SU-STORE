@@ -3641,6 +3641,10 @@ class OrderRequestHandler(BaseHTTPRequestHandler):
                 if cursor.rowcount == 0:
                     self._send_json(HTTPStatus.NOT_FOUND, {"message": "ไม่พบออเดอร์"})
                     return
+                connection.execute(
+                    "UPDATE display2_picks SET full_name=? WHERE order_code=?",
+                    (new_name, order_code),
+                )
                 log_audit(connection, order_code, "claim_rename", f"name → {new_name}")
                 connection.commit()
             self._send_json(HTTPStatus.OK, {"ok": True})

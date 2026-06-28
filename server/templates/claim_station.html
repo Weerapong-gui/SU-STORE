@@ -1933,7 +1933,11 @@
           method: 'PATCH',
           headers: {'Authorization': 'Claim ' + currentToken, 'Content-Type': 'application/json'},
           body: JSON.stringify({fullName: newName}),
-        }).catch(function() {});
+        }).then(function(r){
+          if (!r.ok) throw new Error('http_'+r.status);
+        }).catch(function(e){
+          alert('บันทึกชื่อล้มเหลว: ' + (e && e.message || 'unknown') + ' — กรุณารีโหลด');
+        });
       }
     }
 
