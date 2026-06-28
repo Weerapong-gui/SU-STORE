@@ -103,6 +103,9 @@ html, body {
 }
 .q-thumb { width: 96px; height: 96px; border-radius: 12px; overflow: hidden; background: var(--surface-2); flex-shrink: 0; }
 .q-thumb img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.q-card.no-size { grid-template-columns: auto 1fr auto; }
+.q-card.no-size .q-thumb { width: 260px; height: 110px; }
+.q-card.no-size .q-thumb img { object-fit: contain; background: var(--surface-2); }
 .q-card:not(:has(.q-thumb)) { grid-template-columns: auto 1fr auto; }
 .q-card.is-new { animation: slideIn .25s ease-out; }
 .q-card.undone { border-color: var(--amber); }
@@ -474,10 +477,13 @@ html, body {
     var thumbHtml = imgUrl
       ? '<div class="q-thumb"><img src="' + escapeHtml(imgUrl) + '" alt="" loading="lazy"/></div>'
       : '';
+    var station = (getStation() || '').toLowerCase();
+    var hideSize = (station === 'headband');
+    var sizeHtml = hideSize ? '' : '<div class="q-size">' + escapeHtml(it.size || '-') + '</div>';
     return '' +
-      '<div class="q-card' + (it.undone ? ' undone' : '') + (isNew ? ' is-new' : '') + (qty > 1 ? ' multi' : '') + '" data-id="' + it.id + '">' +
+      '<div class="q-card' + (it.undone ? ' undone' : '') + (isNew ? ' is-new' : '') + (qty > 1 ? ' multi' : '') + (hideSize ? ' no-size' : '') + '" data-id="' + it.id + '">' +
         thumbHtml +
-        '<div class="q-size">' + escapeHtml(it.size || '-') + '</div>' +
+        sizeHtml +
         '<div class="q-info">' +
           '<div class="nick">' + escapeHtml(it.nickname || '-') + ' ' + qtyHtml + '</div>' +
           '<div class="meta">' +
