@@ -2341,7 +2341,7 @@ class OrderRequestHandler(BaseHTTPRequestHandler):
                          FROM display2_picks p
                          LEFT JOIN orders o ON o.internal_id = p.order_internal_id
                         WHERE p.station = ? AND p.picked_at IS NULL
-                        ORDER BY p.queued_at ASC
+                        ORDER BY p.queued_at DESC
                         LIMIT 50""",
                     (station,),
                 ).fetchall()
