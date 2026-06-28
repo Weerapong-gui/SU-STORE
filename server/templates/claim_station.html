@@ -1017,6 +1017,7 @@
 
     function refreshCurrentOrder() {
       if (!lastOrder || !lastOrder.id || !currentToken) return;
+      if (document.getElementById('editNameInp')) return;
       var btn = document.getElementById('refreshOrderBtn');
       if (btn) btn.style.opacity = '0.4';
       fetch('/claim-station/orders/' + encodeURIComponent(lastOrder.id), {
@@ -1027,6 +1028,7 @@
       }).then(function(r) {
         if (btn) btn.style.opacity = '';
         if (!r || !r.ok || !r.d || !r.d.order) return;
+        if (document.getElementById('editNameInp')) return;
         showOrderCard(r.d.order, {silent: true});
       }).catch(function() { if (btn) btn.style.opacity = ''; });
     }
