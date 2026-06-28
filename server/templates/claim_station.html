@@ -1532,7 +1532,102 @@
       if (previewCol) previewCol.style.display = showPreview ? '' : 'none';
       if (formCol) formCol.style.flex = showPreview ? '' : '1 1 100%';
       if (tab === 'slideshow') initSlideSettings();
+      if (tab === 'assets') loadDisplay2Assets();
       if (showPreview) schedulePreviewUpdate();
+    }
+
+    var SCHOOL_LIST = [
+      "School of Agro-Industry","School of Cosmetic Science","School of Dentistry",
+      "School of Health Science","School of Applied Digital Technology","School of Integrative Medicine",
+      "School of Law","School of Liberal Arts","School of Management","School of Medicine",
+      "School of Nursing","School of Science","School of Sinology","School of Social Innovation"
+    ];
+
+    function _assetAuthHeaders() {
+      var token = (typeof getClaimToken === 'function' && getClaimToken()) || (window.__claimToken || '');
+      return token ? { 'Authorization': 'Claim ' + token } : {};
+    }
+
+    function loadDisplay2Assets() {
+      var c = document.getElementById('assetsStationsContainer');
+      if (!c) return;
+      c.innerHTML = '<div style="font-size:12px;color:var(--muted)">กำลังโหลด...</div>';
+      fetch('/display2/admin/assets', { headers: _assetAuthHeaders() })
+        .then(function(r){ if (!r.ok) throw new Error('http_'+r.status); return r.json(); })
+        .then(function(data){ renderDisplay2Assets(data); })
+        .catch(function(){ c.innerHTML = '<div style="color:var(--danger);font-size:12px">โหลดล้มเหลว</div>'; });
+    }
+
+    function _esc(s){ return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+
+    function _renderAssetGrid(list, station, category){
+      if (!list || !list.length) return '<div style="font-size:12px;color:var(--muted);padding:6px 0">ยังไม่มีรูป</div>';
+      return '<div style="display:flex;flex-wrap:wrap;gap:8px">' + list.map(function(a){
+        return '<div style="position:relative;width:80px;height:80px;border-radius:8px;overflow:hidden;border:1px solid var(--border)">' +
+          '<img src="'+_esc(a.url)+'" alt="" style="width:100%;height:100%;object-fit:cover"/>' +
+          '<button onclick="deleteDisplay2Asset('+a.id+')" style="position:absolute;top:2px;right:2px;background:rgba(220,38,38,.9);color:#fff;border:none;border-radius:4px;width:20px;height:20px;cursor:pointer;font-size:12px;line-height:1;padding:0">×</button>' +
+        '</div>';
+      }).join('') + '</div>';
+    }
+
+    function _renderStationBlock(label, station){
+      return '<div style="border:1px solid var(--border);border-radius:10px;padding:12px;background:var(--bg)">' +
+        '<div style="font-weight:700;margin-bottom:8px">'+_esc(label)+'</div>' +
+        '<div id="assetGrid_'+station+'"></div>' +
+        '<div style="margin-top:8px"><label style="display:inline-block;cursor:pointer;font-size:12px;padding:6px 10px;background:var(--primary);color:#fff;border-radius:6px">' +
+          '+ เพิ่มรูป<input type="file" accept="image/*" style="display:none" onchange="uploadDisplay2Asset(this,\\''+station+'\\',\\'\\')"/></label></div>' +
+      '</div>';
+    }
+
+    function _renderHeadbandBlock(byCategory){
+      var html = '<div style="border:1px solid var(--border);border-radius:10px;padding:12px;background:var(--bg)">' +
+        '<div style="font-weight:700;margin-bottom:8px">Headband (แยกตามสำนักวิชา)</div>';
+      SCHOOL_LIST.forEach(function(school){
+        var list = byCategory[school] || [];
+        var safeId = 'assetGrid_hb_' + school.replace(/[^A-Za-z0-9]/g,'_');
+        html += '<details style="margin-top:8px;border:1px solid var(--border);border-radius:8px;padding:8px"' + (list.length ? ' open' : '') + '>' +
+          '<summary style="cursor:pointer;font-size:13px;font-weight:600">'+_esc(school)+' ('+list.length+')</summary>' +
+          '<div id="'+safeId+'" style="margin-top:8px">'+ _renderAssetGrid(list, 'headband', school) +'</div>' +
+          '<div style="margin-top:6px"><label style="display:inline-block;cursor:pointer;font-size:12px;padding:5px 9px;background:var(--primary);color:#fff;border-radius:6px">' +
+            '+ เพิ่มรูป<input type="file" accept="image/*" style="display:none" onchange="uploadDisplay2Asset(this,\\'headband\\',\\''+school.replace(/'/g,"\\\\'")+'\\')"/></label></div>' +
+        '</details>';
+      });
+      html += '</div>';
+      return html;
+    }
+
+    function renderDisplay2Assets(data){
+      var c = document.getElementById('assetsStationsContainer');
+      if (!c) return;
+      c.innerHTML =
+        _renderStationBlock('Polo', 'polo') +
+        _renderStationBlock('Jacket', 'jacket') +
+        _renderHeadbandBlock(data.headband || {}) +
+        _renderStationBlock('Khantok', 'khantok');
+      document.getElementById('assetGrid_polo').innerHTML = _renderAssetGrid(data.polo || [], 'polo', '');
+      document.getElementById('assetGrid_jacket').innerHTML = _renderAssetGrid(data.jacket || [], 'jacket', '');
+      document.getElementById('assetGrid_khantok').innerHTML = _renderAssetGrid(data.khantok || [], 'khantok', '');
+    }
+
+    function uploadDisplay2Asset(input, station, category){
+      var file = input.files && input.files[0];
+      if (!file) return;
+      var fd = new FormData();
+      fd.append('station', station);
+      if (category) fd.append('category', category);
+      fd.append('image', file);
+      fetch('/display2/admin/assets', { method: 'POST', headers: _assetAuthHeaders(), body: fd })
+        .then(function(r){ if (!r.ok) throw new Error('http_'+r.status); return r.json(); })
+        .then(function(){ input.value = ''; loadDisplay2Assets(); })
+        .catch(function(){ alert('อัปโหลดล้มเหลว'); });
+    }
+
+    function deleteDisplay2Asset(id){
+      if (!confirm('ลบรูปนี้?')) return;
+      fetch('/display2/admin/assets/' + id, { method: 'DELETE', headers: _assetAuthHeaders() })
+        .then(function(r){ if (!r.ok) throw new Error('http'); return r.json(); })
+        .then(function(){ loadDisplay2Assets(); })
+        .catch(function(){ alert('ลบล้มเหลว'); });
     }
     function toggleRunModeSection() {
       var el = document.querySelector('input[name="rcptRunMode"]:checked');
@@ -1875,6 +1970,7 @@
           <button class="rcpt-tab" data-tab="positions" onclick="switchReceiptTab('positions')">ตำแหน่ง</button>
           <button class="rcpt-tab" data-tab="fonts" onclick="switchReceiptTab('fonts')">ขนาดอักษร</button>
           <button class="rcpt-tab" data-tab="slideshow" onclick="switchReceiptTab('slideshow')">สไลด์โชว์</button>
+          <button class="rcpt-tab" data-tab="assets" onclick="switchReceiptTab('assets')">รูปสินค้า (display2)</button>
         </div>
       </div>
 
@@ -2107,6 +2203,21 @@
               </div>
               <div style="margin-top:12px">
                 <button class="rcpt-btn-save" onclick="saveSlideSettings()">บันทึกสไลด์โชว์</button>
+              </div>
+            </div>
+
+            <!-- Display2 product assets -->
+            <div class="rcpt-section" data-section="assets">
+              <div class="rcpt-group">
+                <div class="rcpt-group-title">รูปสินค้าสำหรับ Display2</div>
+                <p style="font-size:12px;color:var(--muted);margin-bottom:14px">อัปโหลดรูปสินค้าให้แสดงบนการ์ดของ display2 — Polo/Jacket รูปจะถูกสุ่มแสดงต่อการ์ด. Headband แยกตามสำนักวิชา</p>
+
+                <div id="assetsStationsContainer" style="display:flex;flex-direction:column;gap:18px">
+                  <div style="font-size:12px;color:var(--muted)">กำลังโหลด...</div>
+                </div>
+              </div>
+              <div style="margin-top:12px">
+                <button class="rcpt-btn-save" onclick="loadDisplay2Assets()">รีเฟรชรายการ</button>
               </div>
             </div>
 
