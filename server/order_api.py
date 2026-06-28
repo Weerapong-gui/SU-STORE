@@ -159,6 +159,8 @@ RECEIPT_SVG = (_TEMPLATES_DIR / "receipt_template.svg").read_bytes()
 _FONT_PATH = _TEMPLATES_DIR / "fonts" / "SukhumvitSet.ttc"
 _slides_dir = Path(os.environ.get("ORDER_API_SLIDES_DIR", "/var/data/su-order-api/slides"))
 _slides_dir.mkdir(parents=True, exist_ok=True)
+_assets_dir = Path(os.environ.get("ORDER_API_ASSETS_DIR", "/var/data/su-order-api/display2_assets"))
+_assets_dir.mkdir(parents=True, exist_ok=True)
 
 # In-memory display state per claim-station user
 _display_state: dict[str, dict] = {}
@@ -478,22 +480,6 @@ def ensure_db() -> None:
       connection.execute(
           "CREATE INDEX IF NOT EXISTS idx_display2_picks_order "
           "ON display2_picks(order_internal_id)"
-      )
-      connection.execute(
-          """
-          CREATE TABLE IF NOT EXISTS display2_assets (
-              id INTEGER PRIMARY KEY AUTOINCREMENT,
-              station TEXT NOT NULL,
-              category TEXT,
-              filename TEXT NOT NULL UNIQUE,
-              uploaded_at TEXT NOT NULL,
-              uploaded_by TEXT NOT NULL DEFAULT ''
-          )
-          """
-      )
-      connection.execute(
-          "CREATE INDEX IF NOT EXISTS idx_display2_assets_station "
-          "ON display2_assets(station, category)"
       )
       connection.execute(
           """
