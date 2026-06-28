@@ -1542,6 +1542,7 @@
       "School of Law","School of Liberal Arts","School of Management","School of Medicine",
       "School of Nursing","School of Science","School of Sinology","School of Social Innovation"
     ];
+    var JACKET_COLORS = ["Blue","Red","White"];
 
     function _assetAuthHeaders() {
       var token = (typeof currentToken !== 'undefined' && currentToken) || '';
@@ -1579,17 +1580,17 @@
       '</div>';
     }
 
-    function _renderHeadbandBlock(byCategory){
+    function _renderGroupedBlock(label, station, byCategory, categories){
       var html = '<div style="border:1px solid var(--border);border-radius:10px;padding:12px;background:var(--bg)">' +
-        '<div style="font-weight:700;margin-bottom:8px">Headband (แยกตามสำนักวิชา)</div>';
-      SCHOOL_LIST.forEach(function(school){
-        var list = byCategory[school] || [];
-        var safeId = 'assetGrid_hb_' + school.replace(/[^A-Za-z0-9]/g,'_');
+        '<div style="font-weight:700;margin-bottom:8px">'+_esc(label)+'</div>';
+      categories.forEach(function(cat){
+        var list = byCategory[cat] || [];
+        var safeId = 'assetGrid_' + station + '_' + cat.replace(/[^A-Za-z0-9]/g,'_');
         html += '<details style="margin-top:8px;border:1px solid var(--border);border-radius:8px;padding:8px"' + (list.length ? ' open' : '') + '>' +
-          '<summary style="cursor:pointer;font-size:13px;font-weight:600">'+_esc(school)+' ('+list.length+')</summary>' +
+          '<summary style="cursor:pointer;font-size:13px;font-weight:600">'+_esc(cat)+' ('+list.length+')</summary>' +
           '<div id="'+safeId+'" style="margin-top:8px">'+ _renderAssetGrid(list) +'</div>' +
           '<div style="margin-top:6px"><label style="display:inline-block;cursor:pointer;font-size:12px;padding:5px 9px;background:var(--primary);color:#fff;border-radius:6px">' +
-            '+ เพิ่มรูป<input type="file" accept="image/*" style="display:none" class="asset-upload-input" data-station="headband" data-category="'+_esc(school)+'"/></label></div>' +
+            '+ เพิ่มรูป<input type="file" accept="image/*" style="display:none" class="asset-upload-input" data-station="'+_esc(station)+'" data-category="'+_esc(cat)+'"/></label></div>' +
         '</details>';
       });
       html += '</div>';
@@ -1601,11 +1602,10 @@
       if (!c) return;
       c.innerHTML =
         _renderStationBlock('Polo', 'polo') +
-        _renderStationBlock('Jacket', 'jacket') +
-        _renderHeadbandBlock(data.headband || {}) +
+        _renderGroupedBlock('Jacket (แยกตามสี)', 'jacket', data.jacket || {}, JACKET_COLORS) +
+        _renderGroupedBlock('Headband (แยกตามสำนักวิชา)', 'headband', data.headband || {}, SCHOOL_LIST) +
         _renderStationBlock('Khantok', 'khantok');
       document.getElementById('assetGrid_polo').innerHTML = _renderAssetGrid(data.polo || []);
-      document.getElementById('assetGrid_jacket').innerHTML = _renderAssetGrid(data.jacket || []);
       document.getElementById('assetGrid_khantok').innerHTML = _renderAssetGrid(data.khantok || []);
       c.querySelectorAll('.asset-upload-input').forEach(function(inp){
         inp.addEventListener('change', function(){ uploadDisplay2Asset(inp, inp.dataset.station, inp.dataset.category || ''); });

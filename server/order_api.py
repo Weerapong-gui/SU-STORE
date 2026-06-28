@@ -2409,7 +2409,7 @@ class OrderRequestHandler(BaseHTTPRequestHandler):
                     "SELECT id, station, category, filename, uploaded_at, uploaded_by"
                     " FROM display2_assets ORDER BY station, category, id"
                 ).fetchall()
-            grouped: dict = {"polo": [], "jacket": [], "khantok": [], "headband": {}}
+            grouped: dict = {"polo": [], "jacket": {}, "khantok": [], "headband": {}}
             for r in rows:
                 entry = {
                     "id": r["id"],
@@ -2419,9 +2419,9 @@ class OrderRequestHandler(BaseHTTPRequestHandler):
                     "uploadedBy": r["uploaded_by"],
                 }
                 st = r["station"]
-                if st == "headband":
+                if st in ("headband", "jacket"):
                     cat = r["category"] or ""
-                    grouped["headband"].setdefault(cat, []).append(entry)
+                    grouped[st].setdefault(cat, []).append(entry)
                 elif st in grouped:
                     grouped[st].append(entry)
             self._send_json(HTTPStatus.OK, grouped)

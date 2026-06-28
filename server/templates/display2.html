@@ -364,7 +364,7 @@ html, body {
 
   function authHeaders(){ return { 'Authorization': 'Claim ' + getToken() }; }
 
-  var assetsCache = { polo: [], jacket: [], khantok: [], headband: {} };
+  var assetsCache = { polo: [], jacket: {}, khantok: [], headband: {} };
   var assetsLastFetch = 0;
   function loadAssets(force){
     var now = Date.now();
@@ -379,8 +379,15 @@ html, body {
     if (!it) return '';
     var station = (getStation() || '').toLowerCase();
     var bucket = [];
-    if (station === 'polo' || station === 'jacket' || station === 'khantok') {
+    if (station === 'polo' || station === 'khantok') {
       bucket = assetsCache[station] || [];
+    } else if (station === 'jacket') {
+      var byColor = assetsCache.jacket || {};
+      var color = '';
+      var sizeStr = it.size || '';
+      var parts = sizeStr.split('/');
+      if (parts.length > 1) color = parts[parts.length - 1].trim();
+      bucket = (color && byColor[color]) || byColor[''] || [];
     } else if (station === 'headband') {
       var byCat = assetsCache.headband || {};
       var school = it.school || '';
