@@ -481,6 +481,38 @@ def ensure_db() -> None:
       )
       connection.execute(
           """
+          CREATE TABLE IF NOT EXISTS display2_assets (
+              id INTEGER PRIMARY KEY AUTOINCREMENT,
+              station TEXT NOT NULL,
+              category TEXT,
+              filename TEXT NOT NULL UNIQUE,
+              uploaded_at TEXT NOT NULL,
+              uploaded_by TEXT NOT NULL DEFAULT ''
+          )
+          """
+      )
+      connection.execute(
+          "CREATE INDEX IF NOT EXISTS idx_display2_assets_station "
+          "ON display2_assets(station, category)"
+      )
+      connection.execute(
+          """
+          CREATE TABLE IF NOT EXISTS display2_assets (
+              id INTEGER PRIMARY KEY AUTOINCREMENT,
+              station TEXT NOT NULL,
+              category TEXT,
+              filename TEXT NOT NULL UNIQUE,
+              uploaded_at TEXT NOT NULL,
+              uploaded_by TEXT NOT NULL DEFAULT ''
+          )
+          """
+      )
+      connection.execute(
+          "CREATE INDEX IF NOT EXISTS idx_display2_assets_station "
+          "ON display2_assets(station, category)"
+      )
+      connection.execute(
+          """
           CREATE TABLE IF NOT EXISTS slip_ocr_results (
               id           INTEGER PRIMARY KEY AUTOINCREMENT,
               order_code   TEXT UNIQUE NOT NULL,
@@ -2351,6 +2383,54 @@ class OrderRequestHandler(BaseHTTPRequestHandler):
             self._send_json(HTTPStatus.OK, {"items": items, "todayPicked": today_count})
             return
 
+        asset_serve_match = re.fullmatch(r"/display2/assets/([A-Za-z0-9_.-]+)", path)
+        if asset_serve_match:
+            if not self._has_claim_station_authorization():
+                self._deny_unauthorized()
+                return
+            fname = asset_serve_match.group(1)
+            fpath = _assets_dir / fname
+            if not fpath.exists() or not fpath.is_file():
+                self._send_json(HTTPStatus.NOT_FOUND, {"message": "asset not found"})
+                return
+            ext = fpath.suffix.lower()
+            mime = {".jpg":"image/jpeg",".jpeg":"image/jpeg",".png":"image/png",".webp":"image/webp",".gif":"image/gif"}.get(ext, "application/octet-stream")
+            data = fpath.read_bytes()
+            self.send_response(HTTPStatus.OK)
+            self.send_header("Content-Type", mime)
+            self.send_header("Content-Length", str(len(data)))
+            self.send_header("Cache-Control", "public, max-age=3600")
+            self.end_headers()
+            self.wfile.write(data)
+            return
+
+        if path == "/display2/admin/assets":
+            if not self._has_claim_station_authorization():
+                self._deny_unauthorized()
+                return
+            with open_db() as connection:
+                rows = connection.execute(
+                    "SELECT id, station, category, filename, uploaded_at, uploaded_by"
+                    " FROM display2_assets ORDER BY station, category, id"
+                ).fetchall()
+            grouped: dict = {"polo": [], "jacket": [], "khantok": [], "headband": {}}
+            for r in rows:
+                entry = {
+                    "id": r["id"],
+                    "url": f"/display2/assets/{r['filename']}",
+                    "filename": r["filename"],
+                    "uploadedAt": r["uploaded_at"],
+                    "uploadedBy": r["uploaded_by"],
+                }
+                st = r["station"]
+                if st == "headband":
+                    cat = r["category"] or ""
+                    grouped["headband"].setdefault(cat, []).append(entry)
+                elif st in grouped:
+                    grouped[st].append(entry)
+            self._send_json(HTTPStatus.OK, grouped)
+            return
+
         if path == "/display2/history":
             if not self._has_claim_station_authorization():
                 self._deny_unauthorized()
@@ -3341,6 +3421,67 @@ class OrderRequestHandler(BaseHTTPRequestHandler):
             self._send_json(HTTPStatus.OK, product)
             return
 
+        if path == "/display2/admin/assets":
+            if not self._has_claim_station_authorization():
+                self._deny_unauthorized()
+                return
+            content_type = self.headers.get("Content-Type", "")
+            if not content_type.lower().startswith("multipart/form-data"):
+                self._send_json(HTTPStatus.BAD_REQUEST, {"message": "multipart/form-data required"})
+                return
+            content_length = int(self.headers.get("Content-Length", "0"))
+            if content_length <= 0 or content_length > 10 * 1024 * 1024:
+                self._send_json(HTTPStatus.BAD_REQUEST, {"message": "invalid size (max 10MB)"})
+                return
+            raw_body = self.rfile.read(content_length)
+            message = BytesParser(policy=default).parsebytes(
+                (f"Content-Type: {content_type}\r\nMIME-Version: 1.0\r\n\r\n").encode("utf-8") + raw_body
+            )
+            if not message.is_multipart():
+                self._send_json(HTTPStatus.BAD_REQUEST, {"message": "invalid multipart"})
+                return
+            station = ""
+            category = ""
+            img_bytes = b""
+            img_ext = ".jpg"
+            for part in message.iter_parts():
+                if part.get_content_disposition() != "form-data":
+                    continue
+                name = str(part.get_param("name", header="content-disposition") or "")
+                if name == "station":
+                    station = (part.get_payload(decode=True) or b"").decode("utf-8", "ignore").strip().lower()
+                elif name == "category":
+                    category = (part.get_payload(decode=True) or b"").decode("utf-8", "ignore").strip()
+                elif name == "image":
+                    img_bytes = part.get_payload(decode=True) or b""
+                    fn = str(part.get_filename() or "")
+                    ext = Path(fn).suffix.lower()
+                    if ext in (".jpg", ".jpeg", ".png", ".webp", ".gif"):
+                        img_ext = ext
+            if station not in {"polo", "jacket", "headband", "khantok"}:
+                self._send_json(HTTPStatus.BAD_REQUEST, {"message": "invalid station"})
+                return
+            if not img_bytes:
+                self._send_json(HTTPStatus.BAD_REQUEST, {"message": "image required"})
+                return
+            uploader = self._get_claim_station_user() or "staff"
+            import uuid as _uuid
+            new_name = f"{station}_{_uuid.uuid4().hex[:12]}{img_ext}"
+            (_assets_dir / new_name).write_bytes(img_bytes)
+            with open_db() as connection:
+                cur = connection.execute(
+                    "INSERT INTO display2_assets (station, category, filename, uploaded_at, uploaded_by)"
+                    " VALUES (?,?,?,?,?)",
+                    (station, category or None, new_name, now_iso(), uploader),
+                )
+                connection.commit()
+                asset_id = cur.lastrowid
+            self._send_json(HTTPStatus.CREATED, {
+                "id": asset_id, "url": f"/display2/assets/{new_name}",
+                "filename": new_name, "station": station, "category": category or None,
+            })
+            return
+
         if path != "/orders":
             self._send_json(HTTPStatus.NOT_FOUND, {"message": "not found"})
             return
@@ -3718,6 +3859,27 @@ class OrderRequestHandler(BaseHTTPRequestHandler):
 
     def do_DELETE(self) -> None:
         path = urlparse(self.path).path
+
+        asset_del_match = re.fullmatch(r"/display2/admin/assets/(\d+)", path)
+        if asset_del_match:
+            if not self._has_claim_station_authorization():
+                self._deny_unauthorized()
+                return
+            aid = int(asset_del_match.group(1))
+            with open_db() as connection:
+                row = connection.execute("SELECT filename FROM display2_assets WHERE id=?", (aid,)).fetchone()
+                if not row:
+                    self._send_json(HTTPStatus.NOT_FOUND, {"message": "not found"})
+                    return
+                connection.execute("DELETE FROM display2_assets WHERE id=?", (aid,))
+                connection.commit()
+            try:
+                fp = _assets_dir / row["filename"]
+                if fp.exists(): fp.unlink()
+            except Exception:
+                pass
+            self._send_json(HTTPStatus.OK, {"ok": True})
+            return
 
         admin_user_del_match = re.fullmatch(r"/admin/users/([^/]+)", path)
         if admin_user_del_match:
