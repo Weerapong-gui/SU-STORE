@@ -1544,7 +1544,7 @@
     ];
 
     function _assetAuthHeaders() {
-      var token = (typeof getClaimToken === 'function' && getClaimToken()) || (window.__claimToken || '');
+      var token = (typeof currentToken !== 'undefined' && currentToken) || '';
       return token ? { 'Authorization': 'Claim ' + token } : {};
     }
 
