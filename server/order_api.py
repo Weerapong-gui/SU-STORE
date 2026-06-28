@@ -2381,9 +2381,6 @@ class OrderRequestHandler(BaseHTTPRequestHandler):
 
         asset_serve_match = re.fullmatch(r"/display2/assets/([A-Za-z0-9_.-]+)", path)
         if asset_serve_match:
-            if not self._has_claim_station_authorization():
-                self._deny_unauthorized()
-                return
             fname = asset_serve_match.group(1)
             fpath = _assets_dir / fname
             if not fpath.exists() or not fpath.is_file():
