@@ -485,7 +485,7 @@ html, body {
         thumbHtml +
         sizeHtml +
         '<div class="q-info">' +
-          '<div class="nick">' + escapeHtml(it.nickname || '-') + ' ' + qtyHtml + '</div>' +
+          '<div class="nick">' + escapeHtml(it.fullName || it.nickname || '-') + ' ' + qtyHtml + '</div>' +
           '<div class="meta">' +
             '<span class="label">ออเดอร์</span><span class="order">' + escapeHtml(it.orderCode) + '</span>' +
             '<span class="label">รหัส นศ</span><span>' + escapeHtml(it.studentCode || '-') + '</span>' +
