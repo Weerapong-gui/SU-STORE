@@ -2349,16 +2349,27 @@ class OrderRequestHandler(BaseHTTPRequestHandler):
                 return
             with open_db() as connection:
                 rows = connection.execute(
-                    """SELECT id, order_code, size, quantity, student_code,
-                              nickname, full_name, queued_at, queued_by, undone_at
-                         FROM display2_picks
-                        WHERE station = ? AND picked_at IS NULL
-                        ORDER BY queued_at ASC
+                    """SELECT p.id, p.order_code, p.size, p.quantity, p.student_code,
+                              p.nickname, p.full_name, p.queued_at, p.queued_by, p.undone_at,
+                              p.item_index, o.items_json
+                         FROM display2_picks p
+                         LEFT JOIN orders o ON o.internal_id = p.order_internal_id
+                        WHERE p.station = ? AND p.picked_at IS NULL
+                        ORDER BY p.queued_at ASC
                         LIMIT 50""",
                     (station,),
                 ).fetchall()
-            items = [
-                {
+            items = []
+            for r in rows:
+                school = ""
+                if station == "headband":
+                    try:
+                        parsed = json.loads(r["items_json"] or "[]")
+                        if 0 <= r["item_index"] < len(parsed):
+                            school = (parsed[r["item_index"]] or {}).get("school") or ""
+                    except (TypeError, json.JSONDecodeError):
+                        pass
+                items.append({
                     "id": r["id"],
                     "orderCode": r["order_code"],
                     "size": r["size"],
@@ -2369,9 +2380,8 @@ class OrderRequestHandler(BaseHTTPRequestHandler):
                     "queuedAt": r["queued_at"],
                     "queuedBy": r["queued_by"],
                     "undone": r["undone_at"] is not None,
-                }
-                for r in rows
-            ]
+                    "school": school,
+                })
             with open_db() as conn2:
                 today_count = conn2.execute(
                     """SELECT COUNT(*) AS c FROM display2_picks

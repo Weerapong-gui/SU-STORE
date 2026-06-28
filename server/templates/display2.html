@@ -99,8 +99,11 @@ html, body {
 .q-card {
   background: var(--surface); border: 1px solid var(--border);
   border-radius: var(--radius); padding: 18px; display: grid;
-  grid-template-columns: auto 1fr auto; gap: 18px; align-items: center;
+  grid-template-columns: auto auto 1fr auto; gap: 18px; align-items: center;
 }
+.q-thumb { width: 96px; height: 96px; border-radius: 12px; overflow: hidden; background: var(--surface-2); flex-shrink: 0; }
+.q-thumb img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.q-card:not(:has(.q-thumb)) { grid-template-columns: auto 1fr auto; }
 .q-card.is-new { animation: slideIn .25s ease-out; }
 .q-card.undone { border-color: var(--amber); }
 @keyframes slideIn { from { opacity: 0; transform: translateY(-8px) } to { opacity: 1; transform: none } }
@@ -360,6 +363,33 @@ html, body {
   }
 
   function authHeaders(){ return { 'Authorization': 'Claim ' + getToken() }; }
+
+  var assetsCache = { polo: [], jacket: [], khantok: [], headband: {} };
+  var assetsLastFetch = 0;
+  function loadAssets(force){
+    var now = Date.now();
+    if (!force && (now - assetsLastFetch) < 30000) return Promise.resolve();
+    assetsLastFetch = now;
+    return fetch('/display2/admin/assets', { headers: authHeaders() })
+      .then(function(r){ if (!r.ok) throw new Error('http'); return r.json(); })
+      .then(function(j){ assetsCache = j || assetsCache; })
+      .catch(function(){});
+  }
+  function pickAssetUrl(it){
+    if (!it) return '';
+    var station = (getStation() || '').toLowerCase();
+    var bucket = [];
+    if (station === 'polo' || station === 'jacket' || station === 'khantok') {
+      bucket = assetsCache[station] || [];
+    } else if (station === 'headband') {
+      var byCat = assetsCache.headband || {};
+      var school = it.school || '';
+      bucket = (school && byCat[school]) || byCat[''] || [];
+    }
+    if (!bucket.length) return '';
+    var idx = Math.floor(Math.random() * bucket.length);
+    return bucket[idx] && bucket[idx].url || '';
+  }
   window.__display2 = { authHeaders: authHeaders, getStation: getStation, getUser: getUser };
 
   $('loginBtn').addEventListener('click', doLogin);
@@ -433,8 +463,13 @@ html, body {
     var qtyHtml = qty > 1
       ? '<span class="qty-warn">×' + qty + '</span>'
       : '<span class="qty-one">×1</span>';
+    var imgUrl = pickAssetUrl(it);
+    var thumbHtml = imgUrl
+      ? '<div class="q-thumb"><img src="' + escapeHtml(imgUrl) + '" alt="" loading="lazy"/></div>'
+      : '';
     return '' +
       '<div class="q-card' + (it.undone ? ' undone' : '') + (isNew ? ' is-new' : '') + (qty > 1 ? ' multi' : '') + '" data-id="' + it.id + '">' +
+        thumbHtml +
         '<div class="q-size">' + escapeHtml(it.size || '-') + '</div>' +
         '<div class="q-info">' +
           '<div class="nick">' + escapeHtml(it.nickname || '-') + ' ' + qtyHtml + '</div>' +
@@ -490,6 +525,7 @@ html, body {
         setBanner('');
         pollDelay = 2000;
         $('qTodayCount').textContent = (j.todayPicked != null ? j.todayPicked : 0);
+        loadAssets(false);
         renderQueue(j.items || []);
       })
       .catch(function(e){
@@ -661,7 +697,7 @@ html, body {
     $('qStationLabel').textContent = (getStation() || '').toUpperCase() + ' STATION';
     $('qUser').textContent = getUser();
     stopPoll();
-    poll();
+    loadAssets(true).finally(function(){ poll(); });
     updateMuteIcon();
   }
 
