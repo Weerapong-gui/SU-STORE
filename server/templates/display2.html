@@ -115,10 +115,10 @@ html, body {
 .q-thumb { width: 132px; height: 100%; border-radius: 0; overflow: hidden; background: var(--surface-2); flex-shrink: 0; display: flex; flex-direction: column; }
 .q-thumb img { width: 100%; height: 100%; object-fit: cover; display: block; }
 .q-thumb-cap { font-size: 12px; font-weight: 700; color: var(--text); padding: 4px 6px; background: rgba(0,0,0,.4); text-align: center; line-height: 1.15; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.q-card.no-size { grid-template-columns: auto 1fr auto; }
-.q-card.no-size .q-thumb { width: 320px; height: 100%; background: var(--surface-2); }
+.q-card.no-size .q-thumb { width: 240px; }
 .q-card.no-size .q-thumb img { flex: 1; min-height: 0; object-fit: cover; }
 .q-card.no-size .q-thumb-cap { font-size: 13px; padding: 5px 8px; }
+.q-card.no-size > .q-boxes { padding-left: 14px; }
 .q-card:not(:has(.q-thumb)) { grid-template-columns: auto 1fr auto; }
 .q-card.is-new { animation: slideIn .25s ease-out; }
 .q-card.undone { border-color: var(--amber); }
