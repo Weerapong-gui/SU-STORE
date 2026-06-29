@@ -123,10 +123,17 @@ html, body {
 .q-info .order { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
 .q-info .undone-tag { color: var(--amber); font-weight: 700; }
 .q-info .label { color: var(--muted); font-size: 13px; text-transform: uppercase; letter-spacing: .04em; opacity: .8; margin-right: -8px; font-weight: 600; }
-.q-info .qty-one { color: var(--text); font-size: clamp(18px, 1.6vw, 22px); font-weight: 800; margin-left: 10px;
-  background: rgba(148,163,184,.18); padding: 2px 12px; border-radius: 999px; }
-.q-info .qty-warn { color: var(--amber); font-size: clamp(20px, 2vw, 26px); font-weight: 900; margin-left: 10px;
-  background: rgba(217,119,6,.15); padding: 2px 12px; border-radius: 999px; }
+.q-qty-box {
+  display: inline-flex; flex-direction: column; align-items: stretch; justify-content: flex-end;
+  width: 64px; min-height: 64px; border-radius: 12px;
+  background: rgba(148,163,184,.22); color: var(--text);
+  font-weight: 900; flex-shrink: 0; overflow: hidden; margin-right: 14px; vertical-align: middle;
+  text-align: center; line-height: 1;
+}
+.q-qty-box.warn { background: rgba(217,119,6,.25); color: var(--amber); }
+.q-qty-num { font-size: 28px; padding: 10px 0 6px; }
+.q-qty-unit { font-size: 13px; padding: 4px 0; background: rgba(0,0,0,.25); font-weight: 700; }
+.q-qty-box.warn .q-qty-unit { background: rgba(217,119,6,.4); color: #fff; }
 .q-card.multi { border-color: var(--amber); }
 .btn-check {
   padding: 18px 26px; border-radius: 14px; border: none; background: var(--green);
@@ -481,9 +488,12 @@ html, body {
       ? '<span class="undone-tag"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-2px"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"/></svg> undo</span>'
       : '';
     var qty = it.quantity || 1;
-    var qtyHtml = qty > 1
-      ? '<span class="qty-warn">×' + qty + '</span>'
-      : '<span class="qty-one">×1</span>';
+    var qtyStation = (getStation() || '').toLowerCase();
+    var qtyUnit = (qtyStation === 'headband') ? 'อัน' : (qtyStation === 'khantok') ? 'ใบ' : 'ตัว';
+    var qtyHtml = '<span class="q-qty-box' + (qty > 1 ? ' warn' : '') + '">' +
+                    '<span class="q-qty-num">' + qty + '</span>' +
+                    '<span class="q-qty-unit">' + qtyUnit + '</span>' +
+                  '</span>';
     var imgUrl = pickAssetUrl(it);
     var station = (getStation() || '').toLowerCase();
     var hideSize = (station === 'headband');
@@ -511,7 +521,7 @@ html, body {
         thumbHtml +
         sizeHtml +
         '<div class="q-info">' +
-          '<div class="nick">' + escapeHtml(it.fullName || it.nickname || '-') + ' ' + qtyHtml + '</div>' +
+          '<div class="nick">' + qtyHtml + escapeHtml(it.fullName || it.nickname || '-') + '</div>' +
           '<div class="meta">' +
             '<span class="label">ออเดอร์</span><span class="order">' + escapeHtml(it.orderCode) + '</span>' +
             '<span class="label">รหัส นศ</span><span>' + escapeHtml(it.studentCode || '-') + '</span>' +
