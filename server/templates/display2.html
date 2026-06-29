@@ -117,9 +117,11 @@ html, body {
   background: var(--accent-bg); padding: 8px 18px; border-radius: 14px;
   min-width: 96px; text-align: center;
 }
+.q-size-group { display: flex; gap: 10px; align-items: stretch; }
+.q-color-swatch { width: 96px; min-height: 100%; border-radius: 14px; border: 2px solid rgba(255,255,255,.12); flex-shrink: 0; }
 .q-info { display: flex; flex-direction: column; gap: 4px; }
 .q-info .nick { font-size: clamp(22px, 2.4vw, 30px); font-weight: 800; }
-.q-info .meta { font-size: 18px; color: var(--text); display: flex; gap: 14px; flex-wrap: wrap; align-items: center; }
+.q-info .meta { font-size: 18px; color: var(--text); display: flex; gap: 14px; flex-wrap: wrap; align-items: center; padding-left: 78px; }
 .q-info .order { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
 .q-info .undone-tag { color: var(--amber); font-weight: 700; }
 .q-info .label { color: var(--muted); font-size: 13px; text-transform: uppercase; letter-spacing: .04em; opacity: .8; margin-right: -8px; font-weight: 600; }
@@ -502,19 +504,23 @@ html, body {
     var thumbHtml = imgUrl
       ? '<div class="q-thumb"><img src="' + escapeHtml(imgUrl) + '" alt="" loading="lazy"/>' + capHtml + '</div>'
       : (capText ? '<div class="q-thumb">' + capHtml + '</div>' : '');
-    var sizeStyle = '';
-    var sizeFg = '';
-    if (station === 'jacket') {
-      var sz = (it.size || '');
-      var colorPart = sz.indexOf('/') >= 0 ? sz.split('/').pop().trim().toLowerCase() : '';
-      var JACKET_COLOR_MAP = { 'red':'#c1272d', 'blue':'#1d3a8a', 'white':'#e9eaee' };
-      var bg = JACKET_COLOR_MAP[colorPart];
-      if (bg) {
-        sizeFg = (colorPart === 'white') ? '#1a2540' : '#fff';
-        sizeStyle = ' style="background:' + bg + ';color:' + sizeFg + '"';
+    var sizeHtml = '';
+    if (!hideSize) {
+      if (station === 'jacket') {
+        var sz = (it.size || '');
+        var parts = sz.split('/');
+        var sizeLabel = (parts[0] || '').trim() || '-';
+        var colorPart = parts.length > 1 ? parts[parts.length - 1].trim().toLowerCase() : '';
+        var JACKET_COLOR_MAP = { 'red':'#c1272d', 'blue':'#1d3a8a', 'white':'#e9eaee' };
+        var bg = JACKET_COLOR_MAP[colorPart] || 'var(--accent-bg)';
+        sizeHtml = '<div class="q-size-group">' +
+                     '<div class="q-size">' + escapeHtml(sizeLabel) + '</div>' +
+                     '<div class="q-color-swatch" style="background:' + bg + '" title="' + escapeHtml(colorPart) + '"></div>' +
+                   '</div>';
+      } else {
+        sizeHtml = '<div class="q-size">' + escapeHtml(it.size || '-') + '</div>';
       }
     }
-    var sizeHtml = hideSize ? '' : '<div class="q-size"' + sizeStyle + '>' + escapeHtml(it.size || '-') + '</div>';
     var tint = orderTint(it.orderCode || '');
     return '' +
       '<div class="q-card' + (it.undone ? ' undone' : '') + (isNew ? ' is-new' : '') + (qty > 1 ? ' multi' : '') + (hideSize ? ' no-size' : '') + '" data-id="' + it.id + '" style="background:' + tint + '">' +
