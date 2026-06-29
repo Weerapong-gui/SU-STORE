@@ -99,8 +99,17 @@ html, body {
 .q-card {
   background: var(--surface); border: 1px solid var(--border);
   border-radius: var(--radius); padding: 18px; display: grid;
-  grid-template-columns: auto auto 1fr auto; gap: 18px; align-items: center;
+  grid-template-columns: auto auto 1fr auto; column-gap: 18px; row-gap: 8px;
+  align-items: center;
 }
+.q-card > .q-thumb { grid-row: 1; }
+.q-card > .q-size, .q-card > .q-size-group { grid-row: 1; grid-column: 2; }
+.q-card > .q-info { grid-row: 1; grid-column: 3; }
+.q-card > .btn-check { grid-row: 1 / span 2; grid-column: 4; align-self: center; }
+.q-meta-row { grid-row: 2; grid-column: 2 / 4; font-size: 18px; color: var(--text); display: flex; gap: 14px; flex-wrap: wrap; align-items: center; }
+.q-meta-row .label { color: var(--muted); font-size: 13px; text-transform: uppercase; letter-spacing: .04em; opacity: .8; margin-right: -8px; font-weight: 600; }
+.q-meta-row .order { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
+.q-meta-row .undone-tag { color: var(--amber); font-weight: 700; }
 .q-thumb { width: 96px; height: 96px; border-radius: 12px; overflow: hidden; background: var(--surface-2); flex-shrink: 0; display: flex; flex-direction: column; }
 .q-thumb img { width: 100%; height: 100%; object-fit: cover; display: block; }
 .q-thumb-cap { font-size: 12px; font-weight: 700; color: var(--text); padding: 4px 6px; background: rgba(0,0,0,.4); text-align: center; line-height: 1.15; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
@@ -122,7 +131,7 @@ html, body {
 .q-color-swatch { width: 96px; min-height: 100%; border-radius: 14px; border: 2px solid rgba(255,255,255,.12); flex-shrink: 0; }
 .q-info { display: flex; flex-direction: column; gap: 4px; }
 .q-info .nick { font-size: clamp(22px, 2.4vw, 30px); font-weight: 800; }
-.q-info .meta { font-size: 18px; color: var(--text); display: flex; gap: 14px; flex-wrap: wrap; align-items: center; padding-left: 110px; }
+.q-info .meta { display: none; }
 .q-info .order { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
 .q-info .undone-tag { color: var(--amber); font-weight: 700; }
 .q-info .label { color: var(--muted); font-size: 13px; text-transform: uppercase; letter-spacing: .04em; opacity: .8; margin-right: -8px; font-weight: 600; }
@@ -544,11 +553,11 @@ html, body {
         sizeHtml +
         '<div class="q-info">' +
           '<div class="nick">' + qtyHtml + escapeHtml(it.fullName || it.nickname || '-') + '</div>' +
-          '<div class="meta">' +
-            '<span class="label">ออเดอร์</span><span class="order">' + escapeHtml(it.orderCode) + '</span>' +
-            '<span class="label">รหัส นศ</span><span>' + escapeHtml(it.studentCode || '-') + '</span>' +
-            undone +
-          '</div>' +
+        '</div>' +
+        '<div class="q-meta-row">' +
+          '<span class="label">ออเดอร์</span><span class="order">' + escapeHtml(it.orderCode) + '</span>' +
+          '<span class="label">รหัส นศ</span><span>' + escapeHtml(it.studentCode || '-') + '</span>' +
+          undone +
         '</div>' +
         '<button class="btn-check" data-id="' + it.id + '">' +
           '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-4px;margin-right:6px"><polyline points="20 6 9 17 4 12"/></svg>' +
