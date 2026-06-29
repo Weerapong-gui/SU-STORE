@@ -127,14 +127,14 @@ html, body {
 .q-info .label { color: var(--muted); font-size: 13px; text-transform: uppercase; letter-spacing: .04em; opacity: .8; margin-right: -8px; font-weight: 600; }
 .q-qty-box {
   display: inline-flex; flex-direction: column; align-items: stretch; justify-content: flex-end;
-  width: 64px; min-height: 64px; border-radius: 12px;
+  width: 96px; min-height: 96px; border-radius: 14px;
   background: rgba(148,163,184,.22); color: var(--text);
   font-weight: 900; flex-shrink: 0; overflow: hidden; margin-right: 14px; vertical-align: middle;
   text-align: center; line-height: 1;
 }
 .q-qty-box.warn { background: rgba(217,119,6,.25); color: var(--amber); }
-.q-qty-num { font-size: 28px; padding: 10px 0 6px; }
-.q-qty-unit { font-size: 13px; padding: 4px 0; background: rgba(0,0,0,.25); font-weight: 700; }
+.q-qty-num { font-size: clamp(28px, 3.5vw, 44px); padding: 14px 0 8px; font-weight: 900; }
+.q-qty-unit { font-size: 14px; padding: 6px 0; background: rgba(0,0,0,.25); font-weight: 700; }
 .q-qty-box.warn .q-qty-unit { background: rgba(217,119,6,.4); color: #fff; }
 .q-card.multi { border-color: var(--amber); }
 .btn-check {
@@ -232,15 +232,30 @@ html, body {
   <div class="picker-title">เลือก Station</div>
   <div class="picker-grid">
     <div class="picker-card" data-station="polo">
-      <img src="/assets/polo.png" alt="">
+      <svg width="110" height="110" viewBox="0 0 24 24" fill="none" stroke="#4f6ef7" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M4 6 L9 3 L10 5 L14 5 L15 3 L20 6 L18 9 L16 8 V20 H8 V8 L6 9 Z"/>
+        <path d="M10 5 L12 7 L14 5"/>
+      </svg>
       <div class="label">POLO</div>
     </div>
     <div class="picker-card" data-station="jacket">
-      <img src="/assets/jacket.png" alt="">
+      <svg width="110" height="110" viewBox="0 0 24 24" fill="none" stroke="#22c55e" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M4 6 L9 3 L12 6 L15 3 L20 6 L18 10 L17 9 V21 H7 V9 L6 10 Z"/>
+        <line x1="12" y1="6" x2="12" y2="21"/>
+        <circle cx="11" cy="10" r="0.5" fill="currentColor"/>
+        <circle cx="11" cy="14" r="0.5" fill="currentColor"/>
+        <circle cx="11" cy="18" r="0.5" fill="currentColor"/>
+      </svg>
       <div class="label">JACKET</div>
     </div>
     <div class="picker-card" data-station="headband">
-      <img src="/assets/headband.png" alt="">
+      <svg width="110" height="110" viewBox="0 0 24 24" fill="none" stroke="#ec4899" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M3 11 Q12 4 21 11"/>
+        <rect x="2" y="10" width="20" height="5" rx="1.5"/>
+        <line x1="7" y1="11" x2="7" y2="14"/>
+        <line x1="12" y1="11" x2="12" y2="14"/>
+        <line x1="17" y1="11" x2="17" y2="14"/>
+      </svg>
       <div class="label">HEADBAND</div>
     </div>
     <div class="picker-card" data-station="khantok">
