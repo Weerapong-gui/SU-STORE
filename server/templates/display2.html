@@ -491,7 +491,19 @@ html, body {
     var thumbHtml = imgUrl
       ? '<div class="q-thumb"><img src="' + escapeHtml(imgUrl) + '" alt="" loading="lazy"/>' + capHtml + '</div>'
       : (capText ? '<div class="q-thumb">' + capHtml + '</div>' : '');
-    var sizeHtml = hideSize ? '' : '<div class="q-size">' + escapeHtml(it.size || '-') + '</div>';
+    var sizeStyle = '';
+    var sizeFg = '';
+    if (station === 'jacket') {
+      var sz = (it.size || '');
+      var colorPart = sz.indexOf('/') >= 0 ? sz.split('/').pop().trim().toLowerCase() : '';
+      var JACKET_COLOR_MAP = { 'red':'#c1272d', 'blue':'#1d3a8a', 'white':'#e9eaee' };
+      var bg = JACKET_COLOR_MAP[colorPart];
+      if (bg) {
+        sizeFg = (colorPart === 'white') ? '#1a2540' : '#fff';
+        sizeStyle = ' style="background:' + bg + ';color:' + sizeFg + '"';
+      }
+    }
+    var sizeHtml = hideSize ? '' : '<div class="q-size"' + sizeStyle + '>' + escapeHtml(it.size || '-') + '</div>';
     var tint = orderTint(it.orderCode || '');
     return '' +
       '<div class="q-card' + (it.undone ? ' undone' : '') + (isNew ? ' is-new' : '') + (qty > 1 ? ' multi' : '') + (hideSize ? ' no-size' : '') + '" data-id="' + it.id + '" style="background:' + tint + '">' +
