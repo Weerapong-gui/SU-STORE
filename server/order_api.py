@@ -1197,14 +1197,14 @@ def update_order_status(
         (status, payment_status, now_iso(), order_code),
     )
     log_audit(connection, order_code, "status_changed", f"{prev_status} → {status}")
-    if prev_status == "received" and status == "shipped":
+    if prev_status == "received" and status != "received":
         removed = connection.execute(
             "DELETE FROM display2_picks WHERE order_internal_id=?",
             (existing_order["internal_id"],),
         ).rowcount
         if removed:
             log_audit(connection, order_code, "display2_cleared",
-                      f"rollback received→shipped, removed {removed} picks")
+                      f"rollback received→{status}, removed {removed} picks")
     row = fetch_order_by_code(connection, order_code)
     assert row is not None
     return serialize_order(row)
