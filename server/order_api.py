@@ -162,8 +162,7 @@ _slides_dir.mkdir(parents=True, exist_ok=True)
 _assets_dir = Path(os.environ.get("ORDER_API_ASSETS_DIR", "/var/data/su-order-api/display2_assets"))
 _assets_dir.mkdir(parents=True, exist_ok=True)
 
-# In-memory display state per claim-station user
-_display_state: dict[str, dict] = {}
+# display1 state is stored in the display1_state table (see helpers below).
 
 STATION_BY_SLUG = {
     "single": "polo",
@@ -499,6 +498,24 @@ def ensure_db() -> None:
       )
       connection.execute(
           """
+          CREATE TABLE IF NOT EXISTS display1_state (
+              username     TEXT PRIMARY KEY,
+              payload_json TEXT NOT NULL,
+              updated_at   TEXT NOT NULL
+          )
+          """
+      )
+      connection.execute(
+          """
+          CREATE TABLE IF NOT EXISTS display1_state (
+              username     TEXT PRIMARY KEY,
+              payload_json TEXT NOT NULL,
+              updated_at   TEXT NOT NULL
+          )
+          """
+      )
+      connection.execute(
+          """
           CREATE TABLE IF NOT EXISTS slip_ocr_results (
               id           INTEGER PRIMARY KEY AUTOINCREMENT,
               order_code   TEXT UNIQUE NOT NULL,
@@ -662,6 +679,36 @@ def cache_invalidate(prefix: str) -> None:
     with _READ_CACHE_LOCK:
         for key in [k for k in _READ_CACHE if k.startswith(prefix)]:
             _READ_CACHE.pop(key, None)
+
+
+def display_state_set(username: str, payload: dict) -> None:
+    with open_db() as connection:
+        connection.execute(
+            "INSERT OR REPLACE INTO display1_state (username, payload_json, updated_at) VALUES (?,?,?)",
+            (username, json.dumps(payload, ensure_ascii=False), now_iso()),
+        )
+
+
+def display_state_get(username: str) -> dict:
+    with open_db() as connection:
+        row = connection.execute(
+            "SELECT payload_json FROM display1_state WHERE username=?",
+            (username,),
+        ).fetchone()
+    if row is None:
+        return {"active": False}
+    try:
+        return json.loads(row["payload_json"])
+    except (TypeError, json.JSONDecodeError):
+        return {"active": False}
+
+
+def display_state_users() -> list[str]:
+    with open_db() as connection:
+        rows = connection.execute(
+            "SELECT username FROM display1_state ORDER BY updated_at DESC"
+        ).fetchall()
+    return [r["username"] for r in rows]
 
 
 def compute_claim_token(username: str, password: str) -> str:
@@ -2379,18 +2426,14 @@ class OrderRequestHandler(BaseHTTPRequestHandler):
             return
 
         if path == "/display1/users":
-            with _global_lock:
-                users = list(_display_state.keys())
-            self._send_json(HTTPStatus.OK, users)
+            self._send_json(HTTPStatus.OK, display_state_users())
             return
 
         if path == "/display1/state":
             from urllib.parse import parse_qs as _pqs
             _qs = _pqs(urlparse(self.path).query)
             user = (_qs.get("user") or [""])[0].strip()
-            with _global_lock:
-                state = dict(_display_state.get(user, {"active": False}))
-            self._send_json(HTTPStatus.OK, state)
+            self._send_json(HTTPStatus.OK, display_state_get(user))
             return
 
         if path == "/display1/slides":
@@ -3235,8 +3278,7 @@ class OrderRequestHandler(BaseHTTPRequestHandler):
             if isinstance(payload, dict):
                 username = str(payload.get("username") or "").strip()
                 if username:
-                    with _global_lock:
-                        _display_state[username] = payload
+                    display_state_set(username, payload)
             self._send_json(HTTPStatus.OK, {"ok": True})
             return
 
