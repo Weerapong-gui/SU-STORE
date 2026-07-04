@@ -39,6 +39,10 @@ services:
     image: su-order-api:latest
     container_name: su-order-api
     restart: unless-stopped
+    ulimits:
+      nofile:
+        soft: 65536
+        hard: 65536
     ports:
       - "127.0.0.1:3010:10000"
     environment:
