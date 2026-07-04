@@ -55,6 +55,8 @@ services:
       BYPASS_TOKEN: ${BYPASS_TOKEN:-}
       PICKUP_USERNAME: ${PICKUP_USERNAME:-staff}
       PICKUP_PASSWORD: ${PICKUP_PASSWORD:-}
+      ORDER_API_WORKERS: ${ORDER_API_WORKERS:-1}
+      ORDER_API_WORKERS: ${ORDER_API_WORKERS:-1}
     volumes:
       - /home/park/SU-STORE/data/order-api:/var/data
     healthcheck:

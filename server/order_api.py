@@ -579,13 +579,89 @@ def ensure_db() -> None:
               )
 
 
-def open_db() -> sqlite3.Connection:
-    connection = sqlite3.connect(DB_PATH, timeout=30)
+_CONN_POOL: list[sqlite3.Connection] = []
+_CONN_POOL_LOCK = threading.Lock()
+_CONN_POOL_MAX = int(os.environ.get("ORDER_API_CONN_POOL_MAX", "32"))
+
+
+def _new_db_connection() -> sqlite3.Connection:
+    connection = sqlite3.connect(DB_PATH, timeout=30, check_same_thread=False)
     connection.row_factory = sqlite3.Row
     connection.execute("PRAGMA journal_mode=WAL")
     connection.execute("PRAGMA synchronous=NORMAL")
     connection.execute("PRAGMA busy_timeout=30000")
     return connection
+
+
+class _PooledConnection:
+    def __init__(self, connection: sqlite3.Connection) -> None:
+        self._connection = connection
+        self._broken = False
+
+    def __enter__(self) -> sqlite3.Connection:
+        return self._connection
+
+    def __exit__(self, exc_type, exc_val, exc_tb) -> bool:
+        try:
+            if exc_type is None:
+                self._connection.commit()
+            else:
+                self._connection.rollback()
+        except Exception:
+            self._broken = True
+        with _CONN_POOL_LOCK:
+            if self._broken or len(_CONN_POOL) >= _CONN_POOL_MAX:
+                try:
+                    self._connection.close()
+                except Exception:
+                    pass
+            else:
+                _CONN_POOL.append(self._connection)
+        return False
+
+
+def open_db() -> "_PooledConnection":
+    with _CONN_POOL_LOCK:
+        connection = _CONN_POOL.pop() if _CONN_POOL else None
+    if connection is None:
+        connection = _new_db_connection()
+    return _PooledConnection(connection)
+
+
+_READ_CACHE: dict[str, tuple[float, Any]] = {}
+_READ_CACHE_LOCK = threading.Lock()
+_READ_CACHE_TTL = float(os.environ.get("ORDER_API_READ_CACHE_TTL", "1.0"))
+_READ_CACHE_MAX = int(os.environ.get("ORDER_API_READ_CACHE_MAX", "5000"))
+
+
+def cache_get(key: str) -> Any:
+    if _READ_CACHE_TTL <= 0:
+        return None
+    with _READ_CACHE_LOCK:
+        entry = _READ_CACHE.get(key)
+    if entry is None:
+        return None
+    ts, value = entry
+    if (time.monotonic() - ts) > _READ_CACHE_TTL:
+        return None
+    return value
+
+
+def cache_set(key: str, value: Any) -> None:
+    if _READ_CACHE_TTL <= 0:
+        return
+    with _READ_CACHE_LOCK:
+        _READ_CACHE[key] = (time.monotonic(), value)
+        if len(_READ_CACHE) > _READ_CACHE_MAX:
+            drop = sorted(_READ_CACHE.items(), key=lambda kv: kv[1][0])[: _READ_CACHE_MAX // 5]
+            for k, _ in drop:
+                _READ_CACHE.pop(k, None)
+
+
+def cache_invalidate(prefix: str) -> None:
+    with _READ_CACHE_LOCK:
+        for key in [k for k in _READ_CACHE if k.startswith(prefix)]:
+            _READ_CACHE.pop(key, None)
 
 
 def compute_claim_token(username: str, password: str) -> str:
@@ -2579,6 +2655,11 @@ class OrderRequestHandler(BaseHTTPRequestHandler):
                 if qr_token != expected:
                     self._send_json(HTTPStatus.FORBIDDEN, {"message": "QR code ไม่ถูกต้อง — สแกนใหม่อีกครั้ง"})
                     return
+            cache_key = f"cs_order:{order_code}"
+            cached = cache_get(cache_key)
+            if cached is not None:
+                self._send_json(HTTPStatus.OK, cached)
+                return
             with open_db() as connection:
                 row = fetch_order_by_code(connection, order_code)
                 ocr_row = connection.execute(
@@ -2598,7 +2679,9 @@ class OrderRequestHandler(BaseHTTPRequestHandler):
                     "status": ocr_row["status"],
                     "refNumber": ocr_row["ref_number"],
                 }
-            self._send_json(HTTPStatus.OK, {"order": order_data})
+            response = {"order": order_data}
+            cache_set(cache_key, response)
+            self._send_json(HTTPStatus.OK, response)
             return
 
         if path == "/check-order":
@@ -3614,6 +3697,7 @@ class OrderRequestHandler(BaseHTTPRequestHandler):
                               "display2_enqueue_failed", f"{type(exc).__name__}: {exc}")
                 connection.commit()
                 updated = updated_row
+            cache_invalidate(f"cs_order:{order_code}")
             self._send_json(HTTPStatus.OK, {"order": serialize_order(updated)})
             return
 
@@ -3647,6 +3731,7 @@ class OrderRequestHandler(BaseHTTPRequestHandler):
                 )
                 log_audit(connection, order_code, "claim_rename", f"name → {new_name}")
                 connection.commit()
+            cache_invalidate(f"cs_order:{order_code}")
             self._send_json(HTTPStatus.OK, {"ok": True})
             return
 
@@ -3695,6 +3780,7 @@ class OrderRequestHandler(BaseHTTPRequestHandler):
                     self._send_json(HTTPStatus.CONFLICT, {"message": "ออเดอร์ถูกแก้ไขโดยผู้ใช้อื่นระหว่างที่คุณกำลังแก้ไข — กรุณารีโหลดและลองใหม่"})
                     return
                 connection.commit()
+            cache_invalidate(f"cs_order:{order_edit_match.group(1)}")
             self._send_json(HTTPStatus.OK, order)
             return
 
@@ -3996,9 +4082,40 @@ def _run_scheduled_backup() -> None:
         time.sleep(60)
 
 
+class _ReusePortHTTPServer(ThreadingHTTPServer):
+    """ThreadingHTTPServer that enables SO_REUSEPORT so multiple worker
+    processes can listen on the same port. Kernel load-balances accepts."""
+
+    def server_bind(self) -> None:
+        import socket as _sk
+        try:
+            self.socket.setsockopt(_sk.SOL_SOCKET, _sk.SO_REUSEADDR, 1)
+            if hasattr(_sk, "SO_REUSEPORT"):
+                self.socket.setsockopt(_sk.SOL_SOCKET, _sk.SO_REUSEPORT, 1)
+        except OSError:
+            pass
+        super().server_bind()
+
+
 if __name__ == "__main__":
     ensure_db()
-    threading.Thread(target=_run_scheduled_backup, daemon=True, name="scheduled-backup").start()
-    server = ThreadingHTTPServer((HOST, PORT), OrderRequestHandler)
-    print(f"Order API listening on http://{HOST}:{PORT}")
+
+    workers = max(1, int(os.environ.get("ORDER_API_WORKERS", "1")))
+    # Fork workers-1 children *before* opening the socket so each process
+    # binds independently with SO_REUSEPORT.
+    is_primary = True
+    for _ in range(workers - 1):
+        pid = os.fork()
+        if pid == 0:
+            is_primary = False
+            break
+
+    # Only the primary process runs the scheduled backup thread — otherwise
+    # every worker would race to write the same daily snapshot.
+    if is_primary:
+        threading.Thread(target=_run_scheduled_backup, daemon=True, name="scheduled-backup").start()
+
+    server = _ReusePortHTTPServer((HOST, PORT), OrderRequestHandler)
+    role = "primary" if is_primary else "worker"
+    print(f"Order API [{role} pid={os.getpid()}] listening on http://{HOST}:{PORT}")
     server.serve_forever()
