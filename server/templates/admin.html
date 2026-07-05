@@ -1193,9 +1193,11 @@
       }
       var adjustedTotal = orderItems.reduce(function(s, it) {
         if (isHeadbandItem(it)) return s;
-        var up = Number(it.unitPrice) || Number((it.product||{}).price) || 0;
+        var up = itemUnitPrice(it);
         var q = Number(it.quantity) || 0;
-        return s + (Number(it.totalAmount) || (up * q));
+        var line = Number(it.totalAmount);
+        if (!line || line === 0) line = up * q;
+        return s + line;
       }, 0);
       var totalAmount = adjustedTotal;
       var dateStr = fmtReceiptDate(order.createdAt);
@@ -1235,9 +1237,10 @@
           } else {
             if (item.size && item.size !== "-" && item.size !== "") name += " (" + item.size + ")";
           }
-          var unitPrice = isHeadband ? 0 : (Number(item.unitPrice) || Number(ip.price) || 0);
+          var unitPrice = isHeadband ? 0 : itemUnitPrice(item);
           var qty = isHeadband ? 0 : (Number(item.quantity) || 0);
-          var lineTotal = isHeadband ? 0 : (Number(item.totalAmount) || (unitPrice * qty));
+          var rawLine = Number(item.totalAmount);
+          var lineTotal = isHeadband ? 0 : ((!rawLine || rawLine === 0) ? unitPrice * qty : rawLine);
           var y = P.rowYs[idx];
           var sz = P.rowSize;
           svg.appendChild(mkText(ox + P.colNo,     y, idx + 1,                           { anchor: "middle", size: sz }));
@@ -1611,9 +1614,14 @@
     var editingOrderId = null;
     var editingOrderItems = [];
 
+    var PRODUCT_PRICE_FALLBACK = { "single-shirt": 399, "fresh-jacket": 899, "fresh-headband": 35 };
     function isHeadbandProduct(p) {
       p = p || {};
       return ((p.category || p.slug || "").toLowerCase().indexOf("headband") >= 0);
+    }
+    function itemUnitPrice(it) {
+      var slug = ((it && it.product) || {}).slug || "";
+      return Number((it||{}).unitPrice) || Number(((it||{}).product||{}).price) || PRODUCT_PRICE_FALLBACK[slug] || 0;
     }
     function orderAdjustedTotal(order) {
       var items = (order.items && order.items.length > 0)
@@ -1621,9 +1629,11 @@
         : [{ product: order.product || {}, quantity: order.quantity, unitPrice: (order.product||{}).price || 0, totalAmount: order.totalAmount }];
       return items.reduce(function(s, it) {
         if (isHeadbandProduct(it.product)) return s;
-        var up = Number(it.unitPrice) || Number((it.product||{}).price) || 0;
+        var up = itemUnitPrice(it);
         var q = Number(it.quantity) || 0;
-        return s + (Number(it.totalAmount) || (up * q));
+        var line = Number(it.totalAmount);
+        if (!line || line === 0) line = up * q;
+        return s + line;
       }, 0);
     }
 

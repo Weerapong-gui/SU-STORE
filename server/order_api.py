@@ -1440,19 +1440,35 @@ def update_order_fields(
 
     if "items" in fields and isinstance(fields["items"], list) and fields["items"]:
         raw_items = fields["items"]
+        product_price_map: dict[str, int] = {}
+        try:
+            for prow in connection.execute("SELECT slug, price FROM products").fetchall():
+                product_price_map[prow["slug"]] = int(prow["price"] or 0)
+        except sqlite3.Error:
+            pass
+        for dp in DEFAULT_PRODUCTS:
+            product_price_map.setdefault(dp["slug"], int(dp["price"]))
         new_items: list[dict[str, Any]] = []
         for item in raw_items:
             if not isinstance(item, dict):
                 continue
             school = item.get("school")
+            product = item.get("product") or {}
+            slug = product.get("slug") or ""
+            fallback_price = product_price_map.get(slug, 0)
+            unit_price = int(item.get("unitPrice") or product.get("price") or fallback_price or 0)
+            if not product.get("price") and fallback_price:
+                product = {**product, "price": fallback_price}
+            qty = max(1, int(item.get("quantity") or 1))
+            total_amount = int(item.get("totalAmount") or (unit_price * qty))
             new_items.append({
                 "id": str(item.get("id") or "item"),
-                "product": item.get("product", {}),
+                "product": product,
                 "size": str(item.get("size") or "").strip(),
                 "school": school if isinstance(school, str) and school.strip() else None,
-                "quantity": max(1, int(item.get("quantity") or 1)),
-                "unitPrice": int(item.get("unitPrice") or 0),
-                "totalAmount": int(item.get("totalAmount") or 0),
+                "quantity": qty,
+                "unitPrice": unit_price,
+                "totalAmount": total_amount,
             })
         if new_items:
             allowed["items_json"] = json.dumps(new_items, ensure_ascii=False)
