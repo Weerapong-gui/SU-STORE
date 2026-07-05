@@ -119,6 +119,8 @@
     .badge.paid, .badge.preparing, .badge.shipped { background: var(--badge-ok); color: var(--ok); }
     .badge.received { background: var(--badge-purple); color: var(--purple); }
     .badge.rejected, .badge.cancelled { background: var(--badge-danger); color: var(--danger); }
+    .badge.refund { background: var(--badge-warn); color: var(--warn); }
+    .badge.refunded { background: var(--badge-default); color: var(--muted); }
     .products-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px,1fr)); gap: 16px; }
     .product-card { background: var(--surface); border: 1px solid var(--line); border-radius: 12px; overflow: hidden; transition: box-shadow .2s; }
     .product-card:hover { box-shadow: 0 4px 20px rgba(0,0,0,.08); }
@@ -188,6 +190,7 @@
     <button class="tab-btn" data-tab="settings">Settings</button>
     <button class="tab-btn" data-tab="audit">Audit Log</button>
     <button class="tab-btn" data-tab="backup">Backup</button>
+    <button class="tab-btn" data-tab="feedback">ความคิดเห็น</button>
     <button class="tab-btn" data-tab="users" id="usersTabBtn" style="display:none;color:#92400e;align-items:center;gap:6px"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg> Users</button>
     <span style="margin-left:auto;display:flex;align-items:center;gap:5px;padding:0 8px;font-size:12px;color:var(--muted);flex-shrink:0">
       <span style="width:7px;height:7px;border-radius:50%;background:var(--ok);display:inline-block;flex-shrink:0"></span>
@@ -481,6 +484,35 @@
     </main>
   </div>
 
+  <!-- FEEDBACK TAB -->
+  <div class="tab-pane" id="tab-feedback">
+    <main>
+      <div class="settings-card">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;flex-wrap:wrap;gap:10px">
+          <h3 style="margin:0">ความคิดเห็นจากลูกค้า</h3>
+          <button class="secondary" id="refreshFeedbackBtn" style="font-size:12px;padding:6px 14px">รีเฟรช</button>
+        </div>
+        <div id="feedbackNotice" class="notice" style="margin-bottom:12px"></div>
+        <div id="feedbackSummary" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:10px;margin-bottom:16px"></div>
+        <div id="feedbackDistribution" style="margin-bottom:16px"></div>
+        <div style="overflow-x:auto">
+          <table class="users-tbl" id="feedbackTable">
+            <thead>
+              <tr>
+                <th style="width:70px">คะแนน</th>
+                <th style="width:130px">ออเดอร์</th>
+                <th>ความคิดเห็น</th>
+                <th style="width:180px">ลูกค้า</th>
+                <th style="width:140px">เวลา</th>
+              </tr>
+            </thead>
+            <tbody id="feedbackTbody"><tr><td colspan="5" style="text-align:center;color:var(--muted);padding:20px">กำลังโหลด...</td></tr></tbody>
+          </table>
+        </div>
+      </div>
+    </main>
+  </div>
+
   <!-- USERS TAB -->
   <div class="tab-pane" id="tab-users">
     <main>
@@ -494,11 +526,12 @@
             <thead><tr>
               <th>Username</th>
               <th>สิทธิ์</th>
+              <th>รหัสผ่าน</th>
               <th>เพิ่มโดย</th>
               <th>วันที่เพิ่ม</th>
               <th></th>
             </tr></thead>
-            <tbody id="usersTableBody"><tr><td colspan="5" style="text-align:center;color:var(--muted);padding:20px">Loading...</td></tr></tbody>
+            <tbody id="usersTableBody"><tr><td colspan="6" style="text-align:center;color:var(--muted);padding:20px">Loading...</td></tr></tbody>
           </table>
         </div>
         <div style="border-top:1px solid var(--line);padding-top:16px">
@@ -530,6 +563,26 @@
       <div style="display:flex;gap:10px">
         <button id="dlgConfirmBtn" style="flex:1;height:46px;border-radius:10px;font-size:14px;font-weight:700;color:#fff;border:none;cursor:pointer;transition:opacity .15s"></button>
         <button id="dlgCancelBtn" class="ghost" style="flex:1;height:46px;border-radius:10px;font-size:14px;font-weight:600">ยกเลิก</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- CHANGE PASSWORD MODAL -->
+  <div class="sa-modal-backdrop" id="pwChangeModal">
+    <div class="sa-modal">
+      <h3 id="pwChangeTitle">แก้ไขรหัสผ่าน</h3>
+      <div class="sa-field">
+        <label>รหัสผ่านใหม่</label>
+        <input id="pwChangeInput" type="password" placeholder="รหัสผ่านใหม่" style="height:40px" autocomplete="new-password" />
+      </div>
+      <div class="sa-field">
+        <label>ยืนยันรหัสผ่านใหม่</label>
+        <input id="pwChangeInput2" type="password" placeholder="พิมพ์ซ้ำอีกครั้ง" style="height:40px" autocomplete="new-password" />
+      </div>
+      <p id="pwChangeError" style="color:var(--danger);font-size:12px;min-height:16px;margin-bottom:12px"></p>
+      <div style="display:flex;gap:8px">
+        <button id="pwChangeOk" class="primary" style="flex:1">บันทึก</button>
+        <button id="pwChangeCancel" class="ghost">ยกเลิก</button>
       </div>
     </div>
   </div>
@@ -790,6 +843,7 @@
         if (btn.dataset.tab === "settings") loadSettings();
         if (btn.dataset.tab === "audit") loadAuditLog();
         if (btn.dataset.tab === "backup") loadBackupList();
+        if (btn.dataset.tab === "feedback") loadFeedback();
         if (btn.dataset.tab === "users") loadUsers();
       });
     });
@@ -900,37 +954,80 @@
 
     async function loadUsers() {
       var tbody = document.querySelector('#usersTableBody');
-      tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;color:var(--muted);padding:20px">Loading...</td></tr>';
+      tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;color:var(--muted);padding:20px">Loading...</td></tr>';
       try {
         const r = await fetch('/admin/users', { headers: saHeaders() });
         if (r.status === 401) {
-          tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;color:var(--danger);padding:20px">Session หมดอายุ กรุณา login ใหม่</td></tr>';
+          tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;color:var(--danger);padding:20px">Session หมดอายุ กรุณา login ใหม่</td></tr>';
           return;
         }
         const d = await r.json();
         const users = d.users || [];
         document.querySelector('#userCountBadge').textContent = users.length + ' คน';
         if (!users.length) {
-          tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;color:var(--muted);padding:20px">ยังไม่มี admin</td></tr>';
+          tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;color:var(--muted);padding:20px">ยังไม่มี admin</td></tr>';
           return;
         }
         tbody.innerHTML = users.map(function(u) {
           var badge = u.isSuperadmin ? '<span class="badge-super">SUPER</span>' : '';
           var role  = u.isSuperadmin ? 'Superadmin' : 'Admin';
           var dt    = u.createdAt ? new Date(u.createdAt).toLocaleDateString('th-TH') : '-';
+          var uArg = esc(JSON.stringify(u.username));
+          var pwCell =
+            '<span style="font-family:monospace;letter-spacing:2px;color:var(--muted)">••••••••</span>' +
+            ' <button onclick="changeUserPassword(' + uArg + ')" style="font-size:11px;min-height:26px;padding:0 10px;border:1px solid var(--line);color:var(--accent);background:none;border-radius:6px;cursor:pointer;margin-left:6px">แก้ไข</button>';
           var delBtn = u.isSuperadmin ? '' :
-            '<button onclick="deleteUser(' + JSON.stringify(u.username) + ')" style="font-size:11px;min-height:28px;padding:0 10px;border-color:var(--danger);color:var(--danger);background:none;border-radius:6px;cursor:pointer">ลบ</button>';
+            '<button onclick="deleteUser(' + uArg + ')" style="font-size:11px;min-height:28px;padding:0 10px;border-color:var(--danger);color:var(--danger);background:none;border-radius:6px;cursor:pointer">ลบ</button>';
           return '<tr>' +
             '<td><strong>' + esc(u.username) + '</strong>' + badge + '</td>' +
             '<td style="color:var(--muted);font-size:12px">' + role + '</td>' +
+            '<td>' + pwCell + '</td>' +
             '<td style="color:var(--muted);font-size:12px">' + esc(u.createdBy||'-') + '</td>' +
             '<td style="color:var(--muted);font-size:12px">' + dt + '</td>' +
             '<td>' + delBtn + '</td>' +
           '</tr>';
         }).join('');
       } catch(e) {
-        tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;color:var(--danger);padding:20px">โหลดข้อมูลไม่ได้</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;color:var(--danger);padding:20px">โหลดข้อมูลไม่ได้</td></tr>';
       }
+    }
+
+    async function changeUserPassword(username) {
+      var modal = document.getElementById('pwChangeModal');
+      var input = document.getElementById('pwChangeInput');
+      var input2 = document.getElementById('pwChangeInput2');
+      var err = document.getElementById('pwChangeError');
+      var title = document.getElementById('pwChangeTitle');
+      title.textContent = 'แก้ไขรหัสผ่าน: ' + username;
+      input.value = ''; input2.value = ''; err.textContent = '';
+      modal.style.display = 'flex';
+      setTimeout(function(){ input.focus(); }, 50);
+      return new Promise(function(resolve) {
+        var okBtn = document.getElementById('pwChangeOk');
+        var cancelBtn = document.getElementById('pwChangeCancel');
+        function cleanup() {
+          okBtn.onclick = null; cancelBtn.onclick = null;
+          modal.style.display = 'none';
+        }
+        cancelBtn.onclick = function() { cleanup(); resolve(false); };
+        okBtn.onclick = async function() {
+          var p1 = input.value, p2 = input2.value;
+          if (!p1 || p1.length < 4) { err.textContent = 'รหัสผ่านสั้นเกินไป (>= 4 ตัว)'; return; }
+          if (p1 !== p2) { err.textContent = 'รหัสผ่านไม่ตรงกัน'; return; }
+          okBtn.disabled = true; err.textContent = '';
+          try {
+            const r = await fetch('/admin/users/' + encodeURIComponent(username) + '/password', {
+              method: 'PUT', headers: saHeaders(),
+              body: JSON.stringify({ password: p1 })
+            });
+            const d = await r.json();
+            if (!r.ok) { err.textContent = d.message || 'แก้ไม่สำเร็จ'; okBtn.disabled = false; return; }
+            cleanup();
+            await showDialog({type:'alert',icon:'info',title:'สำเร็จ',message:'เปลี่ยนรหัสผ่านของ ' + username + ' แล้ว'});
+            resolve(true);
+          } catch(e) { err.textContent = 'เกิดข้อผิดพลาด'; okBtn.disabled = false; }
+        };
+      });
     }
 
     async function deleteUser(username) {
@@ -1086,9 +1183,20 @@
         return res + u1k(a) + "บาทถ้วน";
       }
 
-      var totalAmount = Number(order.totalAmount) || 0;
+      function isHeadbandItem(item) {
+        var ip = (item && item.product) || {};
+        return ((ip.category || ip.slug || "").toLowerCase().indexOf("headband") >= 0);
+      }
+      var adjustedTotal = orderItems.reduce(function(s, it) {
+        if (isHeadbandItem(it)) return s;
+        var up = Number(it.unitPrice) || Number((it.product||{}).price) || 0;
+        var q = Number(it.quantity) || 0;
+        return s + (Number(it.totalAmount) || (up * q));
+      }, 0);
+      var totalAmount = adjustedTotal;
       var dateStr = fmtReceiptDate(order.createdAt);
-      var school = c.school || (orderItems[0] && orderItems[0].school) || "";
+      function stripSchoolPrefix(s) { return String(s == null ? "" : s).replace(/^\s*school\s+of\s+/i, ""); }
+      var school = stripSchoolPrefix(c.school || (orderItems[0] && orderItems[0].school) || "");
       var receiptNo = String(order.sequenceNumber || 0).padStart(4, "0");
       var bahtText = "(" + toBahtText(totalAmount) + ")";
 
@@ -1118,13 +1226,14 @@
           var isHeadband = ((ip.category || ip.slug || "").toLowerCase().indexOf("headband") >= 0);
           var name = ip.name || "-";
           if (isHeadband) {
-            if (item.school && item.school.trim()) name += " (" + item.school + ")";
+            if (item.school && item.school.trim()) name += " (" + stripSchoolPrefix(item.school) + ")";
+            name += " (ยกเลิก)";
           } else {
             if (item.size && item.size !== "-" && item.size !== "") name += " (" + item.size + ")";
           }
-          var unitPrice = Number(item.unitPrice) || Number(ip.price) || 0;
-          var qty = Number(item.quantity) || 0;
-          var lineTotal = Number(item.totalAmount) || (unitPrice * qty);
+          var unitPrice = isHeadband ? 0 : (Number(item.unitPrice) || Number(ip.price) || 0);
+          var qty = isHeadband ? 0 : (Number(item.quantity) || 0);
+          var lineTotal = isHeadband ? 0 : (Number(item.totalAmount) || (unitPrice * qty));
           var y = P.rowYs[idx];
           var sz = P.rowSize;
           svg.appendChild(mkText(ox + P.colNo,     y, idx + 1,                           { anchor: "middle", size: sz }));
@@ -1166,8 +1275,8 @@
     }
 
     // ── ORDERS ─────────────────────────────────────────────────────────────────
-    var statuses = ["pending_payment","waiting_confirm","paid","preparing","shipped","received","cancelled","rejected"];
-    var STATUS_TH = {"pending_payment":"รอสลิป","waiting_confirm":"รอยืนยัน","paid":"ชำระแล้ว","preparing":"กำลังจัดเตรียม","shipped":"พร้อมรับ","received":"รับแล้ว ✓","cancelled":"ยกเลิก","rejected":"ปฏิเสธ"};
+    var statuses = ["pending_payment","waiting_confirm","paid","preparing","shipped","received","cancelled","rejected","refund","refunded"];
+    var STATUS_TH = {"pending_payment":"รอสลิป","waiting_confirm":"รอยืนยัน","paid":"ชำระแล้ว","preparing":"กำลังจัดเตรียม","shipped":"พร้อมรับ","received":"รับแล้ว ✓","cancelled":"ยกเลิก","rejected":"ปฏิเสธ","refund":"รอคืนเงิน","refunded":"คืนเงินแล้ว"};
     function fmtDate(iso) {
       if (!iso) return "-";
       var s = String(iso).replace(" ", "T");
@@ -2000,9 +2109,15 @@
       if (receiptBtn) {
         var oid = receiptBtn.dataset.oid;
         receiptBtn.disabled = true;
-        loadOrders().then(function() {
-          var fresh = allOrders.find(function(o) { return o.id === oid; });
-          if (fresh) printReceipt(fresh);
+        var bust = "?t=" + Date.now();
+        fetch("/admin/orders/" + encodeURIComponent(oid) + bust, {
+          headers: authHeaders(),
+          cache: "no-store",
+        }).then(function(r) {
+          if (!r.ok) throw new Error("HTTP " + r.status);
+          return r.json();
+        }).then(function(fresh) {
+          if (fresh && fresh.id) printReceipt(fresh);
           else setOrdersNotice("ไม่พบออเดอร์ — อาจถูกลบ", true);
         }).catch(function(err) {
           setOrdersNotice("โหลดข้อมูลล่าสุดล้มเหลว: " + err.message, true);
@@ -2350,7 +2465,9 @@
               '<div class="stat"><span>คำสั่งซื้อทั้งหมด</span><strong id="anTotal">' + d.total + '</strong></div>' +
               '<div class="stat"><span>รายได้ที่ยืนยันแล้ว</span><strong id="anRevenue">' + baht(d.revenue) + '</strong></div>' +
               '<div class="stat"><span>คณะ</span><strong id="anSchool">' + d.schoolCount + '</strong></div>' +
+              '<div class="stat"><span>นักศึกษาที่เข้าร่วม</span><strong id="anStudent">' + (d.studentCount || 0) + '</strong></div>' +
               '<div class="stat"><span style="color:var(--ok)">กำไรสุทธิ (~ประมาณ)</span><strong id="anProfit" style="color:var(--ok)">' + baht(d.profit) + '</strong></div>' +
+              '<div class="stat"><span style="color:var(--warn)">ยอดคืนเงินสะสม</span><strong id="anRefund" style="color:var(--warn)">' + baht(d.refundedAmount || 0) + ' <span style="font-size:12px;color:var(--muted)">(' + (d.refundedCount || 0) + ' ออเดอร์)</span></strong></div>' +
             '</div>' +
           '</div>' +
           '<div class="analytics-card" style="grid-column:1/-1"><h3>ออเดอร์รายวัน</h3><div id="dailyChart"></div></div>' +
@@ -2861,6 +2978,74 @@
         } catch(e) { setBackupNotice(e.message, true); }
       }
     });
+
+    // ── FEEDBACK ───────────────────────────────────────────────────────────────
+    function setFeedbackNotice(msg, err) {
+      var el = document.querySelector("#feedbackNotice");
+      if (!el) return;
+      el.textContent = msg || "";
+      el.className = "notice" + (err ? " err" : "");
+    }
+    var FB_META = [
+      {v:1,label:"แย่มาก",color:"#e11d48",emoji:"1"},
+      {v:2,label:"แย่",   color:"#f97316",emoji:"2"},
+      {v:3,label:"เฉยๆ",  color:"#f59e0b",emoji:"3"},
+      {v:4,label:"ดี",    color:"#84cc16",emoji:"4"},
+      {v:5,label:"ดีมาก", color:"#059669",emoji:"5"}
+    ];
+    function fbRatingBadge(r) {
+      var m = FB_META[Math.max(0, Math.min(4, r - 1))];
+      return '<span style="display:inline-flex;align-items:center;justify-content:center;min-width:56px;padding:4px 10px;border-radius:999px;font-weight:800;font-size:12px;background:' + m.color + '20;color:' + m.color + ';border:1.5px solid ' + m.color + '40">' + r + ' / 5</span>';
+    }
+    async function loadFeedback() {
+      setFeedbackNotice("กำลังโหลด...");
+      try {
+        var res = await fetch("/admin/feedback", { headers: authHeaders() });
+        if (!res.ok) throw new Error("HTTP " + res.status);
+        var d = await res.json();
+        var s = d.summary || { total: 0, avgRating: 0, distribution: {} };
+        var avg = s.total > 0 ? s.avgRating.toFixed(2) : "—";
+        var summaryEl = document.querySelector("#feedbackSummary");
+        summaryEl.innerHTML =
+          '<div style="border:1px solid var(--border);border-radius:12px;padding:14px;background:var(--bg)"><div style="font-size:11px;color:var(--muted);font-weight:700;letter-spacing:.05em">จำนวนทั้งหมด</div><div style="font-size:28px;font-weight:800;margin-top:4px">' + s.total + '</div></div>' +
+          '<div style="border:1px solid var(--border);border-radius:12px;padding:14px;background:var(--bg)"><div style="font-size:11px;color:var(--muted);font-weight:700;letter-spacing:.05em">คะแนนเฉลี่ย</div><div style="font-size:28px;font-weight:800;margin-top:4px;color:var(--accent)">' + avg + '</div></div>';
+        var maxN = 0;
+        for (var k in s.distribution) { if (s.distribution[k] > maxN) maxN = s.distribution[k]; }
+        var distEl = document.querySelector("#feedbackDistribution");
+        var distHtml = '<div style="border:1px solid var(--border);border-radius:12px;padding:14px;background:var(--bg)"><div style="font-size:11px;color:var(--muted);font-weight:700;letter-spacing:.05em;margin-bottom:8px">การกระจายคะแนน</div>';
+        for (var i = 5; i >= 1; i--) {
+          var n = s.distribution[String(i)] || 0;
+          var pct = maxN > 0 ? Math.round(n / maxN * 100) : 0;
+          var m = FB_META[i - 1];
+          distHtml += '<div style="display:flex;align-items:center;gap:10px;margin:6px 0;font-size:12px">' +
+            '<div style="width:70px;font-weight:700;color:' + m.color + '">' + m.label + '</div>' +
+            '<div style="flex:1;height:10px;background:var(--border);border-radius:999px;overflow:hidden"><div style="width:' + pct + '%;height:100%;background:' + m.color + ';transition:width .4s"></div></div>' +
+            '<div style="width:36px;text-align:right;font-weight:700;color:var(--muted)">' + n + '</div></div>';
+        }
+        distHtml += '</div>';
+        distEl.innerHTML = distHtml;
+        var tbody = document.querySelector("#feedbackTbody");
+        if (!d.feedback || d.feedback.length === 0) {
+          tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;color:var(--muted);padding:20px">ยังไม่มีความคิดเห็น</td></tr>';
+        } else {
+          tbody.innerHTML = d.feedback.map(function(f) {
+            var cust = (f.fullName || '-') + (f.studentCode ? '<br><span style="font-size:11px;color:var(--muted)">' + esc(f.studentCode) + '</span>' : '');
+            return '<tr>' +
+              '<td>' + fbRatingBadge(f.rating) + '</td>' +
+              '<td style="font-family:monospace;font-weight:700">' + esc(f.orderCode) + '</td>' +
+              '<td style="font-size:13px;line-height:1.5">' + (f.comment ? esc(f.comment) : '<span style="color:var(--muted)">—</span>') + '</td>' +
+              '<td>' + cust + '</td>' +
+              '<td style="font-size:12px;color:var(--muted)">' + fmtDate(f.createdAt) + '</td>' +
+              '</tr>';
+          }).join('');
+        }
+        setFeedbackNotice(s.total > 0 ? "โหลดสำเร็จ " + d.feedback.length + " รายการ" : "");
+      } catch (e) {
+        setFeedbackNotice("โหลดล้มเหลว: " + e.message, true);
+        document.querySelector("#feedbackTbody").innerHTML = '<tr><td colspan="5" style="text-align:center;color:var(--danger);padding:20px">โหลดล้มเหลว</td></tr>';
+      }
+    }
+    document.querySelector("#refreshFeedbackBtn").addEventListener("click", function() { loadFeedback(); });
 
     // ── Init ───────────────────────────────────────────────────────────────────
     loadProducts();

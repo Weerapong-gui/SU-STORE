@@ -67,6 +67,8 @@ ORDER_STATUSES = {
     "received",
     "cancelled",
     "rejected",
+    "refund",
+    "refunded",
 }
 PAYMENT_STATUS_BY_ORDER_STATUS = {
     "pending_payment": "awaiting_payment",
@@ -77,6 +79,8 @@ PAYMENT_STATUS_BY_ORDER_STATUS = {
     "received": "paid",
     "cancelled": "rejected",
     "rejected": "rejected",
+    "refund": "refund_pending",
+    "refunded": "refunded",
 }
 
 # In-memory visitor tracking (IP → last-seen timestamp)
@@ -448,6 +452,18 @@ def ensure_db() -> None:
       )
       connection.execute("CREATE INDEX IF NOT EXISTS idx_audit_order_code ON order_audit_log(order_code)")
       connection.execute("CREATE INDEX IF NOT EXISTS idx_audit_created_at ON order_audit_log(created_at)")
+      connection.execute(
+          """
+          CREATE TABLE IF NOT EXISTS order_feedback (
+              id INTEGER PRIMARY KEY AUTOINCREMENT,
+              order_code TEXT NOT NULL UNIQUE,
+              rating INTEGER NOT NULL,
+              comment TEXT NOT NULL DEFAULT '',
+              created_at TEXT NOT NULL
+          )
+          """
+      )
+      connection.execute("CREATE INDEX IF NOT EXISTS idx_feedback_created_at ON order_feedback(created_at)")
       connection.execute(
           """
           CREATE TABLE IF NOT EXISTS display2_picks (
@@ -898,6 +914,15 @@ def materialize_slip_payload(order_code: str, slip: dict[str, Any]) -> tuple[dic
     )
 
 
+def has_feedback_for_order(order_code: str) -> bool:
+    try:
+        with open_db() as conn:
+            row = conn.execute("SELECT 1 FROM order_feedback WHERE order_code=?", (order_code,)).fetchone()
+        return row is not None
+    except sqlite3.Error:
+        return False
+
+
 def serialize_order(row: sqlite3.Row, include_access_token: bool = False) -> dict[str, Any]:
     row_keys = set(row.keys())
     slip = None
@@ -984,6 +1009,7 @@ def serialize_order(row: sqlite3.Row, include_access_token: bool = False) -> dic
         "adminNote": row["admin_note"] if "admin_note" in row_keys else None,
         "receivedAt": row["received_at"] if "received_at" in row_keys else None,
         "receivedBy": row["received_by"] if "received_by" in row_keys else None,
+        "feedbackSubmitted": has_feedback_for_order(row["order_code"]),
         "qrToken": compute_qr_token(row["order_code"]),
     }
     if include_access_token:
@@ -2097,12 +2123,12 @@ PRODUCT_COST: dict[str, int] = {"single": 158, "jacket": 685, "headband": 20}
 def get_analytics(connection: sqlite3.Connection) -> dict[str, Any]:
     total_row = connection.execute("SELECT COUNT(*) AS cnt FROM orders").fetchone()
     total = int(total_row["cnt"] if total_row else 0)
-    revenue_row = connection.execute(
-        "SELECT COALESCE(SUM(total_amount), 0) AS rev FROM orders WHERE status IN ('paid','preparing','shipped','received')"
-    ).fetchone()
-    revenue = int(revenue_row["rev"] if revenue_row else 0)
     school_count_row = connection.execute("SELECT COUNT(DISTINCT school) AS cnt FROM orders").fetchone()
     school_count = int(school_count_row["cnt"] if school_count_row else 0)
+    student_count_row = connection.execute(
+        "SELECT COUNT(DISTINCT student_code) AS cnt FROM orders WHERE student_code IS NOT NULL AND student_code != ''"
+    ).fetchone()
+    student_count = int(student_count_row["cnt"] if student_count_row else 0)
     by_school = connection.execute(
         "SELECT school, COUNT(*) AS cnt FROM orders GROUP BY school ORDER BY cnt DESC"
     ).fetchall()
@@ -2118,10 +2144,11 @@ def get_analytics(connection: sqlite3.Connection) -> dict[str, Any]:
     by_day = connection.execute(
         "SELECT DATE(created_at, '+7 hours') AS day, COUNT(*) AS cnt FROM orders WHERE DATE(created_at, '+7 hours') != '2026-05-17' GROUP BY day ORDER BY day"
     ).fetchall()
-    # คำนวณต้นทุนจากออเดอร์ที่ confirmed เท่านั้น
+    # Revenue + cost: exclude headband items (refund) and exclude refund/refunded orders
     confirmed_rows = connection.execute(
-        "SELECT items_json, product_category, quantity FROM orders WHERE status IN ('paid','preparing','shipped','received')"
+        "SELECT items_json, product_category, product_price, quantity, total_amount FROM orders WHERE status IN ('paid','preparing','shipped','received')"
     ).fetchall()
+    revenue = 0
     cost_qty: dict[str, int] = {}
     for row in confirmed_rows:
         counted = False
@@ -2132,6 +2159,10 @@ def get_analytics(connection: sqlite3.Connection) -> dict[str, Any]:
                     for item in parsed:
                         cat = (item.get("product") or {}).get("category") or ""
                         qty = int(item.get("quantity") or 0)
+                        up = int(item.get("unitPrice") or (item.get("product") or {}).get("price") or 0)
+                        if cat == "headband":
+                            continue
+                        revenue += up * qty
                         if cat:
                             cost_qty[cat] = cost_qty.get(cat, 0) + qty
                     counted = True
@@ -2139,15 +2170,25 @@ def get_analytics(connection: sqlite3.Connection) -> dict[str, Any]:
                 pass
         if not counted:
             cat = row["product_category"] or ""
-            if cat:
-                cost_qty[cat] = cost_qty.get(cat, 0) + int(row["quantity"] or 0)
+            if cat != "headband":
+                revenue += int(row["total_amount"] or 0)
+                if cat:
+                    cost_qty[cat] = cost_qty.get(cat, 0) + int(row["quantity"] or 0)
+    refunded_row = connection.execute(
+        "SELECT COALESCE(SUM(total_amount), 0) AS r, COUNT(*) AS c FROM orders WHERE status IN ('refund','refunded')"
+    ).fetchone()
+    refunded_amount = int(refunded_row["r"] if refunded_row else 0)
+    refunded_count = int(refunded_row["c"] if refunded_row else 0)
     total_cost = sum(cost_qty.get(cat, 0) * price for cat, price in PRODUCT_COST.items())
     profit = revenue - total_cost
     return {
         "total": total,
         "revenue": revenue,
         "schoolCount": school_count,
+        "studentCount": student_count,
         "profit": profit,
+        "refundedAmount": refunded_amount,
+        "refundedCount": refunded_count,
         "bySchool": [[row["school"], row["cnt"]] for row in by_school],
         "byProduct": [[row["product_name"], row["cnt"]] for row in by_product],
         "byStatus": [[row["status"], row["cnt"]] for row in by_status],
@@ -3083,6 +3124,52 @@ class OrderRequestHandler(BaseHTTPRequestHandler):
             })
             return
 
+        if path == "/admin/feedback":
+            if not self._require_admin_authorization():
+                return
+            from urllib.parse import parse_qs as _pqs_fb
+            qs = _pqs_fb(urlparse(self.path).query)
+            limit = min(max(1, int((qs.get("limit") or ["500"])[0])), 2000)
+            with open_db() as connection:
+                rows = connection.execute(
+                    """SELECT f.id, f.order_code, f.rating, f.comment, f.created_at,
+                              o.full_name, o.student_code, o.school
+                       FROM order_feedback f
+                       LEFT JOIN orders o ON o.order_code = f.order_code
+                       ORDER BY f.created_at DESC LIMIT ?""",
+                    (limit,),
+                ).fetchall()
+                summary_row = connection.execute(
+                    "SELECT COUNT(*) AS total, AVG(rating) AS avg_rating FROM order_feedback"
+                ).fetchone()
+                dist_rows = connection.execute(
+                    "SELECT rating, COUNT(*) AS n FROM order_feedback GROUP BY rating"
+                ).fetchall()
+            distribution = {str(i): 0 for i in range(1, 6)}
+            for r in dist_rows:
+                distribution[str(int(r["rating"]))] = int(r["n"])
+            self._send_json(HTTPStatus.OK, {
+                "feedback": [
+                    {
+                        "id": row["id"],
+                        "orderCode": row["order_code"],
+                        "rating": int(row["rating"]),
+                        "comment": row["comment"] or "",
+                        "createdAt": row["created_at"],
+                        "fullName": row["full_name"] or "",
+                        "studentCode": row["student_code"] or "",
+                        "school": row["school"] or "",
+                    }
+                    for row in rows
+                ],
+                "summary": {
+                    "total": int(summary_row["total"] or 0),
+                    "avgRating": float(summary_row["avg_rating"]) if summary_row["avg_rating"] is not None else 0.0,
+                    "distribution": distribution,
+                },
+            })
+            return
+
         if path == "/admin/site-settings":
             if not self._require_admin_authorization():
                 return
@@ -3264,6 +3351,48 @@ class OrderRequestHandler(BaseHTTPRequestHandler):
                 "uploadedAt": uploaded_at,
                 "url": f"/admin/orders/{order_code}/extra-slips/{new_id}",
             })
+            return
+
+        feedback_match = re.fullmatch(r"/orders/([A-Z0-9-]+)/feedback", path)
+        if feedback_match:
+            order_code = feedback_match.group(1)
+            try:
+                payload = self._read_json()
+            except json.JSONDecodeError:
+                self._send_json(HTTPStatus.BAD_REQUEST, {"message": "invalid json"})
+                return
+            if not isinstance(payload, dict):
+                self._send_json(HTTPStatus.BAD_REQUEST, {"message": "invalid payload"})
+                return
+            try:
+                rating = int(payload.get("rating", 0))
+            except (TypeError, ValueError):
+                rating = 0
+            if rating < 1 or rating > 5:
+                self._send_json(HTTPStatus.BAD_REQUEST, {"message": "rating must be 1-5"})
+                return
+            comment = str(payload.get("comment") or "").strip()[:500]
+            with open_db() as connection:
+                existing_order = fetch_order_by_code(connection, order_code)
+                if existing_order is None:
+                    self._send_json(HTTPStatus.NOT_FOUND, {"message": "order not found"})
+                    return
+                if existing_order["status"] != "received":
+                    self._send_json(HTTPStatus.BAD_REQUEST, {"message": "order not received yet"})
+                    return
+                existing_fb = connection.execute(
+                    "SELECT 1 FROM order_feedback WHERE order_code=?", (order_code,)
+                ).fetchone()
+                if existing_fb:
+                    self._send_json(HTTPStatus.CONFLICT, {"message": "feedback already submitted"})
+                    return
+                connection.execute(
+                    "INSERT INTO order_feedback (order_code, rating, comment, created_at) VALUES (?, ?, ?, ?)",
+                    (order_code, rating, comment, now_iso()),
+                )
+                log_audit(connection, order_code, "feedback_submitted", f"rating={rating}")
+                connection.commit()
+            self._send_json(HTTPStatus.OK, {"ok": True})
             return
 
         if path == "/display1/update":
@@ -3659,6 +3788,45 @@ class OrderRequestHandler(BaseHTTPRequestHandler):
                     return
                 connection.commit()
             self._send_json(HTTPStatus.OK, product)
+            return
+
+        admin_user_pw_match = re.fullmatch(r"/admin/users/([^/]+)/password", path)
+        if admin_user_pw_match:
+            if not self._has_superadmin_authorization():
+                self._deny_unauthorized()
+                return
+            username = admin_user_pw_match.group(1)
+            try:
+                payload = self._read_json()
+            except json.JSONDecodeError:
+                self._send_json(HTTPStatus.BAD_REQUEST, {"message": "invalid json"})
+                return
+            new_password = ((payload or {}).get("password") or "") if isinstance(payload, dict) else ""
+            if not new_password or len(new_password) < 4:
+                self._send_json(HTTPStatus.BAD_REQUEST, {"message": "รหัสผ่านต้องมีอย่างน้อย 4 ตัวอักษร"})
+                return
+            if len(new_password) > 128:
+                self._send_json(HTTPStatus.BAD_REQUEST, {"message": "รหัสผ่านยาวเกินไป"})
+                return
+            with open_db() as conn:
+                row = conn.execute("SELECT is_superadmin FROM admin_users WHERE username=?", (username,)).fetchone()
+                if not row:
+                    self._send_json(HTTPStatus.NOT_FOUND, {"message": f"ไม่พบ user '{username}'"})
+                    return
+                new_claim = compute_claim_token(username, new_password)
+                if row["is_superadmin"]:
+                    new_super = compute_super_token(username, new_password)
+                    conn.execute(
+                        "UPDATE admin_users SET claim_token=?, super_token=? WHERE username=?",
+                        (new_claim, new_super, username),
+                    )
+                else:
+                    conn.execute(
+                        "UPDATE admin_users SET claim_token=? WHERE username=?",
+                        (new_claim, username),
+                    )
+                conn.commit()
+            self._send_json(HTTPStatus.OK, {"ok": True, "username": username})
             return
 
         order_match = re.fullmatch(r"/orders/([A-Z0-9-]+)", path)
