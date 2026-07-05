@@ -1280,12 +1280,15 @@ def create_orders_summary(connection: sqlite3.Connection, round_filter: int = 0)
             round_params,
         ).fetchall()
     }
-    total_row = connection.execute(f"SELECT COUNT(*) AS cnt FROM orders WHERE 1=1 {round_where}", round_params).fetchone()
+    total_row = connection.execute(
+        f"SELECT COUNT(*) AS cnt FROM orders WHERE status NOT IN ('refund','refunded') {round_where}",
+        round_params,
+    ).fetchone()
     # Count per-category qty from items_json so multi-item orders are fully counted
-    # Exclude rejected and cancelled orders from product quantity totals
+    # Exclude rejected, cancelled, refund, and refunded orders from product quantity totals
     category_counts: dict[str, int] = {}
     for row in connection.execute(
-        f"SELECT items_json, product_category, quantity FROM orders WHERE status NOT IN ('rejected', 'cancelled') {round_where}",
+        f"SELECT items_json, product_category, quantity FROM orders WHERE status NOT IN ('rejected','cancelled','refund','refunded') {round_where}",
         round_params,
     ).fetchall():
         counted = False
@@ -2121,28 +2124,29 @@ def get_product_breakdown(connection: sqlite3.Connection, category: str, round_f
 PRODUCT_COST: dict[str, int] = {"single": 158, "jacket": 685, "headband": 20}
 
 def get_analytics(connection: sqlite3.Connection) -> dict[str, Any]:
-    total_row = connection.execute("SELECT COUNT(*) AS cnt FROM orders").fetchone()
+    exclude_refund = "status NOT IN ('refund','refunded')"
+    total_row = connection.execute(f"SELECT COUNT(*) AS cnt FROM orders WHERE {exclude_refund}").fetchone()
     total = int(total_row["cnt"] if total_row else 0)
-    school_count_row = connection.execute("SELECT COUNT(DISTINCT school) AS cnt FROM orders").fetchone()
+    school_count_row = connection.execute(f"SELECT COUNT(DISTINCT school) AS cnt FROM orders WHERE {exclude_refund}").fetchone()
     school_count = int(school_count_row["cnt"] if school_count_row else 0)
     student_count_row = connection.execute(
-        "SELECT COUNT(DISTINCT student_code) AS cnt FROM orders WHERE student_code IS NOT NULL AND student_code != ''"
+        f"SELECT COUNT(DISTINCT student_code) AS cnt FROM orders WHERE student_code IS NOT NULL AND student_code != '' AND {exclude_refund}"
     ).fetchone()
     student_count = int(student_count_row["cnt"] if student_count_row else 0)
     by_school = connection.execute(
-        "SELECT school, COUNT(*) AS cnt FROM orders GROUP BY school ORDER BY cnt DESC"
+        f"SELECT school, COUNT(*) AS cnt FROM orders WHERE {exclude_refund} GROUP BY school ORDER BY cnt DESC"
     ).fetchall()
     by_product = connection.execute(
-        "SELECT product_name, COUNT(*) AS cnt FROM orders GROUP BY product_name ORDER BY cnt DESC"
+        f"SELECT product_name, COUNT(*) AS cnt FROM orders WHERE {exclude_refund} GROUP BY product_name ORDER BY cnt DESC"
     ).fetchall()
     by_status = connection.execute(
         "SELECT status, COUNT(*) AS cnt FROM orders GROUP BY status ORDER BY cnt DESC"
     ).fetchall()
     by_size = connection.execute(
-        "SELECT size, COUNT(*) AS cnt FROM orders WHERE size != '' GROUP BY size ORDER BY cnt DESC LIMIT 20"
+        f"SELECT size, COUNT(*) AS cnt FROM orders WHERE size != '' AND {exclude_refund} GROUP BY size ORDER BY cnt DESC LIMIT 20"
     ).fetchall()
     by_day = connection.execute(
-        "SELECT DATE(created_at, '+7 hours') AS day, COUNT(*) AS cnt FROM orders WHERE DATE(created_at, '+7 hours') != '2026-05-17' GROUP BY day ORDER BY day"
+        f"SELECT DATE(created_at, '+7 hours') AS day, COUNT(*) AS cnt FROM orders WHERE DATE(created_at, '+7 hours') != '2026-05-17' AND {exclude_refund} GROUP BY day ORDER BY day"
     ).fetchall()
     # Revenue + cost: exclude headband items (refund) and exclude refund/refunded orders
     confirmed_rows = connection.execute(
