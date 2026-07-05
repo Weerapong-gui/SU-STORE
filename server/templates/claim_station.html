@@ -820,10 +820,120 @@
       if (!checkedIds.length) { alert('กรุณาเลือกอย่างน้อย 1 ออเดอร์'); return; }
       var selected = _lastOrderListCache.filter(function(o) { return checkedIds.indexOf(o.id) >= 0; });
       if (!selected.length) { alert('ไม่พบออเดอร์ที่เลือก'); return; }
-      if (selected.length > 20 && !confirm('พิมพ์ใบเสร็จ ' + selected.length + ' ใบ ต่อหรือไม่?')) return;
-      if (selected.length > 1) pushDisplay(_buildDisplayStateMulti(selected));
-      else if (selected.length === 1) pushDisplay(_buildDisplayState(selected[0], false));
-      printReceiptsBatch(selected);
+      openBatchReviewModal(selected);
+    }
+    var _batchReviewOrders = [];
+    function openBatchReviewModal(orders) {
+      _batchReviewOrders = orders.slice();
+      var initialName = '';
+      for (var i = 0; i < orders.length; i++) {
+        var c = orders[i].customer || {};
+        if (c.fullName) { initialName = c.fullName; break; }
+      }
+      var studentCode = '';
+      var school = '';
+      if (orders[0] && orders[0].customer) {
+        studentCode = orders[0].customer.studentCode || '';
+        school = orders[0].customer.school || '';
+      }
+      var grand = 0;
+      var orderBlocks = '';
+      for (var oi = 0; oi < orders.length; oi++) {
+        var o = orders[oi];
+        var mapped = _mapOrderItems(o);
+        var subTotal = _orderAdjustedTotal(o);
+        grand += subTotal;
+        var rowsHtml = mapped.map(function(it) {
+          var isCancelled = it.total === 0 && (it.name.indexOf('ยกเลิก') >= 0);
+          var priceCls = isCancelled ? 'color:#94a3b8;text-decoration:line-through' : 'color:var(--primary);font-weight:700';
+          var nameCls = isCancelled ? 'color:#94a3b8' : '';
+          return '<div style="display:flex;justify-content:space-between;gap:12px;padding:4px 0;font-size:13px">' +
+            '<div style="flex:1;' + nameCls + '">' + esc(it.name) + ' <span style="color:var(--muted);font-size:11px">' + (it.size ? 'Size ' + esc(it.size) : '') + (it.qty ? ' × ' + it.qty : '') + '</span></div>' +
+            '<div style="' + priceCls + '">' + baht(it.total) + '</div>' +
+          '</div>';
+        }).join('');
+        orderBlocks +=
+          '<div style="border:1px solid var(--border);border-radius:10px;padding:10px 12px;margin-bottom:8px;background:var(--surface)">' +
+            '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">' +
+              '<div style="font-weight:700;font-size:14px">' + esc(o.id || '-') + '</div>' +
+              '<div style="font-weight:700;color:var(--primary);font-size:14px">' + baht(subTotal) + '</div>' +
+            '</div>' +
+            rowsHtml +
+          '</div>';
+      }
+      var modal = document.getElementById('csBatchReviewModal');
+      if (!modal) {
+        modal = document.createElement('div');
+        modal.id = 'csBatchReviewModal';
+        modal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.65);z-index:9999;display:flex;align-items:center;justify-content:center;padding:24px';
+        document.body.appendChild(modal);
+      }
+      modal.innerHTML =
+        '<div style="background:var(--bg);color:var(--text);border-radius:14px;max-width:640px;width:100%;max-height:92vh;overflow:auto;padding:20px;box-shadow:0 20px 60px rgba(0,0,0,.6)">' +
+          '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px">' +
+            '<div style="font-weight:800;font-size:18px">ตรวจสอบก่อนพิมพ์ (' + orders.length + ' ออเดอร์)</div>' +
+            '<button onclick="closeBatchReviewModal()" style="background:none;border:none;color:var(--muted);font-size:22px;cursor:pointer;line-height:1">&times;</button>' +
+          '</div>' +
+          '<div style="margin-bottom:12px">' +
+            '<div style="font-size:12px;color:var(--muted);margin-bottom:4px">ชื่อลูกค้า (ใช้กับทุกออเดอร์)</div>' +
+            '<input id="csBatchNameInput" type="text" value="' + esc(initialName) + '" style="width:100%;padding:10px 12px;border:1.5px solid var(--border);border-radius:8px;font-size:15px;background:var(--surface);color:var(--text)" />' +
+            '<div style="font-size:11px;color:var(--muted);margin-top:4px">' + esc(studentCode) + (school ? ' · ' + esc(school) : '') + '</div>' +
+          '</div>' +
+          '<div style="margin-bottom:12px">' + orderBlocks + '</div>' +
+          '<div style="display:flex;justify-content:space-between;align-items:center;padding:10px 12px;background:var(--surface);border-radius:10px;margin-bottom:14px">' +
+            '<div style="font-weight:700">ยอดรวมทั้งหมด</div>' +
+            '<div style="font-weight:800;font-size:18px;color:var(--primary)">' + baht(grand) + '</div>' +
+          '</div>' +
+          '<div style="display:flex;gap:10px">' +
+            '<button onclick="closeBatchReviewModal()" style="flex:1;padding:12px;border:1.5px solid var(--border);border-radius:10px;background:none;color:var(--muted);font-weight:600;cursor:pointer">ยกเลิก</button>' +
+            '<button onclick="confirmBatchReview()" id="csBatchConfirmBtn" style="flex:2;padding:12px;border:none;border-radius:10px;background:var(--primary);color:#fff;font-weight:700;cursor:pointer">ยืนยัน + พิมพ์</button>' +
+          '</div>' +
+        '</div>';
+      modal.style.display = 'flex';
+      setTimeout(function() {
+        var inp = document.getElementById('csBatchNameInput');
+        if (inp) inp.focus();
+      }, 80);
+    }
+    function closeBatchReviewModal() {
+      var modal = document.getElementById('csBatchReviewModal');
+      if (modal) modal.style.display = 'none';
+      _batchReviewOrders = [];
+    }
+    async function confirmBatchReview() {
+      var orders = _batchReviewOrders;
+      if (!orders || !orders.length) { closeBatchReviewModal(); return; }
+      var nameInp = document.getElementById('csBatchNameInput');
+      var newName = nameInp ? nameInp.value.trim() : '';
+      var btn = document.getElementById('csBatchConfirmBtn');
+      if (btn) { btn.disabled = true; btn.textContent = 'กำลังบันทึก…'; }
+      try {
+        if (newName) {
+          var toUpdate = orders.filter(function(o) {
+            return !o.customer || (o.customer.fullName || '') !== newName;
+          });
+          if (toUpdate.length) {
+            await Promise.all(toUpdate.map(function(o) {
+              return fetch('/claim-station/orders/' + encodeURIComponent(o.id) + '/name', {
+                method: 'PATCH',
+                headers: {'Authorization': 'Claim ' + currentToken, 'Content-Type': 'application/json'},
+                body: JSON.stringify({fullName: newName}),
+              }).then(function(r) {
+                if (r.ok) {
+                  if (!o.customer) o.customer = {};
+                  o.customer.fullName = newName;
+                }
+              }).catch(function() {});
+            }));
+          }
+        }
+        if (orders.length > 1) pushDisplay(_buildDisplayStateMulti(orders));
+        else pushDisplay(_buildDisplayState(orders[0], false));
+        closeBatchReviewModal();
+        printReceiptsBatch(orders);
+      } finally {
+        if (btn) { btn.disabled = false; btn.textContent = 'ยืนยัน + พิมพ์'; }
+      }
     }
 
     function lookupOrder(code, qrToken) {

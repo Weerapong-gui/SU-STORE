@@ -129,6 +129,11 @@ html, body {
   min-width: 96px; min-height: 110px;
   display: flex; align-items: center; justify-content: center;
 }
+.q-size.q-size-ticket {
+  padding: 4px; min-width: 260px; min-height: 110px;
+  background: transparent; border: none; overflow: hidden;
+}
+.q-size.q-size-ticket img { max-width: 100%; max-height: 100%; height: auto; display: block; }
 .q-size-group { display: flex; gap: 10px; align-items: stretch; }
 .q-color-swatch { width: 96px; min-height: 100%; border-radius: 14px; border: 2px solid rgba(255,255,255,.12); flex-shrink: 0; }
 .q-info { display: flex; flex-direction: column; gap: 4px; }
@@ -524,11 +529,14 @@ html, body {
       } else if (station === 'khantok') {
         var kSize = String(it.size || '');
         var kAmt = kSize.replace(/[^0-9]/g, '');
-        var kBg = '', kFg = '', kBd = '';
-        if (kAmt === '100') { kBg = 'linear-gradient(135deg,#d4a12b,#f7d879)'; kFg = '#3b2606'; kBd = '#a37d15'; }
-        else if (kAmt === '50') { kBg = 'linear-gradient(135deg,#c1272d,#e85a5f)'; kFg = '#fff'; kBd = '#8a1519'; }
-        var kStyle = kBg ? ('background:' + kBg + ';color:' + kFg + ';border-color:' + kBd) : '';
-        sizeHtml = '<div class="q-size" style="' + kStyle + '">' + escapeHtml(kSize || '-') + '</div>';
+        var kImg = '';
+        if (kAmt === '100') kImg = '/assets/khantok-ticket-100.png';
+        else if (kAmt === '50') kImg = '/assets/khantok-ticket-50.png';
+        if (kImg) {
+          sizeHtml = '<div class="q-size q-size-ticket"><img src="' + kImg + '" alt="ticket ' + escapeHtml(kAmt) + '" /></div>';
+        } else {
+          sizeHtml = '<div class="q-size">' + escapeHtml(kSize || '-') + '</div>';
+        }
       } else {
         sizeHtml = '<div class="q-size">' + escapeHtml(it.size || '-') + '</div>';
       }
