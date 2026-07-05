@@ -1611,6 +1611,22 @@
     var editingOrderId = null;
     var editingOrderItems = [];
 
+    function isHeadbandProduct(p) {
+      p = p || {};
+      return ((p.category || p.slug || "").toLowerCase().indexOf("headband") >= 0);
+    }
+    function orderAdjustedTotal(order) {
+      var items = (order.items && order.items.length > 0)
+        ? order.items
+        : [{ product: order.product || {}, quantity: order.quantity, unitPrice: (order.product||{}).price || 0, totalAmount: order.totalAmount }];
+      return items.reduce(function(s, it) {
+        if (isHeadbandProduct(it.product)) return s;
+        var up = Number(it.unitPrice) || Number((it.product||{}).price) || 0;
+        var q = Number(it.quantity) || 0;
+        return s + (Number(it.totalAmount) || (up * q));
+      }, 0);
+    }
+
     function renderOrders() {
       document.querySelector("#ordersBody").innerHTML = allOrders.map(function(order) {
         var c = order.customer || {};
@@ -1637,7 +1653,7 @@
           '<td><input type="checkbox" class="orderCheckbox" data-oid="' + esc(order.id) + '" /></td>' +
           '<td><strong>' + esc(order.id) + '</strong><br/><span class="muted">' + fmtDate(order.createdAt) + '</span></td>' +
           '<td><strong>' + esc(c.fullName||"-") + '</strong><br/><span class="muted">' + esc(c.studentCode||"-") + '</span><br/><span class="muted">' + esc(c.phone||"") + '</span></td>' +
-          '<td>' + itemsHtml + '<br/><span class="money">' + esc(baht(order.totalAmount)) + '</span>' + schoolHtml + '</td>' +
+          '<td>' + itemsHtml + '<br/><span class="money">' + esc(baht(orderAdjustedTotal(order))) + '</span>' + schoolHtml + '</td>' +
           '<td><span class="muted">' + (order.slip ? '<span style="color:var(--ok)">✓ Slip uploaded</span>' : 'ไม่มีสลิป') + '</span><br/>' + (order.khantokTicket ? '<span style="font-size:11px;font-weight:700;color:var(--ok)">🎟 บัตรขันโตก ฿' + (order.khantokTicketValue || 100) + '</span>' : order.khantokTicketAlreadyClaimed ? '<span style="font-size:11px;font-weight:700;color:var(--warn)">🎟 ได้ไปแล้ว</span>' : '<span style="font-size:11px;color:var(--muted)">ไม่ได้บัตร</span>') + '</td>' +
           '<td><span class="badge ' + esc(order.status) + '">' + esc(STATUS_TH[order.status] || order.status) + '</span>' + (needsAction ? '<br/><span style="font-size:10px;color:var(--warn);font-weight:700">⚠ รอยืนยัน</span>' : '') + (order.status === 'received' && order.receivedBy ? '<br/><span style="font-size:10px;color:var(--muted)">โดย ' + esc(order.receivedBy) + '</span>' : '') + '</td>' +
           '<td style="font-size:12px;white-space:pre-wrap">' + (order.adminNote ? '<span style="color:' + (order.adminNote.includes('ได้รับผ้าคาดฟรีโควต้า500') ? 'var(--ok)' : 'var(--muted)') + '">' + esc(order.adminNote) + '</span>' : '') + '</td>' +
