@@ -1598,6 +1598,18 @@ def create_order(connection: sqlite3.Connection, payload: dict[str, Any]) -> dic
         "UPDATE orders SET khantok_ticket = ?, khantok_ticket_claimed_at = ?, khantok_ticket_already_claimed = ?, khantok_ticket_value = ? WHERE internal_id = ?",
         (1 if khantok_ticket else 0, khantok_ticket_claimed_at, 1 if khantok_ticket_already_claimed else 0, khantok_ticket_value, sequence_number),
     )
+    if is_headband_only:
+        connection.execute(
+            "UPDATE orders SET status = 'refund', payment_status = 'refund_pending', updated_at = ? WHERE internal_id = ?",
+            (now, sequence_number),
+        )
+        try:
+            connection.execute(
+                "INSERT INTO order_audit_log(order_code, event, detail, created_at) VALUES (?,?,?,?)",
+                (order_code, "auto_refund_headband", "headband-only order auto-refunded on creation", now),
+            )
+        except sqlite3.Error:
+            pass
     row = fetch_order_by_code(connection, order_code)
     assert row is not None
     return serialize_order(row, include_access_token=True)

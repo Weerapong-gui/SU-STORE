@@ -11,10 +11,12 @@ export const translations = {
       waiting_confirm: { label: "Awaiting Confirmation", description: "Our team is verifying your transfer" },
       paid:            { label: "Paid",                  description: "Payment confirmed" },
       preparing:       { label: "Preparing",             description: "Your order is being prepared" },
-      shipped:         { label: "Ready for Pickup",      description: "Your order is ready — please show your QR code at the pickup point" },
+      shipped:         { label: "Ready for Pickup",      description: "Your order is ready. Show this QR at the pickup point." },
       received:        { label: "Received",              description: "You have collected your order. Thank you!" },
       cancelled:       { label: "Cancelled",             description: "This order has been cancelled" },
       rejected:        { label: "Rejected",              description: "Payment not confirmed. Please contact us" },
+      refund:          { label: "Refund Pending",        description: "This product is unavailable. Full refund will be processed by the Student Union." },
+      refunded:        { label: "Refunded",              description: "Refund has been completed." },
     },
     checkOrder: {
       title: "Track Your Order",
@@ -29,6 +31,7 @@ export const translations = {
       search: "Search",
       khantokReceived: "Khantok ticket received",
       khantokClaimed: "Already claimed",
+      pickupQrHint: "Show this QR at the pickup point",
     },
     orderAccess: {
       notFound: (id: string) => `Order ${id} was not found`,
@@ -87,6 +90,18 @@ export const translations = {
     payment: {
       bankName: "Bangkok Bank",
     },
+    feedback: {
+      title: "Feedback",
+      question: "How are you feeling?",
+      subtitle: "Your input helps us improve our service.",
+      ratingLabels: ["Very Bad", "Bad", "Medium", "Good", "Very Good"] as [string, string, string, string, string],
+      commentPlaceholder: "Add a Comment...",
+      submit: "Submit Now",
+      submitting: "Submitting...",
+      thanks: "Thank you!",
+      thanksSub: "Your feedback has been recorded.",
+      errorGeneric: "Unable to submit feedback. Please try again.",
+    },
   },
   th: {
     status: {
@@ -94,10 +109,12 @@ export const translations = {
       waiting_confirm: { label: "รอยืนยันการชำระ", description: "ทีมงานกำลังตรวจสอบสลิปการโอน" },
       paid:            { label: "ชำระเงินแล้ว",    description: "ยืนยันการชำระเงินเรียบร้อย" },
       preparing:       { label: "กำลังเตรียมของ",  description: "กำลังเตรียมสินค้าของคุณ" },
-      shipped:         { label: "พร้อมรับสินค้า",  description: "สินค้าพร้อมแล้ว — แสดง QR ที่จุดรับสินค้า" },
+      shipped:         { label: "พร้อมรับสินค้า",  description: "ออเดอร์ของคุณพร้อมแล้ว โปรดแสดง QR นี้ที่จุดรับสินค้า" },
       received:        { label: "รับสินค้าแล้ว",   description: "รับสินค้าเรียบร้อยแล้ว" },
       cancelled:       { label: "ยกเลิก",          description: "ออเดอร์ถูกยกเลิก" },
       rejected:        { label: "ปฏิเสธ",          description: "ไม่ผ่านการยืนยัน กรุณาติดต่อทีมงาน" },
+      refund:          { label: "รอคืนเงิน",       description: "สินค้านี้ไม่สามารถจำหน่ายได้ องค์การบริหารองค์การนักศึกษาจะคืนเงินให้เต็มจำนวน" },
+      refunded:        { label: "คืนเงินแล้ว",    description: "ดำเนินการคืนเงินเรียบร้อยแล้ว" },
     },
     checkOrder: {
       title: "เช็คสถานะออเดอร์",
@@ -112,6 +129,7 @@ export const translations = {
       search: "ค้นหา",
       khantokReceived: "ได้รับ Khantok ticket",
       khantokClaimed: "รับไปแล้ว",
+      pickupQrHint: "แสดง QR นี้ที่จุดรับสินค้า",
     },
     orderAccess: {
       notFound: (id: string) => `ไม่พบข้อมูลคำสั่งซื้อ ${id} ใน browser นี้`,
@@ -169,6 +187,18 @@ export const translations = {
     },
     payment: {
       bankName: "ธนาคารกรุงเทพ",
+    },
+    feedback: {
+      title: "Feedback",
+      question: "คุณรู้สึกอย่างไร?",
+      subtitle: "ความคิดเห็นของคุณช่วยให้เราพัฒนาบริการดีขึ้น",
+      ratingLabels: ["แย่มาก", "แย่", "เฉยๆ", "ดี", "ดีมาก"] as [string, string, string, string, string],
+      commentPlaceholder: "เพิ่มความคิดเห็น...",
+      submit: "ส่งความคิดเห็น",
+      submitting: "กำลังส่ง...",
+      thanks: "ขอบคุณ!",
+      thanksSub: "บันทึกความคิดเห็นของคุณเรียบร้อยแล้ว",
+      errorGeneric: "ไม่สามารถส่งความคิดเห็นได้ กรุณาลองใหม่",
     },
   },
 } as const;

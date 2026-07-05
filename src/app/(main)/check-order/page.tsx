@@ -7,8 +7,9 @@ import { Container } from "@/components/ui/Container";
 import { Search, Package, CheckCircle2, Clock, XCircle, Truck, AlertCircle, Ticket, Upload } from "lucide-react";
 import { useLang } from "@/lib/i18n";
 import QRCode from "qrcode";
+import { FeedbackModal } from "@/components/FeedbackModal";
 
-type OrderStatus = "pending_payment" | "waiting_confirm" | "paid" | "preparing" | "shipped" | "received" | "cancelled" | "rejected";
+type OrderStatus = "pending_payment" | "waiting_confirm" | "paid" | "preparing" | "shipped" | "received" | "cancelled" | "rejected" | "refund" | "refunded";
 
 interface PublicOrder {
   id: string;
@@ -27,6 +28,7 @@ interface PublicOrder {
   customer: { fullName: string; studentCode: string; school: string };
   slip: { uploadedAt: string } | null;
   qrToken?: string | null;
+  feedbackSubmitted?: boolean;
 }
 
 const STATUS_COLORS: Record<OrderStatus, string> = {
@@ -38,6 +40,8 @@ const STATUS_COLORS: Record<OrderStatus, string> = {
   received:        "text-purple-700 bg-purple-50",
   cancelled:       "text-zinc-500 bg-zinc-100",
   rejected:        "text-red-700 bg-red-50",
+  refund:          "text-amber-700 bg-amber-50",
+  refunded:        "text-zinc-500 bg-zinc-100",
 };
 
 const STATUS_ICONS: Record<OrderStatus, React.ReactNode> = {
@@ -49,7 +53,19 @@ const STATUS_ICONS: Record<OrderStatus, React.ReactNode> = {
   received:        <CheckCircle2 className="h-5 w-5" />,
   cancelled:       <XCircle className="h-5 w-5" />,
   rejected:        <XCircle className="h-5 w-5" />,
+  refund:          <AlertCircle className="h-5 w-5" />,
+  refunded:        <CheckCircle2 className="h-5 w-5" />,
 };
+
+function isHeadbandCategory(cat?: string) {
+  return (cat || "").toLowerCase().includes("headband");
+}
+function orderAdjustedTotal(order: PublicOrder) {
+  return (order.items || []).reduce((s, it) => {
+    if (isHeadbandCategory(it.product?.category)) return s;
+    return s + (Number(it.totalAmount) || 0);
+  }, 0);
+}
 
 function baht(n: number) {
   return new Intl.NumberFormat("th-TH", { style: "currency", currency: "THB", maximumFractionDigits: 0 }).format(n);
@@ -67,10 +83,11 @@ function formatDate(iso: string) {
 function OrderCard({ order }: { order: PublicOrder }) {
   const { t } = useLang();
   const statusKey = order.status in t.status ? order.status : "pending_payment";
-  const cfg = t.status[statusKey as OrderStatus];
+  const cfg = (t.status as Record<string, { label: string; description: string }>)[statusKey];
   const color = STATUS_COLORS[order.status] ?? STATUS_COLORS.pending_payment;
   const icon = STATUS_ICONS[order.status] ?? STATUS_ICONS.pending_payment;
   const [qrDataUrl, setQrDataUrl] = useState<string>("");
+  const [feedbackOpen, setFeedbackOpen] = useState(false);
 
   useEffect(() => {
     if (order.status === "shipped" && order.id) {
@@ -84,6 +101,16 @@ function OrderCard({ order }: { order: PublicOrder }) {
       setQrDataUrl("");
     }
   }, [order.id, order.status, order.qrToken]);
+
+  useEffect(() => {
+    if (order.status !== "received" || !order.id) return;
+    if (order.feedbackSubmitted) return;
+    let done = false;
+    try { done = localStorage.getItem(`feedback_${order.id}_done`) === "1"; } catch {}
+    if (done) return;
+    const timer = setTimeout(() => setFeedbackOpen(true), 600);
+    return () => clearTimeout(timer);
+  }, [order.id, order.status, order.feedbackSubmitted]);
 
   return (
     <div className="overflow-hidden rounded-2xl border border-black/[0.08] bg-white shadow-sm">
@@ -124,7 +151,7 @@ function OrderCard({ order }: { order: PublicOrder }) {
                 </p>
               )}
             </div>
-            <p className="text-sm font-bold text-apple-blue">{baht(item.totalAmount)}</p>
+            <p className="text-sm font-bold text-apple-blue">{baht(isHeadbandCategory(item.product.category) ? 0 : item.totalAmount)}</p>
           </div>
         ))}
       </div>
@@ -146,14 +173,14 @@ function OrderCard({ order }: { order: PublicOrder }) {
               <Ticket className="h-3.5 w-3.5" /> {t.checkOrder.khantokClaimed}
             </span>
           ) : null}
-          <p className="text-base font-bold text-zinc-900">{t.checkOrder.total} {baht(order.totalAmount)}</p>
+          <p className="text-base font-bold text-zinc-900">{t.checkOrder.total} {baht(orderAdjustedTotal(order))}</p>
         </div>
       </div>
 
       {/* QR code for shipped orders */}
       {order.status === "shipped" && qrDataUrl && (
         <div className="border-t border-black/[0.06] px-6 py-5 text-center">
-          <p className="mb-3 text-sm font-semibold text-zinc-700">แสดง QR นี้ที่จุดรับสินค้า</p>
+          <p className="mb-3 text-sm font-semibold text-zinc-700">{t.checkOrder.pickupQrHint}</p>
           <div className="inline-block rounded-2xl border border-black/[0.08] bg-white p-3 shadow-sm">
             <img src={qrDataUrl} alt={`QR ${order.id}`} width={200} height={200} className="block" />
           </div>
@@ -173,11 +200,17 @@ function OrderCard({ order }: { order: PublicOrder }) {
           </Link>
         </div>
       )}
+
+      <FeedbackModal
+        orderId={order.id}
+        open={feedbackOpen}
+        onClose={() => setFeedbackOpen(false)}
+      />
     </div>
   );
 }
 
-const FINAL_STATUSES: OrderStatus[] = ["received", "cancelled", "rejected"];
+const FINAL_STATUSES: OrderStatus[] = ["received", "cancelled", "rejected", "refunded"];
 
 function CheckOrderContent() {
   const searchParams = useSearchParams();
