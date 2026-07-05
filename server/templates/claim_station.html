@@ -770,7 +770,9 @@
         }).catch(function() { showError('ไม่สามารถเชื่อมต่อได้'); beepError(); });
     }
 
+    var _lastOrderListCache = [];
     function showOrderList(orders) {
+      _lastOrderListCache = orders.slice();
       var html = '<div class="result-card"><div class="order-hdr"><span class="order-code" style="font-size:15px">พบ ' + orders.length + ' ออเดอร์</span></div>';
       for (var i = 0; i < orders.length; i++) {
         var o = orders[i];
@@ -784,10 +786,18 @@
           '<div class="cust-meta"><span>' + esc((o.customer || {}).fullName || '') + '</span><span>' + esc(itemSummary) + '</span></div>' +
         '</div>';
       }
-      html += '<div class="action-block"><button class="btn-close" onclick="clearResult()">ปิด</button></div></div>';
+      html += '<div class="action-block" style="display:flex;gap:8px;flex-wrap:wrap">' +
+        '<button class="btn-primary" onclick="printListedOrdersAll()" style="flex:1;min-width:200px">พิมพ์ใบเสร็จทั้งหมด (' + orders.length + ')</button>' +
+        '<button class="btn-close" onclick="clearResult()">ปิด</button>' +
+        '</div></div>';
       _showResultMode();
       document.getElementById('resultCol').style.display = '';
       document.getElementById('resultSection').innerHTML = html;
+    }
+    function printListedOrdersAll() {
+      if (!_lastOrderListCache || !_lastOrderListCache.length) { alert('ไม่มีออเดอร์ให้พิมพ์'); return; }
+      if (_lastOrderListCache.length > 20 && !confirm('พิมพ์ใบเสร็จ ' + _lastOrderListCache.length + ' ใบ ต่อหรือไม่?')) return;
+      printReceiptsBatch(_lastOrderListCache);
     }
 
     function lookupOrder(code, qrToken) {
@@ -1338,47 +1348,89 @@
       if (a >= 1000)    { res += ones[Math.floor(a/1000)]+'พัน'; a %= 1000; }
       return res + u1k(a) + 'บาทถ้วน';
     }
-    function printReceipt() {
-      if (!lastOrder) return;
+    function _renderOrderReceiptSvg(order, templateText, seqNumForOrder) {
       var cfg = receiptConfig && Object.keys(receiptConfig).length ? receiptConfig : RCPT_DEFAULTS;
       var P = buildPFromCfg(cfg);
-      var order = lastOrder;
       var dateStr = cfg.dateMode === 'print'
         ? fmtReceiptDate(new Date().toISOString())
         : fmtReceiptDate(order.createdAt || order.updatedAt);
-      var seqNum = cfg.receiptRunMode === 'local'
-        ? receiptLocalCounter + 1
-        : (Number(order.sequenceNumber) || 0) + (cfg.receiptOffset || 0);
+      var seqNum = (typeof seqNumForOrder === 'number')
+        ? seqNumForOrder
+        : (cfg.receiptRunMode === 'local'
+            ? receiptLocalCounter + 1
+            : (Number(order.sequenceNumber) || 0) + (cfg.receiptOffset || 0));
       var receiptNo = (cfg.receiptPrefix || '') + String(seqNum).padStart(4, "0");
-      function doPrint(svgText) {
-        var parser = new DOMParser();
-        var doc = parser.parseFromString(svgText, "image/svg+xml");
-        var svg = doc.documentElement;
-        injectReceiptData(svg, 0, P, dateStr, receiptNo, order);
-        injectReceiptData(svg, P.rightCopyOffset, P, dateStr, receiptNo, order);
-        var serialized = new XMLSerializer().serializeToString(svg);
+      var parser = new DOMParser();
+      var doc = parser.parseFromString(templateText, "image/svg+xml");
+      var svg = doc.documentElement;
+      injectReceiptData(svg, 0, P, dateStr, receiptNo, order);
+      injectReceiptData(svg, P.rightCopyOffset, P, dateStr, receiptNo, order);
+      return { svg: new XMLSerializer().serializeToString(svg), usedSeqNum: seqNum };
+    }
+
+    function _receiptDocumentHtml(title, bodyInner) {
+      return '<!DOCTYPE html><html lang="th"><head><meta charset="utf-8">' +
+        '<link rel="preconnect" href="https://fonts.googleapis.com">' +
+        '<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>' +
+        '<link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@400;500;600;700&display=swap" rel="stylesheet">' +
+        '<title>' + title + '</title>' +
+        '<style>@page{size:A4 landscape;margin:0}html,body{margin:0;padding:0}' +
+        '.rcpt-page{width:297mm;height:210mm;overflow:hidden;page-break-after:always}' +
+        '.rcpt-page:last-child{page-break-after:auto}' +
+        '.rcpt-page svg{display:block;width:297mm;height:210mm}' +
+        '@media print{body{-webkit-print-color-adjust:exact;print-color-adjust:exact}}</style>' +
+        '</head><body>' + bodyInner +
+        '<script>window.onload=function(){window.print();window.addEventListener("afterprint",function(){window.close();});}<\/script></body></html>';
+    }
+
+    function _ensureTemplate() {
+      if (receiptPreviewSvgText) return Promise.resolve(receiptPreviewSvgText);
+      return fetch("/admin/receipt-template")
+        .then(function(r) { return r.text(); })
+        .then(function(t) { receiptPreviewSvgText = t; return t; });
+    }
+
+    function printReceipt() {
+      if (!lastOrder) return;
+      var cfg = receiptConfig && Object.keys(receiptConfig).length ? receiptConfig : RCPT_DEFAULTS;
+      _ensureTemplate().then(function(svgText) {
+        var order = lastOrder;
+        var r = _renderOrderReceiptSvg(order, svgText);
         var w = window.open("", "_blank");
         if (!w) { alert("กรุณาอนุญาต Popup เพื่อพิมพ์ใบเสร็จ"); return; }
-        w.document.write('<!DOCTYPE html><html lang="th"><head><meta charset="utf-8">' +
-          '<link rel="preconnect" href="https://fonts.googleapis.com">' +
-          '<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>' +
-          '<link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@400;500;600;700&display=swap" rel="stylesheet">' +
-          '<title>ใบเสร็จ ' + (order.id || "") + '</title>' +
-          '<style>@page{size:A4 landscape;margin:0}html,body{margin:0;padding:0;width:297mm;height:210mm;overflow:hidden}svg{display:block;width:297mm;height:210mm}' +
-          '@media print{body{-webkit-print-color-adjust:exact;print-color-adjust:exact}}</style>' +
-          '</head><body>' + serialized +
-          '<script>window.onload=function(){window.print();window.addEventListener("afterprint",function(){window.close();});}<\/script></body></html>');
+        w.document.write(_receiptDocumentHtml("ใบเสร็จ " + (order.id || ""), '<div class="rcpt-page">' + r.svg + '</div>'));
         w.document.close();
-        if (cfg.receiptRunMode === 'local') saveReceiptCounter(seqNum);
-      }
-      if (receiptPreviewSvgText) {
-        doPrint(receiptPreviewSvgText);
-      } else {
-        fetch("/admin/receipt-template")
-          .then(function(r) { return r.text(); })
-          .then(function(t) { receiptPreviewSvgText = t; doPrint(t); })
-          .catch(function(err) { alert("ไม่สามารถโหลด receipt template: " + err.message); });
-      }
+        if (cfg.receiptRunMode === 'local') saveReceiptCounter(r.usedSeqNum);
+      }).catch(function(err) { alert("ไม่สามารถโหลด receipt template: " + err.message); });
+    }
+
+    function printReceiptsBatch(orders) {
+      if (!orders || !orders.length) return;
+      var cfg = receiptConfig && Object.keys(receiptConfig).length ? receiptConfig : RCPT_DEFAULTS;
+      var w = window.open("", "_blank");
+      if (!w) { alert("กรุณาอนุญาต Popup เพื่อพิมพ์ใบเสร็จ"); return; }
+      w.document.write('<!DOCTYPE html><html><head><meta charset="utf-8"><title>กำลังโหลด…</title></head><body style="font-family:sans-serif;padding:24px">กำลังเตรียมใบเสร็จ ' + orders.length + ' ใบ…</body></html>');
+      _ensureTemplate().then(function(svgText) {
+        var pages = [];
+        var nextLocalSeq = receiptLocalCounter;
+        for (var i = 0; i < orders.length; i++) {
+          try {
+            var seqForThis = cfg.receiptRunMode === 'local' ? nextLocalSeq + 1 : undefined;
+            var r = _renderOrderReceiptSvg(orders[i], svgText, seqForThis);
+            if (cfg.receiptRunMode === 'local') nextLocalSeq = r.usedSeqNum;
+            pages.push('<div class="rcpt-page">' + r.svg + '</div>');
+          } catch(e) {
+            pages.push('<div class="rcpt-page" style="padding:20mm;font-family:sans-serif">ไม่สามารถ render ใบเสร็จ ' + ((orders[i] && orders[i].id) || ("#" + i)) + ': ' + (e && e.message ? e.message : e) + '</div>');
+          }
+        }
+        w.document.open();
+        w.document.write(_receiptDocumentHtml("ใบเสร็จ " + orders.length + " ใบ", pages.join("")));
+        w.document.close();
+        if (cfg.receiptRunMode === 'local' && nextLocalSeq !== receiptLocalCounter) saveReceiptCounter(nextLocalSeq);
+      }).catch(function(err) {
+        try { w.close(); } catch(e) {}
+        alert("ไม่สามารถโหลด receipt template: " + err.message);
+      });
     }
 
     /* ── Receipt settings ── */

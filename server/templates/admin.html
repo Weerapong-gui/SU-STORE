@@ -243,6 +243,7 @@
           <option value="refunded">คืนเงินแล้ว (refunded)</option>
         </select>
         <button class="primary" id="bulkApplyBtn">Apply</button>
+        <button class="ghost" id="bulkPrintBtn" title="พิมพ์ใบเสร็จของออเดอร์ที่เลือก">พิมพ์ใบเสร็จที่เลือก</button>
         <button class="ghost" id="bulkClearBtn">Clear</button>
       </div>
       <div class="table-card">
@@ -1131,7 +1132,7 @@
     }
 
     // ── RECEIPT ────────────────────────────────────────────────────────────────
-    function printReceipt(order) {
+    function _renderReceiptSvg(order, templateText) {
       var c = order.customer || {};
       var orderItems = (order.items && order.items.length > 0)
         ? order.items
@@ -1256,30 +1257,70 @@
         svg.appendChild(mkText(ox + P.words.x,    P.words.y,    bahtText,                            P.words));
       }
 
+      var parser = new DOMParser();
+      var doc = parser.parseFromString(templateText, "image/svg+xml");
+      var svg = doc.documentElement;
+      injectData(svg, 0);
+      injectData(svg, P.rightCopyOffset);
+      return new XMLSerializer().serializeToString(svg);
+    }
+
+    function _receiptDocumentHtml(title, bodyInner) {
+      return '<!DOCTYPE html><html lang="th"><head><meta charset="utf-8">' +
+        '<link rel="preconnect" href="https://fonts.googleapis.com">' +
+        '<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>' +
+        '<link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@400;500;600;700&display=swap" rel="stylesheet">' +
+        '<title>' + title + '</title>' +
+        '<style>@page{size:A4 landscape;margin:0}html,body{margin:0;padding:0}' +
+        '.rcpt-page{width:297mm;height:210mm;overflow:hidden;page-break-after:always}' +
+        '.rcpt-page:last-child{page-break-after:auto}' +
+        '.rcpt-page svg{display:block;width:297mm;height:210mm}' +
+        '@media print{body{-webkit-print-color-adjust:exact;print-color-adjust:exact}}</style>' +
+        '</head><body>' + bodyInner +
+        '<script>window.onload=function(){window.print();window.addEventListener("afterprint",function(){window.close();});}<\/script></body></html>';
+    }
+
+    function printReceipt(order) {
       fetch("/admin/receipt-template")
         .then(function(r) { return r.text(); })
         .then(function(svgText) {
-          var parser = new DOMParser();
-          var doc = parser.parseFromString(svgText, "image/svg+xml");
-          var svg = doc.documentElement;
-          injectData(svg, 0);
-          injectData(svg, P.rightCopyOffset);
-          var serialized = new XMLSerializer().serializeToString(svg);
+          var serialized = _renderReceiptSvg(order, svgText);
           var w = window.open("", "_blank");
           if (!w) { alert("กรุณาอนุญาต Popup เพื่อพิมพ์ใบเสร็จ"); return; }
-          w.document.write('<!DOCTYPE html><html lang="th"><head><meta charset="utf-8">' +
-            '<link rel="preconnect" href="https://fonts.googleapis.com">' +
-            '<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>' +
-            '<link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@400;500;600;700&display=swap" rel="stylesheet">' +
-            '<title>ใบเสร็จ ' + order.id + '</title>' +
-            '<style>@page{size:A4 landscape;margin:0}html,body{margin:0;padding:0;width:297mm;height:210mm;overflow:hidden}svg{display:block;width:297mm;height:210mm}' +
-            '@media print{body{-webkit-print-color-adjust:exact;print-color-adjust:exact}}</style>' +
-            '</head><body>' + serialized +
-            '<script>window.onload=function(){window.print();window.addEventListener("afterprint",function(){window.close();});}<\/script></body></html>');
+          w.document.write(_receiptDocumentHtml("ใบเสร็จ " + order.id, '<div class="rcpt-page">' + serialized + '</div>'));
           w.document.close();
         })
         .catch(function(err) { setOrdersNotice("ไม่สามารถโหลด receipt template: " + err.message, true); });
     }
+
+    function printReceiptsBatch(orders) {
+      if (!orders || !orders.length) return;
+      var w = window.open("", "_blank");
+      if (!w) { alert("กรุณาอนุญาต Popup เพื่อพิมพ์ใบเสร็จ"); return; }
+      w.document.write('<!DOCTYPE html><html><head><meta charset="utf-8"><title>กำลังโหลด…</title></head><body style="font-family:sans-serif;padding:24px">กำลังเตรียมใบเสร็จ ' + orders.length + ' ใบ…</body></html>');
+      fetch("/admin/receipt-template")
+        .then(function(r) { return r.text(); })
+        .then(function(svgText) {
+          var pages = [];
+          for (var i = 0; i < orders.length; i++) {
+            try {
+              var s = _renderReceiptSvg(orders[i], svgText);
+              pages.push('<div class="rcpt-page">' + s + '</div>');
+            } catch(e) {
+              pages.push('<div class="rcpt-page" style="padding:20mm;font-family:sans-serif">ไม่สามารถ render ใบเสร็จ ' + (orders[i] && orders[i].id ? orders[i].id : "#" + i) + ': ' + (e && e.message ? e.message : e) + '</div>');
+            }
+          }
+          var title = "ใบเสร็จ " + orders.length + " ใบ";
+          w.document.open();
+          w.document.write(_receiptDocumentHtml(title, pages.join("")));
+          w.document.close();
+        })
+        .catch(function(err) {
+          try { w.close(); } catch(e) {}
+          setOrdersNotice("ไม่สามารถโหลด receipt template: " + err.message, true);
+        });
+    }
+
 
     // ── ORDERS ─────────────────────────────────────────────────────────────────
     var statuses = ["pending_payment","waiting_confirm","paid","preparing","shipped","received","cancelled","rejected","refund","refunded"];
@@ -2200,6 +2241,35 @@
       var all = document.querySelector("#selectAllOrders");
       if (all) all.checked = false;
       updateBulkBar();
+    });
+    document.querySelector("#bulkPrintBtn").addEventListener("click", async function() {
+      var ids = getSelectedOrderIds();
+      if (!ids.length) { setOrdersNotice("กรุณาเลือกออเดอร์ก่อน", true); return; }
+      if (ids.length > 30 && !confirm("คุณกำลังจะพิมพ์ " + ids.length + " ใบเสร็จ ต้องการดำเนินการต่อหรือไม่?")) return;
+      var btn = this;
+      btn.disabled = true; var originalText = btn.textContent;
+      btn.textContent = "กำลังโหลด " + ids.length + " ออเดอร์…";
+      try {
+        var bust = "?t=" + Date.now();
+        var results = await Promise.all(ids.map(function(id) {
+          return fetch("/admin/orders/" + encodeURIComponent(id) + bust, {
+            headers: authHeaders(), cache: "no-store"
+          }).then(function(r) {
+            if (!r.ok) throw new Error(id + ": HTTP " + r.status);
+            return r.json();
+          }).catch(function(err) {
+            return { __error: err.message || String(err), id: id };
+          });
+        }));
+        var goodOrders = results.filter(function(o) { return o && !o.__error && o.id; });
+        var failed = results.filter(function(o) { return o && o.__error; });
+        if (failed.length) setOrdersNotice("โหลดล้มเหลว " + failed.length + " ออเดอร์: " + failed.map(function(f){return f.id;}).join(", "), true);
+        if (!goodOrders.length) { setOrdersNotice("ไม่สามารถโหลดออเดอร์ที่เลือกได้เลย", true); return; }
+        printReceiptsBatch(goodOrders);
+      } finally {
+        btn.disabled = false;
+        btn.textContent = originalText;
+      }
     });
 
     document.querySelector("#closeSlipBtn").addEventListener("click", function() {
