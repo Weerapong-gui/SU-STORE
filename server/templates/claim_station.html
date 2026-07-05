@@ -773,7 +773,13 @@
     var _lastOrderListCache = [];
     function showOrderList(orders) {
       _lastOrderListCache = orders.slice();
-      var html = '<div class="result-card"><div class="order-hdr"><span class="order-code" style="font-size:15px">พบ ' + orders.length + ' ออเดอร์</span></div>';
+      var html = '<div class="result-card">' +
+        '<div class="order-hdr" style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">' +
+          '<span class="order-code" style="font-size:15px">พบ ' + orders.length + ' ออเดอร์</span>' +
+          '<label style="display:inline-flex;align-items:center;gap:6px;font-size:13px;cursor:pointer;margin-left:auto">' +
+            '<input type="checkbox" id="csListSelectAll" onchange="csToggleAllListed(this.checked)" checked /> เลือกทั้งหมด' +
+          '</label>' +
+        '</div>';
       for (var i = 0; i < orders.length; i++) {
         var o = orders[i];
         var items = (o.items && o.items.length) ? o.items : [{product: o.product, size: o.size, quantity: o.quantity}];
@@ -781,23 +787,41 @@
           var p = it.product || {};
           return esc((p.shortName || p.name || '')) + (it.size ? ' ' + esc(it.size) : '');
         }).join(', ');
-        html += '<div class="cust-block" style="cursor:pointer" onclick="lookupOrder(\'' + esc(o.id) + '\',\'\')">' +
-          '<div class="cust-name" style="font-size:15px">' + esc(o.id) + '</div>' +
-          '<div class="cust-meta"><span>' + esc((o.customer || {}).fullName || '') + '</span><span>' + esc(itemSummary) + '</span></div>' +
+        html += '<div class="cust-block" style="display:flex;align-items:center;gap:12px">' +
+          '<input type="checkbox" class="csListChk" data-oid="' + esc(o.id) + '" checked onclick="event.stopPropagation();csUpdateSelCount()" style="width:22px;height:22px;flex-shrink:0;cursor:pointer" />' +
+          '<div style="flex:1;cursor:pointer" onclick="lookupOrder(\'' + esc(o.id) + '\',\'\')">' +
+            '<div class="cust-name" style="font-size:15px">' + esc(o.id) + '</div>' +
+            '<div class="cust-meta"><span>' + esc((o.customer || {}).fullName || '') + '</span><span>' + esc(itemSummary) + '</span></div>' +
+          '</div>' +
         '</div>';
       }
       html += '<div class="action-block" style="display:flex;gap:8px;flex-wrap:wrap">' +
-        '<button class="btn-primary" onclick="printListedOrdersAll()" style="flex:1;min-width:200px">พิมพ์ใบเสร็จทั้งหมด (' + orders.length + ')</button>' +
+        '<button class="btn-primary" onclick="printListedOrdersSelected()" id="csPrintSelBtn" style="flex:1;min-width:200px">พิมพ์ที่เลือก (<span id="csSelCount">' + orders.length + '</span>)</button>' +
         '<button class="btn-close" onclick="clearResult()">ปิด</button>' +
         '</div></div>';
       _showResultMode();
       document.getElementById('resultCol').style.display = '';
       document.getElementById('resultSection').innerHTML = html;
     }
-    function printListedOrdersAll() {
-      if (!_lastOrderListCache || !_lastOrderListCache.length) { alert('ไม่มีออเดอร์ให้พิมพ์'); return; }
-      if (_lastOrderListCache.length > 20 && !confirm('พิมพ์ใบเสร็จ ' + _lastOrderListCache.length + ' ใบ ต่อหรือไม่?')) return;
-      printReceiptsBatch(_lastOrderListCache);
+    function csToggleAllListed(checked) {
+      document.querySelectorAll('.csListChk').forEach(function(cb) { cb.checked = checked; });
+      csUpdateSelCount();
+    }
+    function csUpdateSelCount() {
+      var n = document.querySelectorAll('.csListChk:checked').length;
+      var el = document.getElementById('csSelCount');
+      if (el) el.textContent = n;
+      var all = document.getElementById('csListSelectAll');
+      var total = document.querySelectorAll('.csListChk').length;
+      if (all) all.checked = (n === total && total > 0);
+    }
+    function printListedOrdersSelected() {
+      var checkedIds = Array.from(document.querySelectorAll('.csListChk:checked')).map(function(cb) { return cb.dataset.oid; });
+      if (!checkedIds.length) { alert('กรุณาเลือกอย่างน้อย 1 ออเดอร์'); return; }
+      var selected = _lastOrderListCache.filter(function(o) { return checkedIds.indexOf(o.id) >= 0; });
+      if (!selected.length) { alert('ไม่พบออเดอร์ที่เลือก'); return; }
+      if (selected.length > 20 && !confirm('พิมพ์ใบเสร็จ ' + selected.length + ' ใบ ต่อหรือไม่?')) return;
+      printReceiptsBatch(selected);
     }
 
     function lookupOrder(code, qrToken) {
