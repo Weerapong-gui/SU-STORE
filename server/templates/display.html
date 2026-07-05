@@ -449,24 +449,60 @@ function render(s) {
   showScreen(sActive);
   dName.textContent = s.name || '—';
   dName.className = 'name-text' + (s.typing ? ' typing' : '');
-  dOrderId.textContent = s.orderId || '—';
-  dStatusText.textContent = STATUS_LABEL[s.status] || s.status || '—';
-  dStatusBadge.className = 'status-badge ' + (PAID_STATUSES[s.status] ? 'paid' : 'pending');
+
+  var multi = Array.isArray(s.orders) && s.orders.length > 1;
   var html = '';
-  var items = s.items || [];
-  for (var i = 0; i < items.length; i++) {
-    var it = items[i];
-    var meta = [];
-    if (it.size) meta.push('Size ' + esc(it.size));
-    if (it.qty)  meta.push('&times;' + it.qty);
-    if (it.school) meta.push(esc(it.school));
-    html += '<div class="item-row"><div class="item-info">' +
-      '<div class="item-name">' + esc(it.name) + '</div>' +
-      (meta.length ? '<div class="item-meta">' + meta.join(' &middot; ') + '</div>' : '') +
-      '</div><div class="item-price">' + baht(it.total) + '</div></div>';
+  if (multi) {
+    dOrderId.textContent = s.orders.length + ' ออเดอร์';
+    dStatusText.textContent = 'พิมพ์ใบเสร็จ ' + s.orders.length + ' ใบ';
+    dStatusBadge.className = 'status-badge paid';
+    var grand = 0;
+    for (var oi = 0; oi < s.orders.length; oi++) {
+      var od = s.orders[oi];
+      var oItems = od.items || [];
+      var oSub = 0;
+      var orderRows = '';
+      for (var ii = 0; ii < oItems.length; ii++) {
+        var oit = oItems[ii];
+        var oMeta = [];
+        if (oit.size) oMeta.push('Size ' + esc(oit.size));
+        if (oit.qty)  oMeta.push('&times;' + oit.qty);
+        if (oit.school) oMeta.push(esc(oit.school));
+        var oPrice = Number(oit.total) || 0;
+        oSub += oPrice;
+        orderRows += '<div class="item-row" style="padding-left:8px"><div class="item-info">' +
+          '<div class="item-name">' + esc(oit.name) + '</div>' +
+          (oMeta.length ? '<div class="item-meta">' + oMeta.join(' &middot; ') + '</div>' : '') +
+          '</div><div class="item-price">' + baht(oPrice) + '</div></div>';
+      }
+      grand += Number(od.total) || oSub;
+      html += '<div class="order-group" style="border-top:1px solid rgba(255,255,255,.08);padding:8px 0 4px">' +
+        '<div style="display:flex;justify-content:space-between;align-items:center;padding:0 4px 4px">' +
+          '<div style="font-weight:700;font-size:clamp(14px,1.4vw,20px);letter-spacing:.03em">' + esc(od.orderId || '—') + '</div>' +
+          '<div style="font-weight:700;color:var(--muted);font-size:clamp(12px,1.2vw,16px)">' + baht(Number(od.total) || oSub) + '</div>' +
+        '</div>' + orderRows + '</div>';
+    }
+    dItems.innerHTML = html;
+    dTotal.textContent = baht(Number(s.total) || grand);
+  } else {
+    dOrderId.textContent = s.orderId || '—';
+    dStatusText.textContent = STATUS_LABEL[s.status] || s.status || '—';
+    dStatusBadge.className = 'status-badge ' + (PAID_STATUSES[s.status] ? 'paid' : 'pending');
+    var items = s.items || [];
+    for (var i = 0; i < items.length; i++) {
+      var it = items[i];
+      var meta = [];
+      if (it.size) meta.push('Size ' + esc(it.size));
+      if (it.qty)  meta.push('&times;' + it.qty);
+      if (it.school) meta.push(esc(it.school));
+      html += '<div class="item-row"><div class="item-info">' +
+        '<div class="item-name">' + esc(it.name) + '</div>' +
+        (meta.length ? '<div class="item-meta">' + meta.join(' &middot; ') + '</div>' : '') +
+        '</div><div class="item-price">' + baht(it.total) + '</div></div>';
+    }
+    dItems.innerHTML = html;
+    dTotal.textContent = baht(s.total || 0);
   }
-  dItems.innerHTML = html;
-  dTotal.textContent = baht(s.total || 0);
 }
 
 /* ── init ── */

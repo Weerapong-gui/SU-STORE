@@ -821,6 +821,8 @@
       var selected = _lastOrderListCache.filter(function(o) { return checkedIds.indexOf(o.id) >= 0; });
       if (!selected.length) { alert('ไม่พบออเดอร์ที่เลือก'); return; }
       if (selected.length > 20 && !confirm('พิมพ์ใบเสร็จ ' + selected.length + ' ใบ ต่อหรือไม่?')) return;
+      if (selected.length > 1) pushDisplay(_buildDisplayStateMulti(selected));
+      else if (selected.length === 1) pushDisplay(_buildDisplayState(selected[0], false));
       printReceiptsBatch(selected);
     }
 
@@ -1983,13 +1985,26 @@
     }
 
     /* ── Display1 push ── */
+    function _mapOrderItems(order) {
+      var items = (order.items && order.items.length) ? order.items : [{product: order.product, size: order.size, quantity: order.quantity, totalAmount: order.totalAmount}];
+      return items.map(function(it) {
+        var p = it.product || {};
+        var isHb = ((p.category || p.slug || '').toLowerCase().indexOf('headband') >= 0);
+        return {
+          name: (p.name || p.shortName || '') + (isHb ? ' (ยกเลิก)' : ''),
+          size: it.size || '',
+          qty: isHb ? 0 : (it.quantity || 1),
+          total: isHb ? 0 : (it.totalAmount || 0),
+          school: it.school || '',
+        };
+      });
+    }
+    function _orderAdjustedTotal(order) {
+      var items = _mapOrderItems(order);
+      return items.reduce(function(s, i) { return s + (Number(i.total) || 0); }, 0);
+    }
     function _buildDisplayState(order, typing) {
       if (!order) return {active: false, username: currentUser};
-      var items = (order.items && order.items.length) ? order.items : [{product: order.product, size: order.size, quantity: order.quantity, totalAmount: order.totalAmount}];
-      var mappedItems = items.map(function(it) {
-        var p = it.product || {};
-        return {name: p.name || p.shortName || '', size: it.size || '', qty: it.quantity || 1, total: it.totalAmount || 0, school: it.school || ''};
-      });
       return {
         active: true,
         username: currentUser,
@@ -1997,8 +2012,34 @@
         name: (order.customer && order.customer.fullName) || '',
         typing: !!typing,
         status: order.status || '',
-        items: mappedItems,
-        total: order.totalAmount || 0,
+        items: _mapOrderItems(order),
+        total: _orderAdjustedTotal(order),
+      };
+    }
+    function _buildDisplayStateMulti(orders) {
+      if (!orders || !orders.length) return {active: false, username: currentUser};
+      var name = '';
+      for (var i = 0; i < orders.length; i++) {
+        var c = orders[i].customer || {};
+        if (c.fullName) { name = c.fullName; break; }
+      }
+      var mappedOrders = orders.map(function(o) {
+        var items = _mapOrderItems(o);
+        return {
+          orderId: o.id || '',
+          status: o.status || '',
+          items: items,
+          total: _orderAdjustedTotal(o),
+        };
+      });
+      var grand = mappedOrders.reduce(function(s, o) { return s + (Number(o.total) || 0); }, 0);
+      return {
+        active: true,
+        username: currentUser,
+        name: name,
+        orders: mappedOrders,
+        total: grand,
+        status: 'paid',
       };
     }
     function pushDisplay(stateOrOrder, typing) {
