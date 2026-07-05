@@ -200,7 +200,8 @@
     @media(max-width:640px){.rcpt-body-row{flex-direction:column}.rcpt-form-col{width:100%;border-right:none;border-bottom:1px solid var(--border)}.rcpt-preview-col{min-height:220px}}
     .rcpt-section{display:none}.rcpt-section.active{display:block}
     .rcpt-group{margin-bottom:16px}
-    .rcpt-group-title{font-size:10px;font-weight:800;letter-spacing:.07em;text-transform:uppercase;color:var(--muted);margin-bottom:8px}
+    .rcpt-group-title{font-size:10px;font-weight:800;letter-spacing:.07em;text-transform:uppercase;color:var(--muted);margin-bottom:8px;padding:4px 8px;margin-left:-8px;margin-right:-8px;border-radius:6px;border-left:2px solid transparent;transition:background .15s,color .15s,border-color .15s;cursor:default}
+    .rcpt-group-title:hover{background:var(--hover,rgba(79,110,247,.08));color:var(--primary,#4f6ef7);border-left-color:var(--primary,#4f6ef7)}
     .rcpt-row{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:6px}
     .rcpt-row.cols3{grid-template-columns:1fr 1fr 1fr}
     .rcpt-row.cols1{grid-template-columns:1fr}
@@ -282,7 +283,6 @@
       <span class="top-bar-user" id="userLabel"></span>
       <button id="soundBtn" class="btn-icon" title="เปิด/ปิดเสียง"><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><path d="M15.54 8.46a5 5 0 0 1 0 7.07"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14"/></svg></button>
       <button id="fullscreenBtn" class="btn-fs" title="เต็มจอ"><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 3 21 3 21 9"/><polyline points="9 21 3 21 3 15"/><line x1="21" y1="3" x2="14" y2="10"/><line x1="3" y1="21" x2="10" y2="14"/></svg></button>
-      <button class="btn-icon" onclick="openReceiptSettings()" title="ตั้งค่าใบเสร็จ"><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg></button>
       <button id="logoutBtn" class="btn-logout">ออกจากระบบ</button>
     </div>
     <div id="statsPanel">
@@ -1249,8 +1249,18 @@
       var orderItems = (order.items && order.items.length > 0)
         ? order.items
         : [{ product: order.product || {}, size: order.size, quantity: order.quantity, unitPrice: ((order.product || {}).price || 0), totalAmount: order.totalAmount }];
-      var totalAmount = Number(order.totalAmount) || 0;
-      var school = c.school || (orderItems[0] && orderItems[0].school) || "";
+      var totalAmount = orderItems.reduce(function(s, it) {
+        var ip2 = it.product || {};
+        var hb = ((ip2.category || ip2.slug || "").toLowerCase().indexOf("headband") >= 0);
+        if (hb) return s;
+        var _fb = {"single-shirt":399,"fresh-jacket":899,"fresh-headband":35}[ip2.slug||""] || 0;
+        var _up = Number(it.unitPrice) || Number(ip2.price) || _fb || 0;
+        var _q = Number(it.quantity) || 0;
+        var _lt = Number(it.totalAmount);
+        return s + ((!_lt || _lt === 0) ? _up * _q : _lt);
+      }, 0);
+      function stripSchoolPrefix(s) { return String(s == null ? "" : s).replace(/^\s*school\s+of\s+/i, ""); }
+      var school = stripSchoolPrefix(c.school || (orderItems[0] && orderItems[0].school) || "");
       var bahtText = "(" + toBahtText(totalAmount) + ")";
       function mk(x, y, val, opts) {
         opts = opts || {};
@@ -1274,11 +1284,18 @@
         var ip = item.product || {};
         var isHb = ((ip.category || ip.slug || "").toLowerCase().indexOf("headband") >= 0);
         var name = ip.name || "-";
-        if (isHb) { if (item.school && item.school.trim()) name += " (" + item.school + ")"; }
-        else { if (item.size && item.size !== "-" && item.size !== "") name += " (" + item.size + ")"; }
-        var up = Number(item.unitPrice) || Number(ip.price) || 0;
-        var qty = Number(item.quantity) || 0;
-        var lt = Number(item.totalAmount) || (up * qty);
+        if (isHb) {
+          if (item.school && item.school.trim()) name += " (" + stripSchoolPrefix(item.school) + ")";
+          name += " (ยกเลิก)";
+        } else {
+          if (item.size && item.size !== "-" && item.size !== "") name += " (" + item.size + ")";
+        }
+        var PRODUCT_PRICE_FALLBACK = { "single-shirt": 399, "fresh-jacket": 899, "fresh-headband": 35 };
+        var fallbackPrice = PRODUCT_PRICE_FALLBACK[ip.slug || ""] || 0;
+        var up = isHb ? 0 : (Number(item.unitPrice) || Number(ip.price) || fallbackPrice || 0);
+        var qty = isHb ? 0 : (Number(item.quantity) || 0);
+        var rawLt = Number(item.totalAmount);
+        var lt = isHb ? 0 : ((!rawLt || rawLt === 0) ? up * qty : rawLt);
         var y = P.rowYs[idx], sz = P.rowSize, fo = { minimumFractionDigits: 2, maximumFractionDigits: 2 };
         svg.appendChild(mk(ox + P.colNo,     y, idx + 1,                          { anchor: "middle", size: sz }));
         svg.appendChild(mk(ox + P.colName,   y, name,                             { size: sz }));
@@ -1367,18 +1384,18 @@
     /* ── Receipt settings ── */
     var RCPT_DEFAULTS = {
       autoPrint: false,
-      dateMode: 'order',
+      dateMode: 'print',
       receiptRunMode: 'sequence',
       receiptPrefix: '',
       receiptOffset: 0,
       rightCopyOffset: 421.19,
       dateX: 384, dateY: 35, dateSize: 9.5,
       receiptNoX: 384, receiptNoY: 56, receiptNoSize: 9.5,
-      customerX: 261, customerY: 93, customerSize: 8,
+      customerX: 247.5, customerY: 93, customerSize: 8,
       studentIdY: 112, studentIdSize: 8,
       schoolY: 131, schoolSize: 8,
       rowFirstY: 197, rowSpacing: 25, rowSize: 7.5,
-      colNo: 11, colName: 25, colQty: 278, colPrice: 315, colAmount: 356,
+      colNo: 11, colName: 40, colQty: 278, colPrice: 315, colAmount: 362,
       subtotalX: 374, subtotalY: 399, subtotalSize: 9,
       totalX: 374, totalY: 429, totalSize: 9,
       wordsX: 128, wordsY: 399, wordsSize: 7
@@ -1389,10 +1406,9 @@
     var _previewDebounce = null;
 
     function loadReceiptConfig() {
-      try {
-        var saved = JSON.parse(localStorage.getItem('csReceiptConfig') || '{}');
-        receiptConfig = Object.assign({}, RCPT_DEFAULTS, saved);
-      } catch(e) { receiptConfig = Object.assign({}, RCPT_DEFAULTS); }
+      // Always use RCPT_DEFAULTS as authoritative — do not read localStorage
+      // (previously per-browser localStorage caused stale/missing config across devices)
+      receiptConfig = Object.assign({}, RCPT_DEFAULTS);
     }
     function loadReceiptCounter() {
       receiptLocalCounter = parseInt(localStorage.getItem('csReceiptCounter') || '0') || 0;
@@ -1422,7 +1438,7 @@
       function gR(name, def) { var el = document.querySelector('input[name="' + name + '"]:checked'); return el ? el.value : (def || ''); }
       return {
         autoPrint: gB('rcptAutoPrint'),
-        dateMode: gR('rcptDateMode', 'order'),
+        dateMode: gR('rcptDateMode', 'print'),
         receiptRunMode: gR('rcptRunMode', 'sequence'),
         receiptPrefix: gS('rcptPrefix'),
         receiptOffset: parseInt(gS('rcptOffset')) || 0,
