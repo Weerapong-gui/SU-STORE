@@ -40,7 +40,7 @@ const STATUS_COLORS: Record<OrderStatus, string> = {
   received:        "text-purple-700 bg-purple-50",
   cancelled:       "text-zinc-500 bg-zinc-100",
   rejected:        "text-red-700 bg-red-50",
-  refund:          "text-amber-700 bg-amber-50",
+  refund:          "text-white bg-[#4d6d99]",
   refunded:        "text-zinc-500 bg-zinc-100",
 };
 
@@ -140,20 +140,28 @@ function OrderCard({ order }: { order: PublicOrder }) {
           size: order.size,
           quantity: order.quantity,
           totalAmount: order.totalAmount,
-        }]).map((item, i) => (
-          <div key={i} className="flex items-center justify-between gap-4 py-3">
+        }]).map((item, i) => {
+          const isHb = isHeadbandCategory(item.product.category);
+          const nameClass = isHb ? "text-sm font-semibold text-zinc-400 line-through" : "text-sm font-semibold text-zinc-800";
+          const subClass = isHb ? "text-xs text-zinc-300" : "text-xs text-zinc-400";
+          return (
+          <div key={i} className={`flex items-center justify-between gap-4 py-3 ${isHb ? "opacity-70" : ""}`}>
             <div>
-              <p className="text-sm font-semibold text-zinc-800">{item.product.name}</p>
-              <p className="text-xs text-zinc-400">Size {item.size} × {item.quantity}</p>
+              <p className={nameClass}>
+                {item.product.name}
+                {isHb && <span className="ml-2 text-xs font-normal text-zinc-400 no-underline">(ยกเลิก)</span>}
+              </p>
+              <p className={subClass}>Size {item.size} × {item.quantity}</p>
               {item.school && (
-                <p className="text-xs text-zinc-400" translate="no">
+                <p className={subClass} translate="no">
                   {item.product.category === "headband" ? "Print on Headband" : "School"}: {item.school}
                 </p>
               )}
             </div>
-            <p className="text-sm font-bold text-apple-blue">{baht(isHeadbandCategory(item.product.category) ? 0 : item.totalAmount)}</p>
+            <p className={isHb ? "text-sm font-bold text-zinc-300" : "text-sm font-bold text-apple-blue"}>{baht(isHb ? 0 : item.totalAmount)}</p>
           </div>
-        ))}
+          );
+        })}
       </div>
 
       {/* Footer */}

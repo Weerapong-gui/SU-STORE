@@ -1265,7 +1265,9 @@
       return new XMLSerializer().serializeToString(svg);
     }
 
-    function _receiptDocumentHtml(title, bodyInner) {
+    function _receiptDocumentHtml(title, bodyInner, opts) {
+      var grayscale = !!(opts && opts.grayscale);
+      var gsStyle = grayscale ? '.rcpt-page{filter:grayscale(1);-webkit-filter:grayscale(1)}' : '';
       return '<!DOCTYPE html><html lang="th"><head><meta charset="utf-8">' +
         '<link rel="preconnect" href="https://fonts.googleapis.com">' +
         '<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>' +
@@ -1274,7 +1276,7 @@
         '<style>@page{size:A4 landscape;margin:0}html,body{margin:0;padding:0}' +
         '.rcpt-page{width:297mm;height:210mm;overflow:hidden;page-break-after:always}' +
         '.rcpt-page:last-child{page-break-after:auto}' +
-        '.rcpt-page svg{display:block;width:297mm;height:210mm}' +
+        '.rcpt-page svg{display:block;width:297mm;height:210mm}' + gsStyle +
         '@media print{body{-webkit-print-color-adjust:exact;print-color-adjust:exact}}</style>' +
         '</head><body>' + bodyInner +
         '<script>window.onload=function(){window.print();window.addEventListener("afterprint",function(){window.close();});}<\/script></body></html>';
@@ -1312,7 +1314,7 @@
           }
           var title = "ใบเสร็จ " + orders.length + " ใบ";
           w.document.open();
-          w.document.write(_receiptDocumentHtml(title, pages.join("")));
+          w.document.write(_receiptDocumentHtml(title, pages.join(""), { grayscale: true }));
           w.document.close();
         })
         .catch(function(err) {

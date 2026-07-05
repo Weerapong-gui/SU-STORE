@@ -521,6 +521,14 @@ html, body {
                      '<div class="q-size">' + escapeHtml(sizeLabel) + '</div>' +
                      '<div class="q-color-swatch" style="background:' + bg + '" title="' + escapeHtml(colorPart) + '"></div>' +
                    '</div>';
+      } else if (station === 'khantok') {
+        var kSize = String(it.size || '');
+        var kAmt = kSize.replace(/[^0-9]/g, '');
+        var kBg = '', kFg = '', kBd = '';
+        if (kAmt === '100') { kBg = 'linear-gradient(135deg,#d4a12b,#f7d879)'; kFg = '#3b2606'; kBd = '#a37d15'; }
+        else if (kAmt === '50') { kBg = 'linear-gradient(135deg,#c1272d,#e85a5f)'; kFg = '#fff'; kBd = '#8a1519'; }
+        var kStyle = kBg ? ('background:' + kBg + ';color:' + kFg + ';border-color:' + kBd) : '';
+        sizeHtml = '<div class="q-size" style="' + kStyle + '">' + escapeHtml(kSize || '-') + '</div>';
       } else {
         sizeHtml = '<div class="q-size">' + escapeHtml(it.size || '-') + '</div>';
       }
