@@ -823,6 +823,7 @@
       openBatchReviewModal(selected);
     }
     var _batchReviewOrders = [];
+    var _batchDisplayStickyUntil = 0;
     function _fmtBaht(n) {
       var v = Math.round(Number(n) || 0);
       return '฿' + v.toLocaleString('th-TH');
@@ -933,6 +934,7 @@
         }
         if (orders.length > 1) pushDisplay(_buildDisplayStateMulti(orders));
         else pushDisplay(_buildDisplayState(orders[0], false));
+        _batchDisplayStickyUntil = Date.now() + 5 * 60 * 1000;
         closeBatchReviewModal();
         printReceiptsBatch(orders);
       } finally {
@@ -2159,6 +2161,7 @@
     function pushDisplay(stateOrOrder, typing) {
       var state = (stateOrOrder && stateOrOrder.active !== undefined) ? stateOrOrder : _buildDisplayState(stateOrOrder, typing);
       if (!state.username) state.username = currentUser;
+      if (state.active === false && Date.now() < _batchDisplayStickyUntil) return;
       fetch('/display1/update', {
         method: 'POST',
         headers: {'Authorization': 'Claim ' + currentToken, 'Content-Type': 'application/json'},
