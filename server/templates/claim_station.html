@@ -823,6 +823,10 @@
       openBatchReviewModal(selected);
     }
     var _batchReviewOrders = [];
+    function _fmtBaht(n) {
+      var v = Math.round(Number(n) || 0);
+      return '฿' + v.toLocaleString('th-TH');
+    }
     function openBatchReviewModal(orders) {
       _batchReviewOrders = orders.slice();
       var initialName = '';
@@ -849,14 +853,14 @@
           var nameCls = isCancelled ? 'color:#94a3b8' : '';
           return '<div style="display:flex;justify-content:space-between;gap:12px;padding:4px 0;font-size:13px">' +
             '<div style="flex:1;' + nameCls + '">' + esc(it.name) + ' <span style="color:var(--muted);font-size:11px">' + (it.size ? 'Size ' + esc(it.size) : '') + (it.qty ? ' × ' + it.qty : '') + '</span></div>' +
-            '<div style="' + priceCls + '">' + baht(it.total) + '</div>' +
+            '<div style="' + priceCls + '">' + _fmtBaht(it.total) + '</div>' +
           '</div>';
         }).join('');
         orderBlocks +=
-          '<div style="border:1px solid var(--border);border-radius:10px;padding:10px 12px;margin-bottom:8px;background:var(--surface)">' +
+          '<div style="border:1px solid var(--border);border-radius:10px;padding:10px 12px;margin-bottom:8px;background:var(--card)">' +
             '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">' +
               '<div style="font-weight:700;font-size:14px">' + esc(o.id || '-') + '</div>' +
-              '<div style="font-weight:700;color:var(--primary);font-size:14px">' + baht(subTotal) + '</div>' +
+              '<div style="font-weight:700;color:var(--primary);font-size:14px">' + _fmtBaht(subTotal) + '</div>' +
             '</div>' +
             rowsHtml +
           '</div>';
@@ -869,20 +873,20 @@
         document.body.appendChild(modal);
       }
       modal.innerHTML =
-        '<div style="background:var(--bg);color:var(--text);border-radius:14px;max-width:640px;width:100%;max-height:92vh;overflow:auto;padding:20px;box-shadow:0 20px 60px rgba(0,0,0,.6)">' +
+        '<div style="background:var(--bg);color:var(--ink);border-radius:14px;max-width:640px;width:100%;max-height:92vh;overflow:auto;padding:20px;box-shadow:0 20px 60px rgba(0,0,0,.6)">' +
           '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px">' +
             '<div style="font-weight:800;font-size:18px">ตรวจสอบก่อนพิมพ์ (' + orders.length + ' ออเดอร์)</div>' +
             '<button onclick="closeBatchReviewModal()" style="background:none;border:none;color:var(--muted);font-size:22px;cursor:pointer;line-height:1">&times;</button>' +
           '</div>' +
           '<div style="margin-bottom:12px">' +
             '<div style="font-size:12px;color:var(--muted);margin-bottom:4px">ชื่อลูกค้า (ใช้กับทุกออเดอร์)</div>' +
-            '<input id="csBatchNameInput" type="text" value="' + esc(initialName) + '" style="width:100%;padding:10px 12px;border:1.5px solid var(--border);border-radius:8px;font-size:15px;background:var(--surface);color:var(--text)" />' +
+            '<input id="csBatchNameInput" type="text" value="' + esc(initialName) + '" style="width:100%;padding:10px 12px;border:1.5px solid var(--border);border-radius:8px;font-size:15px;background:var(--card);color:var(--ink)" />' +
             '<div style="font-size:11px;color:var(--muted);margin-top:4px">' + esc(studentCode) + (school ? ' · ' + esc(school) : '') + '</div>' +
           '</div>' +
           '<div style="margin-bottom:12px">' + orderBlocks + '</div>' +
-          '<div style="display:flex;justify-content:space-between;align-items:center;padding:10px 12px;background:var(--surface);border-radius:10px;margin-bottom:14px">' +
+          '<div style="display:flex;justify-content:space-between;align-items:center;padding:10px 12px;background:var(--card);border-radius:10px;margin-bottom:14px">' +
             '<div style="font-weight:700">ยอดรวมทั้งหมด</div>' +
-            '<div style="font-weight:800;font-size:18px;color:var(--primary)">' + baht(grand) + '</div>' +
+            '<div style="font-weight:800;font-size:18px;color:var(--primary)">' + _fmtBaht(grand) + '</div>' +
           '</div>' +
           '<div style="display:flex;gap:10px">' +
             '<button onclick="closeBatchReviewModal()" style="flex:1;padding:12px;border:1.5px solid var(--border);border-radius:10px;background:none;color:var(--muted);font-weight:600;cursor:pointer">ยกเลิก</button>' +
