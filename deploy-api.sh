@@ -1,17 +1,16 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# Server credentials come from the environment, never hard-coded. Set DEPLOY_SSH_PASS
-# before running, e.g.  DEPLOY_SSH_PASS='...' bash deploy-api.sh
-# TODO: migrate to SSH key auth + a NOPASSWD sudoers rule and drop sshpass.
-: "${DEPLOY_SSH_PASS:?Set DEPLOY_SSH_PASS to the server password (do not commit it)}"
-export SSHPASS="$DEPLOY_SSH_PASS"
-
+# SSH auth uses a dedicated deploy key (no password / no sshpass). Install it on the
+# server once with:
+#   ssh-copy-id -i ~/.ssh/su_store_deploy_ed25519.pub park@arch.sumfu.xyz
+# Override the key path with DEPLOY_KEY=... if needed.
 SERVER="park@arch.sumfu.xyz"
 REMOTE_DIR="/home/park/SU-STORE"
-SSH_OPTS="-o StrictHostKeyChecking=no -o PreferredAuthentications=password"
-SSH="sshpass -e ssh $SSH_OPTS $SERVER"
-SCP="sshpass -e scp $SSH_OPTS"
+DEPLOY_KEY="${DEPLOY_KEY:-$HOME/.ssh/su_store_deploy_ed25519}"
+SSH_OPTS="-o StrictHostKeyChecking=accept-new -o PreferredAuthentications=publickey -i $DEPLOY_KEY"
+SSH="ssh $SSH_OPTS $SERVER"
+SCP="scp $SSH_OPTS"
 
 echo "==> Packing server files..."
 tar -czf /tmp/su-api-deploy.tar.gz \
