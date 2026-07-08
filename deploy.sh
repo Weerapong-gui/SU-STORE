@@ -1,11 +1,17 @@
 #!/usr/bin/env bash
-set -e
+set -euo pipefail
+
+# Server credentials come from the environment, never hard-coded. Set DEPLOY_SSH_PASS
+# before running, e.g.  DEPLOY_SSH_PASS='...' bash deploy.sh   (or source a gitignored
+# .env.deploy). TODO: migrate to SSH key auth + a NOPASSWD sudoers rule and drop sshpass.
+: "${DEPLOY_SSH_PASS:?Set DEPLOY_SSH_PASS to the server password (do not commit it)}"
+export SSHPASS="$DEPLOY_SSH_PASS"
 
 SERVER="park@arch.sumfu.xyz"
 REMOTE_DIR="/home/park/SU-STORE"
 SSH_OPTS="-o StrictHostKeyChecking=no -o PreferredAuthentications=password"
-SSH="sshpass -p 23007 ssh $SSH_OPTS $SERVER"
-SCP="sshpass -p 23007 scp $SSH_OPTS"
+SSH="sshpass -e ssh $SSH_OPTS $SERVER"
+SCP="sshpass -e scp $SSH_OPTS"
 
 echo "==> Packing files..."
 tar -czf /tmp/su-store-deploy.tar.gz \
@@ -28,13 +34,13 @@ $SSH "
 "
 
 echo "==> Ensuring image cache dir exists..."
-$SSH "mkdir -p $REMOTE_DIR/data/next-image-cache && echo 23007 | sudo -S chown -R 1001:1001 $REMOTE_DIR/data/next-image-cache 2>/dev/null || chmod 777 $REMOTE_DIR/data/next-image-cache"
+$SSH "mkdir -p $REMOTE_DIR/data/next-image-cache && echo '$DEPLOY_SSH_PASS' | sudo -S chown -R 1001:1001 $REMOTE_DIR/data/next-image-cache 2>/dev/null || chmod 777 $REMOTE_DIR/data/next-image-cache"
 
 echo "==> Rebuilding Docker (su-store + order-api)..."
 $SSH "sg docker -c 'cd $REMOTE_DIR && docker compose --env-file $REMOTE_DIR/.env up -d --build --no-deps su-store order-api'" 2>&1
 
 echo "==> Restarting cloudflared tunnel..."
-$SSH "echo 23007 | sudo -S systemctl restart cloudflared" || true  # connection drops briefly on tunnel restart — expected
+$SSH "echo '$DEPLOY_SSH_PASS' | sudo -S systemctl restart cloudflared" || true  # connection drops briefly on tunnel restart — expected
 
 echo "==> Warming Next.js image cache..."
 $SSH "

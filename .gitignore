@@ -5,8 +5,10 @@ coverage
 .DS_Store
 .env
 .env.local
-data/orders
-data/slips
+# Runtime data (SQLite DB, uploaded slips, image cache, rate-limit state) — never commit.
+# Covers the real Docker volume layout: data/order-api/su-order-api/{orders.db,slips}, data/su-store, …
+data/
+rate-limit.json
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*

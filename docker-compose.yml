@@ -50,7 +50,7 @@ services:
       ORDER_API_PORT: 10000
       ORDER_API_DB_PATH: /var/data/su-order-api/orders.db
       ORDER_API_SLIPS_DIR: /var/data/su-order-api/slips
-      ORDER_PREFIX: ${ORDER_PREFIX:-SU}
+      ORDER_PREFIX: ${ORDER_PREFIX:-FP28}
       ORDER_ROUND: ${ORDER_ROUND:-1}
       KHANTOKE_TICKET_QUOTA: ${KHANTOKE_TICKET_QUOTA:-2000}
       ORDER_API_TOKEN: ${ORDER_API_TOKEN:-}

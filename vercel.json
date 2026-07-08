@@ -1,8 +1,6 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "env": {
-    "ORDER_API_BASE_URL": "https://admin.sumfu.xyz",
-    "ORDER_API_TOKEN": "0c1c0f3e7224e4d2ab62dc215ad6f55f",
-    "BYPASS_TOKEN": "99f5d1931fa6df84abd67a0c0b700b9f"
+    "ORDER_API_BASE_URL": "https://admin.sumfu.xyz"
   }
 }

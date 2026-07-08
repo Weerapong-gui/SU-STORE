@@ -1,5 +1,6 @@
-const SPREADSHEET_ID = '1m-kRy-0nR0l2um4uE_sGRmpwSLmGDx42jPzQpFvne0U';
-const WEBHOOK_TOKEN = 'su-store-sheets-2026';
+// Fill these in when deploying the Apps Script — do NOT commit real values.
+const SPREADSHEET_ID = 'YOUR_SPREADSHEET_ID';
+const WEBHOOK_TOKEN = 'YOUR_WEBHOOK_TOKEN';
 
 const TARGET_SHEET_NAMES = ['POLO', 'JACKET', 'HEADBAND'];
 
