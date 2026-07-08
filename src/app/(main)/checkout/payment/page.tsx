@@ -33,8 +33,10 @@ export default async function CheckoutPaymentPage({ searchParams }: CheckoutPaym
   }
 
   // Block if the specific product is unavailable — redirect to configure page which shows the closed UI
+  let unavailableSlugs: string[] = [];
   if (!existingOrder) {
     const allProducts = await getProducts();
+    unavailableSlugs = allProducts.filter((p) => p.available === false).map((p) => p.slug);
     const requestedSlug = !cartMode ? searchParams?.product : undefined;
     if (requestedSlug) {
       const requestedProduct = allProducts.find((p) => p.slug === requestedSlug);
@@ -60,6 +62,7 @@ export default async function CheckoutPaymentPage({ searchParams }: CheckoutPaym
           defaultSchool={searchParams?.school}
           cartItemId={searchParams?.itemId}
           cartMode={cartMode}
+          unavailableSlugs={unavailableSlugs}
         />
       </Container>
     </section>

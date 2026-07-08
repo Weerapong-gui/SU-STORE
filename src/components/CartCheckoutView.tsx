@@ -17,9 +17,15 @@ const QUANTITY_BUTTON_CLASSES =
 const MOBILE_QUANTITY_BUTTON_CLASSES =
   "inline-flex h-6 w-6 items-center justify-center border border-zinc-300 bg-white text-[10px] text-zinc-900 transition hover:bg-zinc-50 disabled:cursor-not-allowed disabled:opacity-40";
 
-export function CartCheckoutView() {
+type CartCheckoutViewProps = {
+  unavailableSlugs?: string[];
+};
+
+export function CartCheckoutView({ unavailableSlugs = [] }: CartCheckoutViewProps = {}) {
   const { items, subtotal, itemCount, removeItem, updateItemQuantity, clearCart } = useCart();
   const checkoutTarget = "/checkout/payment?cart=1";
+  const unavailableSet = new Set(unavailableSlugs);
+  const hasUnavailable = items.some((it) => unavailableSet.has(it.productSlug));
 
   if (items.length === 0) {
     return (
@@ -64,10 +70,12 @@ export function CartCheckoutView() {
         </div>
 
         <div className="divide-y-0 divide-zinc-200 border-t-0 border-zinc-200 md:mt-8 md:divide-y md:border-t">
-          {items.map((item) => (
+          {items.map((item) => {
+            const itemUnavailable = unavailableSet.has(item.productSlug);
+            return (
             <div
               key={item.id}
-              className="grid grid-cols-[5.4rem_minmax(0,1fr)_auto] gap-3 py-4 md:grid-cols-[7rem_minmax(0,1fr)] md:gap-5 md:py-8 xl:grid-cols-[9rem_minmax(0,1fr)_auto]"
+              className={"grid grid-cols-[5.4rem_minmax(0,1fr)_auto] gap-3 py-4 md:grid-cols-[7rem_minmax(0,1fr)] md:gap-5 md:py-8 xl:grid-cols-[9rem_minmax(0,1fr)_auto]" + (itemUnavailable ? " opacity-70" : "")}
             >
               <div className="relative aspect-[4/5] overflow-hidden rounded-xl bg-white md:rounded-2xl">
                 <Image
@@ -221,8 +229,22 @@ export function CartCheckoutView() {
                   {formatPrice(item.unitPrice * item.quantity)}
                 </p>
               </div>
+              {itemUnavailable && (
+                <div className="col-span-full mt-2 flex flex-wrap items-center gap-2 rounded-lg bg-rose-50 px-3 py-2 text-[11px] font-medium text-rose-700 md:text-sm">
+                  <span>สินค้านี้ปิดจำหน่ายแล้ว โปรดลบออกก่อนดำเนินการต่อ</span>
+                  <button
+                    type="button"
+                    onClick={() => removeItem(item.id)}
+                    className="ml-auto inline-flex items-center gap-1 rounded-full bg-rose-600 px-3 py-1 text-[11px] font-semibold text-white transition hover:bg-rose-700 md:text-sm"
+                  >
+                    <Trash2 className="h-3 w-3" />
+                    Remove
+                  </button>
+                </div>
+              )}
             </div>
-          ))}
+            );
+          })}
         </div>
       </div>
 
@@ -246,9 +268,24 @@ export function CartCheckoutView() {
             </span>
           </div>
 
-          <Link href={checkoutTarget} className="mt-5 inline-flex w-full items-center justify-center rounded-full bg-black px-6 py-4 text-sm font-semibold tracking-[0.02em] text-white transition hover:bg-zinc-900 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-zinc-300 md:mt-6 md:text-base">
-            CONTINUE TO CHECKOUT
-          </Link>
+          {hasUnavailable ? (
+            <>
+              <button
+                type="button"
+                disabled
+                className="mt-5 inline-flex w-full cursor-not-allowed items-center justify-center rounded-full bg-zinc-300 px-6 py-4 text-sm font-semibold tracking-[0.02em] text-zinc-500 md:mt-6 md:text-base"
+              >
+                CONTINUE TO CHECKOUT
+              </button>
+              <p className="mt-2 text-center text-[11px] font-medium text-rose-600 md:text-sm">
+                มีสินค้าปิดจำหน่ายในตะกร้า โปรดลบออกก่อน
+              </p>
+            </>
+          ) : (
+            <Link href={checkoutTarget} className="mt-5 inline-flex w-full items-center justify-center rounded-full bg-black px-6 py-4 text-sm font-semibold tracking-[0.02em] text-white transition hover:bg-zinc-900 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-zinc-300 md:mt-6 md:text-base">
+              CONTINUE TO CHECKOUT
+            </Link>
+          )}
 
           <Link href="/products" className={`${SECONDARY_LINK_CLASSES} mt-4 w-full`}>
             add more products

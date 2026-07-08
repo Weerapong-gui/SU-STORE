@@ -27,6 +27,7 @@ type CheckoutPaymentFormProps = {
   defaultSchool?: string;
   cartItemId?: string;
   cartMode?: boolean;
+  unavailableSlugs?: string[];
 };
 
 type SubmitState = "idle" | "creating" | "uploading";
@@ -95,8 +96,10 @@ export function CheckoutPaymentForm({
   defaultQuantity,
   defaultSchool,
   cartItemId,
-  cartMode = false
+  cartMode = false,
+  unavailableSlugs = []
 }: CheckoutPaymentFormProps) {
+  const unavailableSet = new Set(unavailableSlugs);
   const router = useRouter();
   const { lang } = useLang();
   const { clearCart, hydrated, items: cartItems, removeItem } = useCart();
@@ -153,6 +156,13 @@ export function CheckoutPaymentForm({
 
     if (selectedItems.length === 0) {
       setSubmitError("Please add at least one product before confirming your order.");
+      return;
+    }
+
+    const blockedItems = selectedItems.filter((it) => unavailableSet.has(it.productSlug));
+    if (blockedItems.length > 0) {
+      const names = blockedItems.map((it) => it.productName).join(", ");
+      setSubmitError(`สินค้าปิดจำหน่ายแล้ว: ${names} — โปรดลบออกจากตะกร้าก่อนสั่งซื้อ`);
       return;
     }
 
@@ -222,7 +232,7 @@ export function CheckoutPaymentForm({
         const slipResult = (await slipRes.json().catch(() => null)) as { message?: string } | null;
         setSubmitError(
           (slipResult?.message ?? "Slip upload failed.") +
-          ` Your order ${orderId} was created — go to Check Order to upload your slip.`
+          ` Your order ${orderId} was created. Go to Check Order to upload your slip.`
         );
         setSubmitState("idle");
         return;
@@ -410,7 +420,7 @@ export function CheckoutPaymentForm({
                 <span className="grow text-[11px] leading-relaxed text-zinc-400">
                   {lang === "th"
                     ? "อีเมลที่สามารถติดต่อได้ สามารถใช้อีเมลส่วนตัวได้"
-                    : "Any reachable email — personal email is fine."}
+                    : "Any reachable email. Personal email is fine."}
                 </span>
                 <input
                   name="email"
