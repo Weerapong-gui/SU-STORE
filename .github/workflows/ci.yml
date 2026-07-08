@@ -32,7 +32,7 @@ jobs:
         run: npm test
 
   backend:
-    name: Backend syntax check
+    name: Backend lint & tests
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -42,8 +42,23 @@ jobs:
         with:
           python-version: "3.13"
 
+      - name: Install test tooling
+        run: pip install pytest ruff
+
       - name: Check Python syntax
         run: python3 -c "import ast; ast.parse(open('server/order_api.py').read()); print('order_api.py OK')"
 
+      - name: Lint (ruff — critical errors only)
+        # E9=syntax, F63=comparison/assert bugs, F7=misplaced statements, F82=undefined names.
+        # Intentionally excludes style rules so this only fails on real bugs.
+        run: ruff check --select E9,F63,F7,F82 server/
+
       - name: Run pytest
+        # order_api.py creates its data dirs at import time; point them at a writable
+        # temp location so the module imports on the CI runner (avoids /var/data denial).
+        env:
+          ORDER_API_DB_PATH: /tmp/su-order-api/orders.db
+          ORDER_API_SLIPS_DIR: /tmp/su-order-api/slips
+          ORDER_API_SLIDES_DIR: /tmp/su-order-api/slides
+          ORDER_API_ASSETS_DIR: /tmp/su-order-api/display2_assets
         run: python3 -m pytest server/tests/ -v

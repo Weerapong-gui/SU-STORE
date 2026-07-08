@@ -42,7 +42,10 @@ class TestOrderStatuses:
             )
 
     def test_payment_statuses_are_valid_values(self):
-        valid_payment_statuses = {"awaiting_payment", "waiting_confirm", "paid", "rejected"}
+        valid_payment_statuses = {
+            "awaiting_payment", "waiting_confirm", "paid", "rejected",
+            "refund_pending", "refunded",
+        }
         for order_status, payment_status in order_api.PAYMENT_STATUS_BY_ORDER_STATUS.items():
             assert payment_status in valid_payment_statuses, (
                 f"Order status '{order_status}' maps to unknown payment status '{payment_status}'"
