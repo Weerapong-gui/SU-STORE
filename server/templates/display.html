@@ -103,6 +103,7 @@ html, body {
   display: flex; flex-direction: column;
   padding: 36px 48px 32px;
   gap: 24px; background: var(--bg);
+  overflow: hidden;
 }
 .topbar { display: flex; align-items: center; justify-content: space-between; flex-shrink: 0; }
 .topbar-store-logo { height: clamp(28px, 3.5vw, 52px); object-fit: contain; }
@@ -406,10 +407,29 @@ function startSlideshow(images, interval, transition) {
   }, secs * 1000);
 }
 
+var _manualFs = 1;
 function applyFontSize(s) {
-  var fs = (s && s.fontSize && s.fontSize >= 50 && s.fontSize <= 200) ? s.fontSize / 100 : 1;
-  document.documentElement.style.setProperty('--fs', fs);
+  _manualFs = (s && s.fontSize && s.fontSize >= 50 && s.fontSize <= 200) ? s.fontSize / 100 : 1;
+  document.documentElement.style.setProperty('--fs', _manualFs);
 }
+var _autofitRaf = null;
+function autofit() {
+  if (sActive.classList.contains('hidden')) return;
+  document.documentElement.style.setProperty('--fs', _manualFs);
+  if (_autofitRaf) cancelAnimationFrame(_autofitRaf);
+  _autofitRaf = requestAnimationFrame(function() {
+    var fs = _manualFs;
+    var floor = 0.35;
+    var step = 0.05;
+    var attempts = 0;
+    while (attempts < 40 && sActive.scrollHeight > sActive.clientHeight + 2 && fs > floor) {
+      fs = Math.max(floor, fs - step);
+      document.documentElement.style.setProperty('--fs', fs);
+      attempts++;
+    }
+  });
+}
+window.addEventListener('resize', function() { autofit(); });
 
 var _slidesFetching = false;
 var _slidesFetched = false;
@@ -503,6 +523,7 @@ function render(s) {
     dItems.innerHTML = html;
     dTotal.textContent = baht(s.total || 0);
   }
+  autofit();
 }
 
 /* ── init ── */

@@ -2529,7 +2529,7 @@ class OrderRequestHandler(BaseHTTPRequestHandler):
                 rows = connection.execute(
                     """SELECT p.id, p.order_code, p.size, p.quantity, p.student_code,
                               p.nickname, p.full_name, p.queued_at, p.queued_by, p.undone_at,
-                              p.item_index, o.items_json
+                              p.item_index, o.items_json, o.status AS order_status
                          FROM display2_picks p
                          LEFT JOIN orders o ON o.internal_id = p.order_internal_id
                         WHERE p.station = ? AND p.picked_at IS NULL
@@ -2540,12 +2540,23 @@ class OrderRequestHandler(BaseHTTPRequestHandler):
             items = []
             for r in rows:
                 school = ""
+                line_total = 0
+                unit_price = 0
                 if station == "headband":
                     try:
                         parsed = json.loads(r["items_json"] or "[]")
                         if 0 <= r["item_index"] < len(parsed):
-                            school = (parsed[r["item_index"]] or {}).get("school") or ""
-                    except (TypeError, json.JSONDecodeError):
+                            item = parsed[r["item_index"]] or {}
+                            school = item.get("school") or ""
+                            product = item.get("product") or {}
+                            qty = int(item.get("quantity", 1) or 1)
+                            unit_price = int(item.get("unitPrice") or product.get("price") or 35)
+                            raw_total = item.get("totalAmount")
+                            if raw_total:
+                                line_total = int(raw_total)
+                            else:
+                                line_total = unit_price * qty
+                    except (TypeError, json.JSONDecodeError, ValueError):
                         pass
                 items.append({
                     "id": r["id"],
@@ -2559,6 +2570,9 @@ class OrderRequestHandler(BaseHTTPRequestHandler):
                     "queuedBy": r["queued_by"],
                     "undone": r["undone_at"] is not None,
                     "school": school,
+                    "unitPrice": unit_price,
+                    "lineTotal": line_total,
+                    "orderStatus": r["order_status"],
                 })
             with open_db() as conn2:
                 today_count = conn2.execute(
@@ -2698,20 +2712,20 @@ class OrderRequestHandler(BaseHTTPRequestHandler):
             with open_db() as connection:
                 if student_code:
                     rows = connection.execute(
-                        "SELECT * FROM orders WHERE student_code=? AND status='shipped' ORDER BY created_at DESC",
+                        "SELECT * FROM orders WHERE student_code=? AND status IN ('shipped','refund') ORDER BY created_at DESC",
                         (student_code,),
                     ).fetchall()
                     not_found_msg = "ไม่พบออเดอร์พร้อมรับสำหรับรหัสนักศึกษานี้"
                 elif phone:
                     rows = connection.execute(
-                        "SELECT * FROM orders WHERE phone=? AND status='shipped' ORDER BY created_at DESC",
+                        "SELECT * FROM orders WHERE phone=? AND status IN ('shipped','refund') ORDER BY created_at DESC",
                         (phone,),
                     ).fetchall()
                     not_found_msg = "ไม่พบออเดอร์พร้อมรับสำหรับเบอร์โทรนี้"
                 else:
                     pat = f"%{full_name}%"
                     rows = connection.execute(
-                        "SELECT * FROM orders WHERE (full_name LIKE ? OR (first_name || ' ' || last_name) LIKE ?) AND status='shipped' ORDER BY created_at DESC",
+                        "SELECT * FROM orders WHERE (full_name LIKE ? OR (first_name || ' ' || last_name) LIKE ?) AND status IN ('shipped','refund') ORDER BY created_at DESC",
                         (pat, pat),
                     ).fetchall()
                     not_found_msg = "ไม่พบออเดอร์พร้อมรับสำหรับชื่อนี้"
@@ -2779,7 +2793,7 @@ class OrderRequestHandler(BaseHTTPRequestHandler):
             with open_db() as connection:
                 row = fetch_order_by_code(connection, order_code)
                 ocr_row = connection.execute(
-                    "SELECT amount, date, sender, bank, status FROM slip_ocr_results WHERE order_code = ?",
+                    "SELECT amount, date, sender, bank, status, ref_number FROM slip_ocr_results WHERE order_code = ?",
                     (order_code,),
                 ).fetchone()
             if row is None:
@@ -3528,13 +3542,48 @@ class OrderRequestHandler(BaseHTTPRequestHandler):
                         })
                     return
                 row = connection.execute(
-                    "SELECT order_code, station FROM display2_picks WHERE id=?",
+                    "SELECT order_code, order_internal_id, station FROM display2_picks WHERE id=?",
                     (pick_id,),
                 ).fetchone()
                 log_audit(connection, row["order_code"], "display2_picked",
                           f"station={row['station']} by={picker}")
+                auto_refunded = False
+                if row["station"] == "headband":
+                    order_row = connection.execute(
+                        "SELECT status, items_json FROM orders WHERE internal_id=?",
+                        (row["order_internal_id"],),
+                    ).fetchone()
+                    if order_row:
+                        try:
+                            _items = json.loads(order_row["items_json"] or "[]")
+                        except (TypeError, json.JSONDecodeError):
+                            _items = []
+                        def _slug(it):
+                            p = it.get("product") or {}
+                            return (it.get("slug") or p.get("slug") or "").lower()
+                        headband_only = bool(_items) and all(
+                            "headband" in _slug(i) for i in _items
+                        )
+                        if headband_only and order_row["status"] not in ("refunded", "cancelled", "rejected"):
+                            remaining = connection.execute(
+                                "SELECT COUNT(*) AS c FROM display2_picks "
+                                "WHERE order_internal_id=? AND station='headband' AND picked_at IS NULL",
+                                (row["order_internal_id"],),
+                            ).fetchone()["c"]
+                            if remaining == 0:
+                                connection.execute(
+                                    "UPDATE orders SET status='refunded', payment_status='refunded', updated_at=?"
+                                    " WHERE internal_id=? AND status NOT IN ('refunded','cancelled','rejected')",
+                                    (ts, row["order_internal_id"]),
+                                )
+                                log_audit(connection, row["order_code"], "refund_completed",
+                                          f"auto set by headband station by={picker} (prev={order_row['status']})")
+                                auto_refunded = True
                 connection.commit()
-            self._send_json(HTTPStatus.OK, {"ok": True})
+            resp = {"ok": True}
+            if auto_refunded:
+                resp["autoRefunded"] = True
+            self._send_json(HTTPStatus.OK, resp)
             return
 
         if path == "/display2/undo":
@@ -3913,23 +3962,30 @@ class OrderRequestHandler(BaseHTTPRequestHandler):
             received_by = (payload or {}).get("receivedBy", "") if isinstance(payload, dict) else ""
             with open_db() as connection:
                 ts = now_iso()
-                cursor = connection.execute(
-                    "UPDATE orders SET status='received', payment_status='paid', received_at=?, received_by=?, updated_at=?"
-                    " WHERE order_code=? AND status='shipped'",
-                    (ts, received_by or "staff", ts, order_code),
-                )
-                if cursor.rowcount == 0:
-                    row = fetch_order_by_code(connection, order_code)
-                    if row is None:
-                        self._send_json(HTTPStatus.NOT_FOUND, {"message": "ไม่พบออเดอร์"})
-                    else:
-                        st = row["status"]
-                        if st == "received":
-                            self._send_json(HTTPStatus.CONFLICT, {"message": "ออเดอร์นี้ถูกรับสินค้าไปแล้ว", "alreadyReceived": True})
-                        else:
-                            self._send_json(HTTPStatus.BAD_REQUEST, {"message": f"ออเดอร์มีสถานะ '{st}' ยังไม่พร้อมรับ"})
+                existing = fetch_order_by_code(connection, order_code)
+                if existing is None:
+                    self._send_json(HTTPStatus.NOT_FOUND, {"message": "ไม่พบออเดอร์"})
                     return
-                log_audit(connection, order_code, "claim_received", f"received by {received_by or 'staff'}")
+                prev_status = existing["status"]
+                if prev_status == "received":
+                    self._send_json(HTTPStatus.CONFLICT, {"message": "ออเดอร์นี้ถูกรับสินค้าไปแล้ว", "alreadyReceived": True})
+                    return
+                if prev_status == "refunded":
+                    self._send_json(HTTPStatus.CONFLICT, {"message": "ออเดอร์นี้คืนเงินไปแล้ว", "alreadyReceived": True})
+                    return
+                if prev_status == "shipped":
+                    connection.execute(
+                        "UPDATE orders SET status='received', payment_status='paid', received_at=?, received_by=?, updated_at=?"
+                        " WHERE order_code=? AND status='shipped'",
+                        (ts, received_by or "staff", ts, order_code),
+                    )
+                    log_audit(connection, order_code, "claim_received", f"received by {received_by or 'staff'}")
+                elif prev_status == "refund":
+                    log_audit(connection, order_code, "claim_refund_init",
+                              f"queued to headband station by {received_by or 'staff'}")
+                else:
+                    self._send_json(HTTPStatus.BAD_REQUEST, {"message": f"ออเดอร์มีสถานะ '{prev_status}' ยังไม่พร้อมรับ"})
+                    return
                 updated_row = fetch_order_by_code(connection, order_code)
                 claim_user = self._get_claim_station_user() or received_by or "staff"
                 try:
@@ -3940,7 +3996,7 @@ class OrderRequestHandler(BaseHTTPRequestHandler):
                 connection.commit()
                 updated = updated_row
             cache_invalidate(f"cs_order:{order_code}")
-            self._send_json(HTTPStatus.OK, {"order": serialize_order(updated)})
+            self._send_json(HTTPStatus.OK, {"order": serialize_order(updated), "prevStatus": prev_status})
             return
 
         claim_name_match = re.fullmatch(r"/claim-station/orders/([A-Z0-9-]+)/name", path)

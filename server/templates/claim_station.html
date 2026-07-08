@@ -796,7 +796,7 @@
         '</div>';
       }
       html += '<div class="action-block" style="display:flex;gap:8px;flex-wrap:wrap">' +
-        '<button class="btn-primary" onclick="printListedOrdersSelected()" id="csPrintSelBtn" style="flex:1;min-width:200px">พิมพ์ที่เลือก (<span id="csSelCount">' + orders.length + '</span>)</button>' +
+        '<button class="btn-primary" onclick="printListedOrdersSelected()" id="csPrintSelBtn" style="flex:1;min-width:200px">ตรวจสอบที่เลือก (<span id="csSelCount">' + orders.length + '</span>)</button>' +
         '<button class="btn-close" onclick="clearResult()">ปิด</button>' +
         '</div></div>';
       _showResultMode();
@@ -891,19 +891,36 @@
           '</div>' +
           '<div style="display:flex;gap:10px">' +
             '<button onclick="closeBatchReviewModal()" style="flex:1;padding:12px;border:1.5px solid var(--border);border-radius:10px;background:none;color:var(--muted);font-weight:600;cursor:pointer">ยกเลิก</button>' +
-            '<button onclick="confirmBatchReview()" id="csBatchConfirmBtn" style="flex:2;padding:12px;border:none;border-radius:10px;background:var(--primary);color:#fff;font-weight:700;cursor:pointer">ยืนยัน + พิมพ์</button>' +
+            '<button onclick="confirmBatchReview()" id="csBatchConfirmBtn" style="flex:2;padding:12px;border:none;border-radius:10px;background:var(--primary);color:#fff;font-weight:700;cursor:pointer">ยืนยันรับ + พิมพ์</button>' +
           '</div>' +
         '</div>';
       modal.style.display = 'flex';
+      _batchDisplayStickyUntil = Date.now() + 5 * 60 * 1000;
+      pushDisplay(_buildDisplayStateMulti(orders, initialName));
       setTimeout(function() {
         var inp = document.getElementById('csBatchNameInput');
-        if (inp) inp.focus();
+        if (inp) {
+          inp.focus();
+          var pushDebounce = null;
+          inp.addEventListener('input', function() {
+            clearTimeout(pushDebounce);
+            pushDebounce = setTimeout(function() {
+              _batchDisplayStickyUntil = Date.now() + 5 * 60 * 1000;
+              pushDisplay(_buildDisplayStateMulti(_batchReviewOrders, inp.value));
+            }, 200);
+          });
+        }
       }, 80);
     }
     function closeBatchReviewModal() {
       var modal = document.getElementById('csBatchReviewModal');
       if (modal) modal.style.display = 'none';
+      var wasCanceled = _batchReviewOrders.length > 0;
       _batchReviewOrders = [];
+      if (wasCanceled) {
+        _batchDisplayStickyUntil = 0;
+        pushDisplay({active: false, username: currentUser, slideImages: getSlideshowImages(), slideInterval: getSlideInterval(), fontSize: parseInt(localStorage.getItem('csDisplayFontSize') || '100', 10), slideTransition: getSlideTransition()});
+      }
     }
     async function confirmBatchReview() {
       var orders = _batchReviewOrders;
@@ -932,19 +949,66 @@
             }));
           }
         }
-        if (orders.length > 1) pushDisplay(_buildDisplayStateMulti(orders));
+        var receivedByLabel = currentStation ? currentUser + ' (' + currentStation + ')' : currentUser;
+        var receivedResults = await Promise.all(orders.map(function(o) {
+          if (o.status !== 'shipped' && o.status !== 'refund') return { order: o, ok: true, skipped: true };
+          return fetch('/claim-station/orders/' + encodeURIComponent(o.id) + '/received', {
+            method: 'PATCH',
+            headers: {'Authorization': 'Claim ' + currentToken, 'Content-Type': 'application/json'},
+            body: JSON.stringify({receivedBy: receivedByLabel}),
+          }).then(function(r) {
+            return r.json().then(function(d) {
+              return { order: o, ok: r.ok, status: r.status, data: d };
+            }).catch(function() { return { order: o, ok: r.ok, status: r.status, data: null }; });
+          }).catch(function() { return { order: o, ok: false, network: true }; });
+        }));
+        var failed = receivedResults.filter(function(r) {
+          if (r.skipped) return false;
+          if (r.ok) return false;
+          if (r.status === 409) return false;
+          return true;
+        });
+        var successCount = receivedResults.filter(function(r) { return r.ok && !r.skipped; }).length;
+        var conflictCount = receivedResults.filter(function(r) { return r.status === 409; }).length;
+        receivedResults.forEach(function(r) {
+          if (r.ok && r.data && r.data.order) {
+            r.order.status = r.data.order.status;
+            r.order.receivedAt = r.data.order.receivedAt;
+            r.order.receivedBy = r.data.order.receivedBy;
+          }
+        });
+        if (successCount > 0) {
+          sessionClaimCount += successCount;
+          var sess = document.getElementById('statSession');
+          if (sess) sess.textContent = String(sessionClaimCount);
+          loadStats();
+        }
+        if (orders.length > 1) pushDisplay(_buildDisplayStateMulti(orders, newName));
         else pushDisplay(_buildDisplayState(orders[0], false));
         _batchDisplayStickyUntil = Date.now() + 5 * 60 * 1000;
+        orders.forEach(function(o) {
+          if (o.status === 'received') addRecentPickup(o);
+        });
         closeBatchReviewModal();
         printReceiptsBatch(orders);
+        if (failed.length) {
+          var codes = failed.map(function(f) { return f.order.id; }).join(', ');
+          beepError();
+          setTimeout(function() {
+            showCsDialog({type:'alert',icon:'danger',title:'บันทึกรับสินค้าไม่สำเร็จ',message:'ออเดอร์: ' + codes + ' ยังไม่ถูกบันทึกเป็น received กรุณาลองสแกน/รับใหม่ทีละใบ'});
+          }, 200);
+        } else if (conflictCount === orders.length && successCount === 0) {
+          beepWarn();
+        }
       } finally {
-        if (btn) { btn.disabled = false; btn.textContent = 'ยืนยัน + พิมพ์'; }
+        if (btn) { btn.disabled = false; btn.textContent = 'ยืนยันรับ + พิมพ์'; }
       }
     }
 
     function lookupOrder(code, qrToken) {
       var url = '/claim-station/orders/' + encodeURIComponent(code);
       if (qrToken) url += '?qrToken=' + encodeURIComponent(qrToken);
+      var isQrScan = !!qrToken;
       fetch(url, {headers: {'Authorization': 'Claim ' + currentToken}})
         .then(function(r) {
           if (r.status === 401) { doLogout(); return null; }
@@ -956,7 +1020,28 @@
             beepError(); vibrate([100, 80, 100]);
             return;
           }
-          showOrderCard(r.d.order);
+          var order = r.d.order;
+          var studentCode = order && order.customer && order.customer.studentCode;
+          if (isQrScan && studentCode) {
+            fetch('/claim-station/orders?studentCode=' + encodeURIComponent(studentCode),
+                  {headers: {'Authorization': 'Claim ' + currentToken}})
+              .then(function(rr) {
+                if (rr.status === 401) { doLogout(); return null; }
+                return rr.json().then(function(dd) { return {ok: rr.ok, d: dd}; });
+              })
+              .then(function(rr) {
+                if (!rr || !rr.ok) { showOrderCard(order); return; }
+                var siblings = (rr.d && rr.d.orders) || [];
+                if (siblings.length > 1) {
+                  showOrderList(siblings);
+                } else {
+                  showOrderCard(order);
+                }
+              })
+              .catch(function() { showOrderCard(order); });
+            return;
+          }
+          showOrderCard(order);
         }).catch(function() { showError('ไม่สามารถเชื่อมต่อได้'); beepError(); });
     }
 
@@ -969,8 +1054,10 @@
       var st = order.status || '';
       var stLabel = ST_TH[st] || st;
       var cust = order.customer || {};
-      var canReceive = st === 'shipped';
-      var alreadyReceived = st === 'received';
+      var canReceive = (st === 'shipped' || st === 'refund');
+      var isRefundFlow = (st === 'refund');
+      var alreadyReceived = (st === 'received' || st === 'refunded');
+      var alreadyRefunded = (st === 'refunded');
       var items = (order.items && order.items.length) ? order.items : [{product: order.product, size: order.size, quantity: order.quantity}];
       var needChecklist = false;
       var itemsHtml = '';
@@ -1006,7 +1093,8 @@
       }
       var banner = '';
       if (alreadyReceived) {
-        banner = '<div class="banner received-banner" style="display:flex;align-items:center;gap:6px">' + IC_CHECK + ' รับสินค้าแล้ว' +
+        var doneLabel = alreadyRefunded ? 'คืนเงินแล้ว' : 'รับสินค้าแล้ว';
+        banner = '<div class="banner received-banner" style="display:flex;align-items:center;gap:6px">' + IC_CHECK + ' ' + doneLabel +
           (order.receivedAt ? ' เมื่อ ' + esc(fmt(order.receivedAt)) : '') +
           (order.receivedBy ? ' โดย ' + esc(order.receivedBy) : '') + '</div>';
         if (!silent || prevStatus !== st) beepWarn();
@@ -1019,7 +1107,8 @@
       var action = '';
       if (canReceive) {
         var confirmDisabled = needChecklist ? ' disabled' : '';
-        action = '<button id="confirmBtn" class="btn-confirm" style="display:flex;align-items:center;justify-content:center;gap:6px"' + confirmDisabled + ' onclick="doReceive(\'' + esc(order.id || '') + '\')">' + IC_CHECK + ' ยืนยันรับสินค้า</button>' +
+        var confirmLabel = isRefundFlow ? 'ส่งไปคืนเงินที่ station' : 'ยืนยันรับสินค้า';
+        action = '<button id="confirmBtn" class="btn-confirm" style="display:flex;align-items:center;justify-content:center;gap:6px"' + confirmDisabled + ' onclick="doReceive(\'' + esc(order.id || '') + '\')">' + IC_CHECK + ' ' + confirmLabel + '</button>' +
                  '<button class="btn-close" onclick="clearResult()">ยกเลิก</button>';
       } else if (alreadyReceived) {
         action = '<button class="btn-print" style="display:flex;align-items:center;justify-content:center;gap:6px" onclick="printReceipt()">' + IC_PRINT + ' พิมพ์ใบเสร็จ</button>' +
@@ -1278,7 +1367,7 @@
         if (chk.status === 401) { doLogout(); return; }
         if (chk.ok) {
           var chkData = await chk.json();
-          if (chkData.order && chkData.order.status !== 'shipped') {
+          if (chkData.order && chkData.order.status !== 'shipped' && chkData.order.status !== 'refund') {
             showOrderCard(chkData.order, {silent: false});
             return;
           }
@@ -1524,7 +1613,7 @@
         '.rcpt-page svg{display:block;width:297mm;height:210mm}' + gsStyle +
         '@media print{body{-webkit-print-color-adjust:exact;print-color-adjust:exact}}</style>' +
         '</head><body>' + bodyInner +
-        '<script>window.onload=function(){window.print();window.addEventListener("afterprint",function(){window.close();});}<\/script></body></html>';
+        '<script>window.onload=function(){var closed=false;function bye(){if(closed)return;closed=true;try{window.close();}catch(e){}}window.addEventListener("afterprint",bye);setTimeout(function(){window.print();setTimeout(bye,1500);},80);}<\/script></body></html>';
     }
 
     function _ensureTemplate() {
@@ -2132,12 +2221,16 @@
         total: _orderAdjustedTotal(order),
       };
     }
-    function _buildDisplayStateMulti(orders) {
+    function _buildDisplayStateMulti(orders, overrideName) {
       if (!orders || !orders.length) return {active: false, username: currentUser};
       var name = '';
-      for (var i = 0; i < orders.length; i++) {
-        var c = orders[i].customer || {};
-        if (c.fullName) { name = c.fullName; break; }
+      if (typeof overrideName === 'string' && overrideName.trim()) {
+        name = overrideName.trim();
+      } else {
+        for (var i = 0; i < orders.length; i++) {
+          var c = orders[i].customer || {};
+          if (c.fullName) { name = c.fullName; break; }
+        }
       }
       var mappedOrders = orders.map(function(o) {
         var items = _mapOrderItems(o);

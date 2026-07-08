@@ -161,6 +161,16 @@ html, body {
 }
 .btn-check:hover { filter: brightness(1.08); }
 .btn-check:disabled { opacity: .5; cursor: not-allowed; }
+.btn-check.btn-refund { background: var(--amber); }
+.q-amount-badge {
+  display: inline-flex; align-items: center; justify-content: center;
+  padding: 6px 14px; border-radius: 10px;
+  background: rgba(217,119,6,.18); color: var(--amber);
+  font-weight: 800; font-size: 22px;
+  border: 1px solid rgba(217,119,6,.35);
+  margin-left: 4px;
+}
+.q-card.hb-card .q-amount-badge { font-size: 24px; }
 .q-empty {
   display: none; flex: 1; flex-direction: column;
   align-items: center; justify-content: center; gap: 18px;
@@ -542,10 +552,23 @@ html, body {
       }
     }
     var tint = orderTint(it.orderCode || '');
+    var isHeadband = (station === 'headband');
+    var amountHtml = '';
+    if (isHeadband) {
+      var amt = Number(it.lineTotal) || 0;
+      if (amt > 0) {
+        amountHtml = '<span class="q-amount-badge">฿' + amt.toLocaleString('th-TH') + '</span>';
+      }
+    }
+    var btnLabel = isHeadband ? 'คืนเงิน' : 'เช็ค';
+    var btnIcon = isHeadband
+      ? '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-4px;margin-right:6px"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>'
+      : '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-4px;margin-right:6px"><polyline points="20 6 9 17 4 12"/></svg>';
+    var btnClass = isHeadband ? 'btn-check btn-refund' : 'btn-check';
     return '' +
-      '<div class="q-card' + (it.undone ? ' undone' : '') + (isNew ? ' is-new' : '') + (qty > 1 ? ' multi' : '') + (hideSize ? ' no-size' : '') + '" data-id="' + it.id + '" style="background:' + tint + '">' +
+      '<div class="q-card' + (it.undone ? ' undone' : '') + (isNew ? ' is-new' : '') + (qty > 1 ? ' multi' : '') + (hideSize ? ' no-size' : '') + (isHeadband ? ' hb-card' : '') + '" data-id="' + it.id + '" style="background:' + tint + '">' +
         thumbHtml +
-        '<div class="q-boxes">' + sizeHtml + qtyHtml + '</div>' +
+        '<div class="q-boxes">' + sizeHtml + qtyHtml + amountHtml + '</div>' +
         '<div class="q-info">' +
           '<div class="nick-row">' + escapeHtml(it.fullName || it.nickname || '-') + '</div>' +
           '<div class="meta-row">' +
@@ -554,9 +577,9 @@ html, body {
             undone +
           '</div>' +
         '</div>' +
-        '<button class="btn-check" data-id="' + it.id + '">' +
-          '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-4px;margin-right:6px"><polyline points="20 6 9 17 4 12"/></svg>' +
-          'เช็ค' +
+        '<button class="' + btnClass + '" data-id="' + it.id + '">' +
+          btnIcon +
+          btnLabel +
         '</button>' +
       '</div>';
   }
