@@ -37,13 +37,29 @@ SU-STORE/
 │   ├── lib/
 │   │   ├── remoteOrderApi.ts     # ฟังก์ชัน fetch ไปยัง order-api
 │   │   └── orderStore.ts         # fallback state (ถ้า API ไม่ตอบสนอง)
-│   └── data/products.ts          # ข้อมูลสินค้า (static, frontend)
+│   ├── data/products.ts          # ข้อมูลสินค้า (static, frontend)
+│   └── __tests__/                # Vitest unit tests (formatPrice, productSizing, rateLimit)
 │
 ├── server/
-│   ├── order_api.py              # ❗ ไฟล์หลักทั้งหมด — Python HTTP server + Admin HTML/CSS/JS
-│   ├── ocr.py                    # OCR สำหรับตรวจสลิป (Tesseract)
-│   └── Dockerfile                # Docker image สำหรับ order-api
+│   ├── order_api.py              # ❗ ไฟล์หลักของ backend — Python HTTP server + business logic + routing
+│   ├── ocr.py                    # OCR สำหรับตรวจสลิป (Tesseract) — import เข้าไปใน order_api.py
+│   ├── openapi.yaml              # OpenAPI spec (serve ที่ /admin/openapi.yaml)
+│   ├── google_sheets_webhook.gs # Apps Script ตัวอย่างสำหรับ Google Sheets webhook
+│   ├── templates/               # ❗ HTML/CSS/JS ทุกหน้า (โหลดจากดิสก์ตอน import)
+│   │   ├── admin.html           # Admin panel
+│   │   ├── order_view.html      # หน้าตรวจออเดอร์ (read-only /orders)
+│   │   ├── claim_station.html   # Claim Station (จุดรับของ /claim-station)
+│   │   ├── display.html         # จอ Display 1 (/display1)
+│   │   ├── display2.html        # จอ Display 2 คิวหยิบของ (/display2)
+│   │   ├── receipt_template.svg # เทมเพลตใบเสร็จ SVG (serve ที่ /admin/receipt-template)
+│   │   ├── assets/              # รูปสินค้า/โลโก้/บัตรขันโตก (png)
+│   │   └── fonts/               # SukhumvitSet.ttc (serve ที่ /fonts/SukhumvitSet.ttc)
+│   ├── tests/                   # pytest (test_order_api.py)
+│   └── Dockerfile               # Docker image สำหรับ order-api
 │
+├── tests/                        # pytest ระดับ repo (test_display2.py)
+├── .github/workflows/ci.yml      # CI: tsc + lint + npm test (frontend), python syntax + pytest (backend)
+├── vitest.config.ts              # config สำหรับ Vitest (frontend tests)
 ├── deploy.sh                     # Deploy ทั้ง su-store + order-api (ลูกค้าอาจกระทบ ~1-3 นาที)
 ├── deploy-api.sh                 # ⚡ Deploy เฉพาะ order-api (เร็วกว่า, su-store ไม่ restart)
 ├── docker-compose.yml            # กำหนด services ทั้ง 2
@@ -85,43 +101,42 @@ SU-STORE/
 
 ## 4. ไฟล์ที่สำคัญที่สุด: `server/order_api.py`
 
-ไฟล์เดียวที่ทำหน้าที่ทั้งหมดของ backend:
-- Python HTTP server (raw `http.server`, ไม่ใช้ Flask/FastAPI)
-- Admin panel HTML/CSS/JS (embed เป็น string `ADMIN_HTML = r"""..."""`)
-- Order view HTML สำหรับลูกค้า (`ORDER_VIEW_HTML = r"""..."""`)
-- SQLite database operations
-- Slip image serving
+ไฟล์หลักของ backend ทั้งหมด:
+- Python HTTP server (raw `http.server` แบบ `ThreadingHTTPServer`, ไม่ใช้ Flask/FastAPI)
+- SQLite database operations (schema init, order CRUD, audit/backup, khantok, display, claim)
+- Business logic (khantok eligibility, refund, OCR trigger, Google Sheets sync)
+- Routing + serving หน้า HTML ทุกหน้า
 
-### โครงสร้างภายใน `order_api.py`
+> **สำคัญ:** HTML/CSS/JS **ไม่ได้ฝังเป็น `r"""..."""` ใน Python อีกต่อไป** ทุกหน้าอยู่เป็นไฟล์แยกใน `server/templates/*.html` และถูกโหลดจากดิสก์ตอน import (`server/order_api.py` ~บรรทัด 156–163):
+>
+> ```python
+> _TEMPLATES_DIR = Path(__file__).parent / "templates"
+> ADMIN_HTML        = (_TEMPLATES_DIR / "admin.html").read_text(...)
+> ORDER_VIEW_HTML   = (_TEMPLATES_DIR / "order_view.html").read_text(...)
+> CLAIM_STATION_HTML= (_TEMPLATES_DIR / "claim_station.html").read_text(...)
+> DISPLAY_HTML      = (_TEMPLATES_DIR / "display.html").read_text(...)
+> DISPLAY2_HTML     = (_TEMPLATES_DIR / "display2.html").read_text(...)
+> RECEIPT_SVG       = (_TEMPLATES_DIR / "receipt_template.svg").read_bytes()
+> ```
+>
+> ดังนั้น **แก้ HTML/CSS/JS ให้แก้ที่ไฟล์ template ของหน้านั้นๆ** ไม่ใช่ใน `order_api.py`
 
-```
-บรรทัด 1–34      imports, constants setup
-บรรทัด 35–92     config (ORDER_PREFIX, KHANTOK quotas, statuses, schedule)
-บรรทัด 93–133    DEFAULT_PRODUCTS (fallback สินค้าถ้า DB ว่าง)
-บรรทัด 136–2284  ADMIN_HTML = r"""..."""
-  ├── CSS :root variables (light/dark theme)
-  ├── HTML structure (header, tabs, tables, modals)
-  └── <script> block (บรรทัด 771–2284) — JavaScript ทั้งหมดของ admin
-        ├── Token management
-        ├── Tab switching
-        ├── Orders tab (renderOrders, renderOrderStats, loadOrders)
-        ├── Analytics tab (loadAnalytics, renderDailyChart)
-        ├── Products, Settings, Audit, Backup tabs
-        └── Dark mode toggle (initTheme IIFE — ต้องอยู่ใน ADMIN_HTML ไม่ใช่ ORDER_VIEW_HTML)
-บรรทัด 2289–2767  ORDER_VIEW_HTML = r"""...""" (หน้าตรวจออเดอร์แยก)
-บรรทัด 2800+      Python functions: DB init, order CRUD, API handlers
-บรรทัด 4800+      HTTP request dispatcher (routing)
-```
+### โครงสร้างเชิงตรรกะภายใน `order_api.py`
 
-### ⚠️ ข้อควรระวังเวลาแก้ `order_api.py`
+(อธิบายเป็นส่วนงาน ไม่อ้างเลขบรรทัดตายตัวเพราะไฟล์ยาว ~4,400 บรรทัดและเลื่อนทุกครั้งที่แก้ — ใช้ชื่อฟังก์ชัน/คลาสค้นหาแทน)
 
-1. **สองหน้า HTML แยกกัน** — `ADMIN_HTML` และ `ORDER_VIEW_HTML` เป็น string คนละก้อน JavaScript ของ admin ต้องอยู่ใน `ADMIN_HTML` เท่านั้น อย่าเอาไปใส่ใน `ORDER_VIEW_HTML`
+- **Config / constants** — `ORDER_PREFIX`, KHANTOK quotas, `ORDER_STATUSES`, `STATION_BY_SLUG`, `TZ_BANGKOK`, `DEFAULT_PRODUCTS`
+- **Template loading** — `_TEMPLATES_DIR` และตัวแปร `*_HTML` / `RECEIPT_SVG` (~บรรทัด 156–163)
+- **DB layer** — `open_db()`, schema init (สร้างตาราง `orders`, `display2_picks`, `display1_state`, `slip_ocr_results`, `admin_users`, ฯลฯ), `log_audit()`
+- **Business logic functions** — `create_order_code()`, `reserve_khantok_ticket()`, `enqueue_display2()`, `_run_ocr_for_slip()`, `sync_order_to_google_sheets()`, order CRUD
+- **`class OrderRequestHandler(BaseHTTPRequestHandler)`** (ใกล้ท้ายไฟล์) — dispatcher หลัก แยกตาม HTTP method: `do_GET` / `do_POST` / `do_PUT` / `do_PATCH` / `do_DELETE` (routing แบบเทียบ `path` + regex)
+- **`_ReusePortHTTPServer` + main** — bootstrap server (รองรับหลาย worker ผ่าน `SO_REUSEPORT`)
 
-2. **SVG/HTML attribute ใน JavaScript string** — ใช้ single-quote JS string + double-quote HTML attributes:
-   ```javascript
-   '<rect x="' + x + '" width="' + w + '" fill="#4f6ef7"/>'
-   ```
-   อย่าใช้ `\"` (backslash-quote) เพราะ Python raw string จะทำให้เกิด literal backslash
+### ⚠️ ข้อควรระวังเวลาแก้ `order_api.py` / templates
+
+1. **หน้า HTML แต่ละหน้าเป็นไฟล์แยกกัน** — `admin.html`, `order_view.html`, `claim_station.html`, `display.html`, `display2.html` ต่างมี `<script>` ของตัวเอง JavaScript ของแต่ละหน้าต้องอยู่ในไฟล์ template ของหน้านั้น อย่าเอา JS ของ admin ไปใส่หน้าอื่น (และ scope ของ `var`/`let`/`const` ไม่ปนกันข้ามไฟล์ เพราะคนละหน้า)
+
+2. **Escape ข้อมูลลูกค้าก่อน `innerHTML`** — ในไฟล์ template ใช้ helper `esc()` / `text()` ห่อค่าที่มาจากผู้ใช้ (ชื่อ, note ฯลฯ) ก่อนต่อเป็น HTML string เสมอ กัน XSS และกัน HTML แตก; เวลา generate SVG ให้ล้อม attribute ด้วย double-quote เสมอ เช่น `fill="#4f6ef7"` (attribute ที่ไม่มี quote ทำให้ browser parse ผิด กราฟไม่ขึ้น)
 
 3. **Timezone** — `created_at` ใน SQLite เก็บ UTC เสมอ ต้องบวก +7 ชั่วโมงทุกครั้งที่แสดงผล:
    - SQL: `DATE(created_at, '+7 hours')`
@@ -145,8 +160,8 @@ SU-STORE/
 
 ### หมายเลขออเดอร์ (Order ID)
 
-รูปแบบ: `{ORDER_PREFIX}{sequence:04d}{phase}`
-- ตัวอย่าง: `FP28150 1` = prefix `FP28`, sequence `1501`, phase `1`  
+รูปแบบ: `{ORDER_PREFIX}{sequence:04d}{phase}` (prefix + เลขลำดับ 4 หลัก zero-pad + เลข phase ต่อท้าย)
+- ตัวอย่าง: prefix `FP28`, sequence `150`, phase `1` → `FP2801501` (ดู `create_order_code()`)
 - `ORDER_PREFIX` มาจาก env var (ตอนนี้คือ `FP28`)
 - Phase คำนวณจาก `get_current_phase()` (ดู DB)
 
@@ -307,11 +322,50 @@ Admin panel คือ HTML หน้าเดียว serve จาก `order-ap
 
 ---
 
+## 9.1 หน้าจอ/ฟีเจอร์อื่นๆ ของ operator (นอกเหนือจาก Admin Panel)
+
+order-api ยัง serve หน้าจอและฟีเจอร์สำคัญอีกหลายตัวที่ไม่ได้อยู่ในแท็บของ admin ทั้งหมดอยู่ในไฟล์ template แยกกัน (ดู §4)
+
+### Claim Station — จุดรับของ (`/claim-station`, `claim_station.html`)
+
+หน้าสำหรับ staff ที่จุดแจกของ แยกจาก admin panel:
+- **Auth คนละแบบกับ admin** — ใช้ `claim_token` รายบุคคลในตาราง `admin_users` ส่งผ่าน header `Authorization: Claim <token>` (ตรวจด้วย `_has_claim_station_authorization()` / `_get_claim_station_user()`) ล็อกอินที่ `/claim-station/login`
+- ค้นหาออเดอร์ (ตาม student_code / phone / ชื่อ), ดูสลิป, มาร์คว่ารับของแล้ว (`PATCH /claim-station/orders/{code}/received`), แก้ชื่อผู้รับ, อัปโหลดสลิปเพิ่ม, พิมพ์ใบเสร็จ
+- เมื่อมาร์ค received จะ trigger การ enqueue ไปยัง Display 2 และ (สำหรับ headband-only) ปิด refund ให้อัตโนมัติ
+
+### Display screens — จอแสดงผลที่งาน
+
+- **Display 1** (`/display1`, `display.html`) — จอที่จุดรับ ควบคุมสถานะโดย staff ผ่าน `POST /display1/update` (เก็บ state ต่อ username ในตาราง `display1_state`) รองรับ slideshow (`/display1/slides`, อัปโหลด/ลบสไลด์ได้)
+- **Display 2** (`/display2`, `display2.html`) — จอคิว "หยิบของ" แยกตามสถานี (polo / jacket / headband / khantok ตาม `STATION_BY_SLUG`) เมื่อออเดอร์ถูกยืนยันที่ claim station ฟังก์ชัน `enqueue_display2()` จะแตกออเดอร์เป็น 1 แถวต่อ 1 ชิ้นในตาราง `display2_picks` (idempotent ต่อ `order_internal_id`+`item_index`) staff กด "หยิบแล้ว" ผ่าน `POST /display2/pick`; asset รูปของแต่ละสถานีเก็บใน `display2_assets`
+
+### Refund flow — การคืนเงิน
+
+- Statuses `refund` / `refunded` (payment_status `refund_pending` / `refunded`) เพิ่มเข้ามาใน `ORDER_STATUSES`
+- **Headband-only order คืนเงินอัตโนมัติ** — ออเดอร์ที่มีแต่ `fresh-headband` จะถูกตั้ง `status='refund'` ตั้งแต่ตอนสร้าง (log audit `auto_refund_headband`) และปิดยอดเป็น `refunded` เมื่อ claim station มาร์ค received (audit `refund_completed`)
+- ออเดอร์สถานะ refund/refunded ถูก **กันออกจาก** ยอดขาย, quota, และ analytics แต่ยังนับแยกใน `refundedAmount` / `refundedCount`
+
+### OCR ตรวจสลิป (`server/ocr.py` + ตาราง `slip_ocr_results`)
+
+- ตอนลูกค้าอัปโหลดสลิป order-api จะเรียก `_run_ocr_for_slip()` **ใน background thread** ซึ่ง `import ocr` แล้วเรียก `ocr.extract_slip_data()` (Tesseract) ดึง amount / date / sender / bank / ref_number
+- ผลเก็บในตาราง `slip_ocr_results` และตรวจ **สลิปซ้ำ** จาก `ref_number` ที่ชนกับออเดอร์อื่น; สลิปที่เป็น PDF จะข้าม OCR (status `skipped`)
+- admin เห็นผล OCR ประกอบการยืนยันการชำระเงิน
+
+### Receipt / ใบเสร็จ SVG (`receipt_template.svg` + `SukhumvitSet.ttc`)
+
+- เทมเพลตใบเสร็จเป็น SVG ที่ serve ที่ `GET /admin/receipt-template` (ค่าคงที่ `RECEIPT_SVG`) และฟอนต์ไทย `SukhumvitSet.ttc` serve ที่ `/fonts/SukhumvitSet.ttc`
+- ทั้ง admin panel และ claim station เติมข้อมูลลง SVG ฝั่ง client แล้วสั่ง `window.print()` เพื่อพิมพ์ใบเสร็จ (พิมพ์ทีละใบหรือหลายใบพร้อมกันได้)
+
+---
+
 ## 10. Pitfalls ที่เคยเจอ (เรียนรู้จากประสบการณ์จริง)
 
-### 🐛 JavaScript อยู่ผิด HTML block
-**ปัญหา:** `initTheme` IIFE อยู่ใน `ORDER_VIEW_HTML` แทน `ADMIN_HTML` → toggle ใช้ไม่ได้
-**บทเรียน:** ตรวจสอบว่าโค้ดอยู่ในก้อน `r"""..."""` ที่ถูกต้องเสมอ
+### 🐛 JavaScript อยู่ผิดไฟล์ template
+**ปัญหา:** ใส่ JS ของหน้าหนึ่ง (เช่น `initTheme` ของ admin) ไปในไฟล์ template อีกหน้า → ฟีเจอร์ใช้ไม่ได้
+**บทเรียน:** แต่ละหน้าคือไฟล์ `templates/*.html` คนละไฟล์และมี `<script>` ของตัวเอง แก้ JS ให้แก้ในไฟล์ template ของหน้านั้น (`admin.html` / `order_view.html` / `claim_station.html` / `display.html` / `display2.html`) ไม่ใช่ในไฟล์อื่นหรือใน `order_api.py`
+
+### 🐛 ไม่ได้ escape ข้อมูลลูกค้าก่อน innerHTML
+**ปัญหา:** ต่อค่าที่มาจากผู้ใช้ (ชื่อ/note) เข้า HTML string ตรงๆ → HTML แตก หรือเสี่ยง XSS
+**บทเรียน:** ห่อค่าด้วย helper `esc()` / `text()` ในไฟล์ template ก่อนใส่ `innerHTML` เสมอ
 
 ### 🐛 SVG attribute ไม่มี quotes
 **ปัญหา:** `fill=#4f6ef7` → browser parse ผิด → กราฟแท่งไม่แสดง
@@ -330,9 +384,9 @@ Admin panel คือ HTML หน้าเดียว serve จาก `order-ap
 **สาเหตุ:** ไม่มี `.dockerignore` ที่ครอบคลุม `node_modules` และ `.next`
 **สถานะ:** ยังเป็นอยู่ แต่ไม่ทำให้ผลลัพธ์ผิดพลาด
 
-### 🐛 `let` ซ้ำกับ `var` ข้าม script block
-**ปัญหา:** ถ้า declare `let allOrders` ใน script block 2 ทับกับ `var allOrders` ใน script block 1 → SyntaxError → script ทั้งก้อนไม่รัน
-**บทเรียน:** `ADMIN_HTML` และ `ORDER_VIEW_HTML` มีแต่ละ script block ของตัวเอง ไม่เกี่ยวกัน (คนละหน้า HTML)
+### 🐛 ตัวแปร JS ซ้ำกันภายในไฟล์ template เดียว
+**ปัญหา:** declare ตัวแปรชื่อเดียวกันซ้ำ (เช่น `let allOrders` ทับ `var allOrders`) ภายใน `<script>` ก้อนเดียวกัน → SyntaxError → script ทั้งก้อนไม่รัน
+**บทเรียน:** ระวังชื่อตัวแปรซ้ำภายในไฟล์ template เดียวกัน ส่วนตัวแปรข้ามไฟล์ (คนละหน้า HTML) ไม่ปนกันอยู่แล้ว เพราะโหลดเป็นคนละเอกสาร
 
 ---
 
