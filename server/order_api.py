@@ -409,6 +409,12 @@ def ensure_db() -> None:
       if "ticket_value" not in claim_columns:
           connection.execute("ALTER TABLE khantok_ticket_claims ADD COLUMN ticket_value INTEGER NOT NULL DEFAULT 100")
       connection.execute("CREATE UNIQUE INDEX IF NOT EXISTS idx_orders_order_code ON orders(order_code)")
+      # Hot-path indexes: the khantok de-dup check, list/filter, analytics group-bys and
+      # check-order lookups all filter/sort on these columns. Additive & idempotent.
+      connection.execute("CREATE INDEX IF NOT EXISTS idx_orders_student_code ON orders(student_code)")
+      connection.execute("CREATE INDEX IF NOT EXISTS idx_orders_status ON orders(status)")
+      connection.execute("CREATE INDEX IF NOT EXISTS idx_orders_round_number ON orders(round_number)")
+      connection.execute("CREATE INDEX IF NOT EXISTS idx_orders_created_at ON orders(created_at)")
       connection.execute(
           """
           CREATE TABLE IF NOT EXISTS products (
@@ -1183,12 +1189,19 @@ def validate_order_payload(payload: Any) -> tuple[dict[str, Any] | None, str | N
             }
         ]
 
+    # Derive the order total from the (validated) line items rather than trusting the
+    # client-supplied top-level totalAmount. This guarantees the stored total always
+    # matches the sum of items — the value OCR later checks the slip against.
+    # NOTE: per-item unitPrice is still client-supplied; making price fully authoritative
+    # requires a single source of product-price truth (see audit follow-up).
+    computed_total = sum(int(item["totalAmount"]) for item in normalized_items)
+
     return {
         "product": product,
         "customer": customer,
         "size": size.strip(),
         "quantity": quantity,
-        "total_amount": total_amount,
+        "total_amount": computed_total,
         "items": normalized_items,
     }, None
 
@@ -1507,8 +1520,12 @@ def reserve_khantok_ticket(
     if not code.startswith(KHANTOK_STUDENT_CODE_PREFIX):
         return False, None, False, None
 
+    # Only a still-live order should block a re-claim. A ticketed order that was later
+    # cancelled/rejected/refunded must NOT permanently deny the student a ticket on a new
+    # order. (Read-only guard — does not mutate the dead order's data.)
     duplicate = connection.execute(
-        "SELECT 1 FROM orders WHERE student_code = ? AND khantok_ticket = 1 AND internal_id != ?",
+        "SELECT 1 FROM orders WHERE student_code = ? AND khantok_ticket = 1 AND internal_id != ? "
+        "AND status NOT IN ('cancelled', 'rejected', 'refund', 'refunded')",
         (code, order_id),
     ).fetchone()
     if duplicate is not None:
@@ -2375,7 +2392,9 @@ class OrderRequestHandler(BaseHTTPRequestHandler):
     def _is_authorized_for_order(self, row: sqlite3.Row) -> bool:
         if self._has_global_authorization():
             return True
-        return self.headers.get("X-Order-Token") == row["access_token"]
+        incoming = self.headers.get("X-Order-Token") or ""
+        expected = row["access_token"] or ""
+        return bool(expected) and hmac.compare_digest(incoming, expected)
 
     def _deny_unauthorized(self) -> bool:
         self._send_json(HTTPStatus.UNAUTHORIZED, {"message": "unauthorized"})
@@ -2782,7 +2801,7 @@ class OrderRequestHandler(BaseHTTPRequestHandler):
             order_code = claim_order_get_match.group(1)
             if qr_token and ORDER_API_TOKEN:
                 expected = compute_qr_token(order_code)
-                if qr_token != expected:
+                if not hmac.compare_digest(qr_token, expected):
                     self._send_json(HTTPStatus.FORBIDDEN, {"message": "QR code ไม่ถูกต้อง — สแกนใหม่อีกครั้ง"})
                     return
             cache_key = f"cs_order:{order_code}"
@@ -3281,6 +3300,12 @@ class OrderRequestHandler(BaseHTTPRequestHandler):
             row = fetch_order_by_code(connection, order_code)
             if row is None:
                 self._send_json(HTTPStatus.NOT_FOUND, {"message": "order not found"})
+                return
+            # Require authorization: the master Bearer (attached by the Next.js proxy)
+            # OR the per-order X-Order-Token. Without this, order codes are enumerable
+            # and this endpoint would leak every customer's PII + qrToken.
+            if not self._is_authorized_for_order(row):
+                self._deny_unauthorized()
                 return
             self._send_json(HTTPStatus.OK, serialize_order(row))
 
@@ -4194,6 +4219,12 @@ class OrderRequestHandler(BaseHTTPRequestHandler):
             existing_order = fetch_order_by_code(connection, order_match.group(1))
             if existing_order is None:
                 self._send_json(HTTPStatus.NOT_FOUND, {"message": "order not found"})
+                return
+            # Require the master Bearer or the per-order X-Order-Token before accepting
+            # a slip, matching the do_PUT /orders/{code} path. Without it, anyone could
+            # overwrite a pending order's slip and trigger server-side OCR unauthenticated.
+            if not self._is_authorized_for_order(existing_order):
+                self._deny_unauthorized()
                 return
             if existing_order["status"] != "pending_payment":
                 self._send_json(HTTPStatus.FORBIDDEN, {"message": "slip upload is only allowed for pending_payment orders"})

@@ -7,10 +7,26 @@ import numpy as np
 import pytesseract
 from PIL import Image
 
+# Reject absurdly large images before decoding them. Bank-transfer slips are phone
+# screenshots (a few megapixels); a highly-compressible multi-hundred-megapixel PNG/WebP
+# would otherwise decode into multiple GB of RAM here (and get upscaled 2x in pass 4),
+# OOM-killing the worker. Probing the header via PIL is cheap (no full decode).
+MAX_OCR_PIXELS = 40_000_000  # 40 MP
+Image.MAX_IMAGE_PIXELS = MAX_OCR_PIXELS
+
 
 # ─── OCR preprocessing ──────────────────────────────────────────────────────
 
 def _preprocess_passes(image_path: str) -> list[np.ndarray]:
+    try:
+        with Image.open(image_path) as _probe:
+            _pw, _ph = _probe.size
+        if _pw * _ph > MAX_OCR_PIXELS:
+            raise ValueError(f"image too large for OCR: {_pw}x{_ph} pixels")
+    except (OSError, ValueError) as exc:
+        # Re-raise size violations; ignore probe failures (cv2 may still handle the file).
+        if isinstance(exc, ValueError):
+            raise
     img = cv2.imread(image_path)
     if img is None:
         img_pil = Image.open(image_path)

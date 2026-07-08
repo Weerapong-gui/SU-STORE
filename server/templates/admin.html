@@ -3199,7 +3199,7 @@
           tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;color:var(--muted);padding:20px">ยังไม่มีความคิดเห็น</td></tr>';
         } else {
           tbody.innerHTML = d.feedback.map(function(f) {
-            var cust = (f.fullName || '-') + (f.studentCode ? '<br><span style="font-size:11px;color:var(--muted)">' + esc(f.studentCode) + '</span>' : '');
+            var cust = esc(f.fullName || '-') + (f.studentCode ? '<br><span style="font-size:11px;color:var(--muted)">' + esc(f.studentCode) + '</span>' : '');
             return '<tr>' +
               '<td>' + fbRatingBadge(f.rating) + '</td>' +
               '<td style="font-family:monospace;font-weight:700">' + esc(f.orderCode) + '</td>' +

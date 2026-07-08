@@ -240,7 +240,9 @@
     let allOrders = [];
     let serverSummary = {};
 
-    tokenInput.value = localStorage.getItem("suStoreOrderViewToken") || localStorage.getItem("suStoreAdminToken") || "";
+    // Use sessionStorage (cleared on tab/browser close) to match admin.html — do not
+    // persist a full-privilege admin token to localStorage on shared/kiosk machines.
+    tokenInput.value = sessionStorage.getItem("suStoreOrderViewToken") || "";
 
     function text(value) {
       return String(value ?? "").replace(/[&<>"']/g, (match) => ({
@@ -352,7 +354,7 @@
                     <span class="tiny muted">${text(customer.school || "")}</span>
                   </td>
                   <td class="money">${text(baht(order.totalAmount))}</td>
-                  <td>${order.khantokTicket ? `ได้รับ (฿${order.khantokTicketValue || 100})` : order.khantokTicketAlreadyClaimed ? "รับไปแล้ว " + (order.customer?.studentCode || "") : "ไม่ได้รับ"}</td>
+                  <td>${order.khantokTicket ? `ได้รับ (฿${order.khantokTicketValue || 100})` : order.khantokTicketAlreadyClaimed ? "รับไปแล้ว " + text(order.customer?.studentCode || "") : "ไม่ได้รับ"}</td>
                   <td>
                     <span class="tiny">${text(order.paymentStatus || "-")}</span><br />
                     <button class="secondary slipButton" data-order-id="${text(order.id || "")}" ${slip ? "" : "disabled"}>Open Slip</button>
@@ -372,7 +374,7 @@
         setNotice("Enter ORDER_API_TOKEN to load orders", true);
         return;
       }
-      localStorage.setItem("suStoreOrderViewToken", token);
+      sessionStorage.setItem("suStoreOrderViewToken", token);
       refreshButton.disabled = true;
       setNotice("Loading orders...");
       try {
