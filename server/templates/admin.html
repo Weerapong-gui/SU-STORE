@@ -723,6 +723,31 @@
 
       <p style="font-size:11px;font-weight:700;color:var(--muted);letter-spacing:.1em;text-transform:uppercase;margin:18px 0 10px">Items</p>
       <div id="oe_itemsContainer"></div>
+      <div style="margin-top:8px">
+        <button class="ghost" id="oe_addItemBtn" type="button" style="font-size:13px">+ เพิ่มสินค้า</button>
+        <div id="oe_addItemPicker" style="display:none;margin-top:10px;padding:12px;border:1px dashed var(--line);border-radius:8px">
+          <div class="field-row">
+            <div class="field">
+              <label>Product</label>
+              <select id="oe_addItemProduct">
+                <option value="single-shirt">FRESHER POLO SHIRT (฿399)</option>
+                <option value="fresh-jacket">FRESHER JACKET (฿899)</option>
+                <option value="fresh-headband" selected>FRESHER HEADBAND (฿35)</option>
+              </select>
+            </div>
+            <div class="field" style="max-width:160px">
+              <label>ราคา</label>
+              <label style="display:flex;gap:6px;align-items:center;font-weight:600;font-size:13px;padding-top:6px">
+                <input type="checkbox" id="oe_addItemFreebie" checked /> แถมฟรี (฿0)
+              </label>
+            </div>
+          </div>
+          <div style="display:flex;gap:8px;margin-top:8px">
+            <button class="primary" type="button" id="oe_addItemConfirm" style="font-size:13px">เพิ่ม</button>
+            <button class="ghost" type="button" id="oe_addItemCancel" style="font-size:13px">ยกเลิก</button>
+          </div>
+        </div>
+      </div>
 
       <p style="font-size:11px;font-weight:700;color:var(--muted);letter-spacing:.1em;text-transform:uppercase;margin:18px 0 10px">Khantok Ticket</p>
       <div style="display:flex;gap:24px;align-items:center;flex-wrap:wrap">
@@ -1752,6 +1777,8 @@
       document.querySelector("#oe_khantokClaimed").checked = !!order.khantokTicketAlreadyClaimed;
       document.querySelector("#oe_khantokValue").value = order.khantokTicketValue != null ? order.khantokTicketValue : "";
       renderItemEditors(items);
+      var _addPicker = document.querySelector("#oe_addItemPicker");
+      if (_addPicker) _addPicker.style.display = "none";
       var slipPreview = document.querySelector("#oe_slipPreview");
       if (order.slip) {
         slipPreview.innerHTML = '<p style="font-size:12px;color:var(--ok);margin:0 0 6px">✓ Slip uploaded at ' + esc(order.slip.uploadedAt||"") + '</p>' +
@@ -1813,6 +1840,47 @@
     document.querySelector("#cancelOrderEditBtn").addEventListener("click", closeOrderEdit);
     document.querySelector("#orderEditModal").addEventListener("click", function(e) {
       if (e.target === document.querySelector("#orderEditModal")) closeOrderEdit();
+    });
+
+    var ADD_ITEM_CATALOG = {
+      "single-shirt":   {slug:"single-shirt",   name:"FRESHER POLO SHIRT", price:399, category:"single"},
+      "fresh-jacket":   {slug:"fresh-jacket",   name:"FRESHER JACKET",     price:899, category:"jacket"},
+      "fresh-headband": {slug:"fresh-headband", name:"FRESHER HEADBAND",   price:35,  category:"headband"},
+    };
+    document.querySelector("#oe_addItemBtn").addEventListener("click", function() {
+      var picker = document.querySelector("#oe_addItemPicker");
+      picker.style.display = picker.style.display === "none" ? "" : "none";
+    });
+    document.querySelector("#oe_addItemCancel").addEventListener("click", function() {
+      document.querySelector("#oe_addItemPicker").style.display = "none";
+    });
+    document.querySelector("#oe_addItemConfirm").addEventListener("click", function() {
+      var slug = document.querySelector("#oe_addItemProduct").value;
+      var freebie = document.querySelector("#oe_addItemFreebie").checked;
+      var base = ADD_ITEM_CATALOG[slug];
+      if (!base) return;
+      var price = freebie ? 0 : base.price;
+      var product = Object.assign({}, base, {price: price});
+      var size, school = null;
+      if (base.category === "jacket") {
+        size = "M / Blue";
+      } else if (base.category === "headband") {
+        size = "ONE SIZE";
+        school = document.querySelector("#oe_school").value || null;
+      } else {
+        size = "M";
+      }
+      editingOrderItems.push({
+        id: slug + "-added-" + Date.now(),
+        product: product,
+        size: size,
+        school: school,
+        quantity: 1,
+        unitPrice: price,
+        totalAmount: price,
+      });
+      renderItemEditors(editingOrderItems);
+      document.querySelector("#oe_addItemPicker").style.display = "none";
     });
 
     document.querySelector("#oe_uploadSlipBtn").addEventListener("click", async function() {
