@@ -40,6 +40,11 @@ export function isRateLimited(key: string, max: number): boolean {
   const now = Date.now();
   const entry = store[key];
   if (!entry || now > entry.resetAt) {
+    // Opportunistically drop expired entries so `store` (and the persisted file) stay
+    // bounded instead of accumulating one permanent entry per unique IP ever seen.
+    for (const k of Object.keys(store)) {
+      if (store[k].resetAt <= now) delete store[k];
+    }
     store[key] = { count: 1, resetAt: now + WINDOW_MS };
     persist();
     return false;

@@ -534,7 +534,7 @@ export function CheckoutPaymentForm({
                     </svg>
                   </div>
                   <p className="text-sm font-medium text-zinc-700">Attach payment slip</p>
-                  <p className="text-xs text-zinc-400">JPG, PNG, WebP or PDF · max 10 MB</p>
+                  <p className="text-xs text-zinc-400">JPG, PNG, WebP or PDF · max 5 MB</p>
                 </>
               )}
             </label>

@@ -1,8 +1,16 @@
 import { NextRequest, NextResponse } from "next/server";
+import { getRateLimitKey, isRateLimited } from "@/lib/rateLimit";
 
 const API_BASE = process.env.ORDER_API_BASE_URL?.replace(/\/$/, "") ?? "";
+// This proxy is unauthenticated and returns customer name/school by student code, so
+// throttle it to blunt PII enumeration over sequential/prefixed student codes.
+const RATE_LIMIT_MAX = 20;
 
 export async function GET(request: NextRequest) {
+  if (isRateLimited(getRateLimitKey(request, "check-order"), RATE_LIMIT_MAX)) {
+    return NextResponse.json({ message: "Too many requests. Please wait a moment." }, { status: 429 });
+  }
+
   const { searchParams } = new URL(request.url);
   const code = searchParams.get("code");
   const studentCode = searchParams.get("studentCode");

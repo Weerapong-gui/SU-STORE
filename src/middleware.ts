@@ -72,7 +72,7 @@ export async function middleware(request: NextRequest) {
       const url = request.nextUrl.clone();
       url.searchParams.delete("token");
       const res = NextResponse.redirect(url);
-      res.cookies.set("bypass_gate", "1", { httpOnly: true, sameSite: "lax", maxAge: 60 * 60 * 24 * 7 });
+      res.cookies.set("bypass_gate", "1", { httpOnly: true, secure: process.env.NODE_ENV === "production", sameSite: "lax", maxAge: 60 * 60 * 24 * 7 });
       return res;
     }
   }
