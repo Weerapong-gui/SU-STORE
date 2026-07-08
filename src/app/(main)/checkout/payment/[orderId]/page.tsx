@@ -94,7 +94,7 @@ export default async function CheckoutPaymentPage({ params }: CheckoutPaymentPag
                     <div className="flex items-center justify-center rounded-[1.75rem] border border-zinc-200 bg-white px-5 py-4">
                       <Image
                         src="/images/logoBank.png"
-                        alt="Bangkok Bank — องค์การบริหาร องค์การนักศึกษา มหาวิทยาลัยแม่ฟ้าหลวง"
+                        alt="Bangkok Bank · องค์การบริหาร องค์การนักศึกษา มหาวิทยาลัยแม่ฟ้าหลวง"
                         width={1000}
                         height={500}
                         className="w-full max-w-sm object-contain"

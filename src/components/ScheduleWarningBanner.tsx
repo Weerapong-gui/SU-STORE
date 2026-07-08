@@ -107,7 +107,7 @@ export function ScheduleWarningBanner() {
   return (
     <div className="sticky top-0 z-40 bg-amber-500 px-4 py-3 text-center text-sm font-semibold text-white shadow-md">
       ⚠ {customMessage ?? t.schedule.defaultWarning}
-      {" — "}
+      {" · "}
       <span className="tabular-nums">
         {t.schedule.closingIn(mins, secs)}
       </span>

@@ -10,7 +10,7 @@ const RATE_LIMIT_MAX = 5;
 
 export async function POST(request: Request) {
   if (isRateLimited(getRateLimitKey(request, "order"), RATE_LIMIT_MAX)) {
-    return NextResponse.json({ success: false, message: "Too many requests — please wait a moment" }, { status: 429 });
+    return NextResponse.json({ success: false, message: "Too many requests. Please wait a moment." }, { status: 429 });
   }
 
   const contentLength = parseInt(request.headers.get("content-length") ?? "0", 10);

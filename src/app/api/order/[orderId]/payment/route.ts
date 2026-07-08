@@ -19,7 +19,7 @@ type PaymentRouteProps = {
 
 export async function POST(request: Request, { params }: PaymentRouteProps) {
   if (isRateLimited(getRateLimitKey(request, "slip"), RATE_LIMIT_MAX)) {
-    return NextResponse.json({ message: "Too many uploads — please wait a moment" }, { status: 429 });
+    return NextResponse.json({ message: "Too many uploads. Please wait a moment." }, { status: 429 });
   }
 
   try {
