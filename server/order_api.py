@@ -159,6 +159,7 @@ ORDER_VIEW_HTML = (_TEMPLATES_DIR / "order_view.html").read_text(encoding="utf-8
 CLAIM_STATION_HTML = (_TEMPLATES_DIR / "claim_station.html").read_text(encoding="utf-8")
 DISPLAY_HTML = (_TEMPLATES_DIR / "display.html").read_text(encoding="utf-8")
 DISPLAY2_HTML = (_TEMPLATES_DIR / "display2.html").read_text(encoding="utf-8")
+DISPLAY3_HTML = (_TEMPLATES_DIR / "display3.html").read_text(encoding="utf-8")
 RECEIPT_SVG = (_TEMPLATES_DIR / "receipt_template.svg").read_bytes()
 _FONT_PATH = _TEMPLATES_DIR / "fonts" / "SukhumvitSet.ttc"
 _slides_dir = Path(os.environ.get("ORDER_API_SLIDES_DIR", "/var/data/su-order-api/slides"))
@@ -2480,6 +2481,20 @@ class OrderRequestHandler(BaseHTTPRequestHandler):
 
         if path == "/display2":
             self._send_html(HTTPStatus.OK, DISPLAY2_HTML)
+            return
+
+        if path == "/dis3":
+            self._send_html(HTTPStatus.OK, DISPLAY3_HTML)
+            return
+
+        if path == "/dis3/data":
+            # Public live sales counts for the /dis3 venue screen (qty only, not sensitive).
+            with open_db() as connection:
+                summary = create_orders_summary(connection)
+            self._send_json(HTTPStatus.OK, {
+                "polo": summary["qtySingle"],
+                "jacket": summary["qtyJacket"],
+            })
             return
 
         _asset_match = re.fullmatch(r"/assets/(slides/[a-zA-Z0-9_.\-]+|[a-zA-Z0-9_.\-]+)", path)
