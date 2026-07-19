@@ -147,3 +147,37 @@ class TestMarkKhantokStationClaimed:
     def test_unknown_order_returns_404(self, temp_db):
         status, _ = order_api.mark_khantok_station_claimed(temp_db, "FP2800000", "staff1")
         assert status == 404
+
+
+class TestAdminStationClaimedToggle:
+    def test_true_sets_timestamp_and_quota_unchanged(self, temp_db):
+        code = _create_phase4_order(temp_db)
+        quota_before = _quota_count(temp_db)
+        result = order_api.update_order_fields(
+            temp_db, code, {"khantokStationClaimed": True}
+        )
+        temp_db.commit()
+        assert result not in (None, False)
+        row = order_api.fetch_order_by_code(temp_db, code)
+        assert row["khantok_station_claimed_at"]
+        assert _quota_count(temp_db) == quota_before
+
+    def test_true_again_does_not_overwrite_timestamp(self, temp_db):
+        code = _create_phase4_order(temp_db)
+        temp_db.execute(
+            "UPDATE orders SET khantok_station_claimed_at='2026-07-01T00:00:00Z'"
+            " WHERE order_code=?", (code,),
+        )
+        order_api.update_order_fields(temp_db, code, {"khantokStationClaimed": True})
+        row = order_api.fetch_order_by_code(temp_db, code)
+        assert row["khantok_station_claimed_at"] == "2026-07-01T00:00:00Z"
+
+    def test_false_clears_timestamp(self, temp_db):
+        code = _create_phase4_order(temp_db)
+        temp_db.execute(
+            "UPDATE orders SET khantok_station_claimed_at='2026-07-01T00:00:00Z'"
+            " WHERE order_code=?", (code,),
+        )
+        order_api.update_order_fields(temp_db, code, {"khantokStationClaimed": False})
+        row = order_api.fetch_order_by_code(temp_db, code)
+        assert row["khantok_station_claimed_at"] is None

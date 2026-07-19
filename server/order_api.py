@@ -1512,6 +1512,18 @@ def update_order_fields(
                 )
             allowed["khantok_ticket_value"] = new_value
 
+    # Station claim state — independent of quota; never touches khantok_ticket_claims
+    if "khantokStationClaimed" in fields and isinstance(fields["khantokStationClaimed"], bool):
+        existing_station_claimed = (
+            existing["khantok_station_claimed_at"]
+            if "khantok_station_claimed_at" in existing.keys() else None
+        )
+        if fields["khantokStationClaimed"]:
+            if not existing_station_claimed:
+                allowed["khantok_station_claimed_at"] = now_iso()
+        else:
+            allowed["khantok_station_claimed_at"] = None
+
     if "items" in fields and isinstance(fields["items"], list) and fields["items"]:
         raw_items = fields["items"]
         product_price_map: dict[str, int] = {}
