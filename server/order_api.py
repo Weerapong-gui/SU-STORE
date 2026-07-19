@@ -359,6 +359,8 @@ def ensure_db() -> None:
           connection.execute("ALTER TABLE orders ADD COLUMN khantok_ticket_already_claimed INTEGER NOT NULL DEFAULT 0")
       if "khantok_ticket_value" not in columns:
           connection.execute("ALTER TABLE orders ADD COLUMN khantok_ticket_value INTEGER")
+      if "khantok_station_claimed_at" not in columns:
+          connection.execute("ALTER TABLE orders ADD COLUMN khantok_station_claimed_at TEXT")
       if "student_code" not in columns:
           connection.execute("ALTER TABLE orders ADD COLUMN student_code TEXT NOT NULL DEFAULT ''")
       if "full_name" not in columns:
@@ -986,6 +988,11 @@ def serialize_order(row: sqlite3.Row, include_access_token: bool = False) -> dic
             else row["lucky_ticket_claimed_at"]
         ),
         "khantokTicketAlreadyClaimed": bool(row["khantok_ticket_already_claimed"]) if "khantok_ticket_already_claimed" in row_keys else False,
+        "khantokStationClaimedAt": (
+            row["khantok_station_claimed_at"]
+            if "khantok_station_claimed_at" in row_keys
+            else None
+        ),
         "khantokTicketValue": int(row["khantok_ticket_value"]) if "khantok_ticket_value" in row_keys and row["khantok_ticket_value"] is not None else None,
         "createdAt": row["created_at"],
         "updatedAt": row["updated_at"],

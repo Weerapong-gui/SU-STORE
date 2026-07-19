@@ -1,0 +1,65 @@
+"""Integration tests for the phase-4 khantok station-claim flow.
+
+Uses a real schema via ensure_db() pointed at a pytest tmp_path.
+"""
+import os
+import sys
+from pathlib import Path
+from tempfile import TemporaryDirectory
+from unittest.mock import MagicMock
+
+import pytest
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "server"))
+
+# Stub out OCR module so order_api imports cleanly even without Tesseract
+sys.modules.setdefault("ocr", MagicMock())
+
+# Set temp directories to avoid permission errors at module import time
+_tmp_for_import = TemporaryDirectory()
+os.environ.setdefault("ORDER_API_SLIDES_DIR", str(Path(_tmp_for_import.name) / "slides"))
+os.environ.setdefault("ORDER_API_ASSETS_DIR", str(Path(_tmp_for_import.name) / "assets"))
+
+import order_api
+
+
+@pytest.fixture()
+def temp_db(tmp_path, monkeypatch):
+    monkeypatch.setattr(order_api, "DB_PATH", tmp_path / "orders.db")
+    monkeypatch.setattr(order_api, "SLIPS_DIR", tmp_path / "slips")
+    monkeypatch.setattr(order_api, "PRODUCT_IMAGES_DIR", tmp_path / "product-images")
+    order_api.ensure_db()
+    pooled = order_api.open_db()
+    with pooled as connection:
+        yield connection
+
+
+class TestStationClaimedColumn:
+    def test_column_exists_after_ensure_db(self, temp_db):
+        columns = {
+            row["name"]
+            for row in temp_db.execute("PRAGMA table_info(orders)").fetchall()
+        }
+        assert "khantok_station_claimed_at" in columns
+
+    def test_serializer_exposes_station_claimed_at(self, temp_db):
+        temp_db.execute(
+            "INSERT INTO orders ("
+            "  round_number, status, payment_status, created_at, updated_at,"
+            "  order_code, khantok_station_claimed_at,"
+            "  product_slug, product_name, product_short_name, product_tagline,"
+            "  product_price, product_image, product_category,"
+            "  size, quantity, total_amount,"
+            "  first_name, last_name, nickname, email, phone, school, access_token"
+            ") VALUES ("
+            "  4, 'paid', 'paid', '2026-07-19T00:00:00Z', '2026-07-19T00:00:00Z',"
+            "  'FP2899994', '2026-07-19T05:00:00Z',"
+            "  'single', 'Test Product', 'Test', 'tagline',"
+            "  100, 'image.png', 'category',"
+            "  'M', 1, 100,"
+            "  'John', 'Doe', 'nick', 'test@example.com', '0123456789', 'school', 'token'"
+            ")"
+        )
+        row = order_api.fetch_order_by_code(temp_db, "FP2899994")
+        data = order_api.serialize_order(row)
+        assert data["khantokStationClaimedAt"] == "2026-07-19T05:00:00Z"
