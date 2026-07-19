@@ -1351,7 +1351,25 @@
         } catch(e) {}
       }
       if (order.khantokTicket) {
-        khantok = '<div class="khantok-badge" style="display:flex;align-items:center;gap:4px">' + IC_TICKET + ' บัตรขันโตก' + (order.khantokTicketValue ? ' ฿' + order.khantokTicketValue : '') + khantokClaimedLine + '</div>';
+        var ktLabel = ' บัตรขันโตก' + (order.khantokTicketValue ? ' ฿' + order.khantokTicketValue : '');
+        if (Number(order.roundNumber) === 4 && !order.khantokStationClaimedAt) {
+          khantok = '<div class="khantok-claim-panel" style="margin:8px 14px;padding:14px;border-radius:12px;background:var(--ok-bg);border:1.5px solid var(--ok)">' +
+            '<div style="display:flex;align-items:center;gap:6px;font-weight:800;color:var(--ok);margin-bottom:10px">' + IC_TICKET + ktLabel + ' — ยังไม่ได้รับ</div>' +
+            '<button id="khantokClaimBtn" class="btn-confirm" style="width:100%;display:flex;align-items:center;justify-content:center;gap:6px" onclick="doClaimKhantok(\'' + esc(order.id || '') + '\')">' + IC_TICKET + ' รับบัตรขันโตก</button></div>';
+        } else if (Number(order.roundNumber) === 4 && order.khantokStationClaimedAt) {
+          var ktWhen = '';
+          try {
+            var _kc = String(order.khantokStationClaimedAt).replace(' ', 'T');
+            if (!_kc.endsWith('Z') && !_kc.includes('+')) _kc += 'Z';
+            var kcd = new Date(new Date(_kc).getTime() + 7*3600000);
+            if (!isNaN(kcd.getTime())) {
+              ktWhen = ' เมื่อ ' + kcd.getDate() + '/' + (kcd.getMonth()+1) + ' ' + String(kcd.getHours()).padStart(2,'0') + ':' + String(kcd.getMinutes()).padStart(2,'0');
+            }
+          } catch(e) {}
+          khantok = '<div class="khantok-badge" style="display:flex;align-items:center;gap:4px">' + IC_TICKET + ktLabel + ' — รับบัตรแล้ว' + ktWhen + '</div>';
+        } else {
+          khantok = '<div class="khantok-badge" style="display:flex;align-items:center;gap:4px">' + IC_TICKET + ktLabel + khantokClaimedLine + '</div>';
+        }
       }
       var nowTs = new Date();
       var refreshStamp = String(nowTs.getHours()).padStart(2,'0') + ':' + String(nowTs.getMinutes()).padStart(2,'0') + ':' + String(nowTs.getSeconds()).padStart(2,'0');
@@ -1547,6 +1565,39 @@
         beepError();
         await showCsDialog({type:'alert',icon:'danger',title:'เชื่อมต่อไม่ได้',message:'ไม่สามารถเชื่อมต่อได้'});
         if (btn) { btn.disabled = false; }
+      }
+    }
+
+    async function doClaimKhantok(code) {
+      var btn = document.getElementById('khantokClaimBtn');
+      if (btn) { btn.disabled = true; btn.textContent = 'กำลังบันทึก...'; }
+      try {
+        var r = await fetch('/claim-station/orders/' + encodeURIComponent(code) + '/khantok-claimed', {
+          method: 'PATCH',
+          headers: {'Authorization':'Claim ' + currentToken, 'Content-Type':'application/json'},
+          body: JSON.stringify({claimedBy: (currentStation ? currentUser + ' (' + currentStation + ')' : currentUser)})
+        });
+        if (r.status === 401) { doLogout(); return; }
+        var d = await r.json();
+        if (!r.ok) {
+          if (r.status === 409) {
+            beepWarn();
+            await showCsDialog({type:'alert',icon:'warn',title:'รับบัตรไปแล้ว',message:d.message || 'ออเดอร์นี้รับบัตรขันโตกไปแล้ว'});
+            refreshCurrentOrder();
+          } else {
+            beepError();
+            await showCsDialog({type:'alert',icon:'danger',title:'เกิดข้อผิดพลาด',message:d.message||'เกิดข้อผิดพลาด'});
+            if (btn) { btn.disabled = false; btn.innerHTML = IC_TICKET + ' รับบัตรขันโตก'; }
+          }
+          return;
+        }
+        beepSuccess(); vibrate(80);
+        showOrderCard(d.order, {silent: true});
+        setScanStatus('รับบัตรขันโตกแล้ว — พร้อมสแกนต่อ', 'success');
+      } catch(e) {
+        beepError();
+        await showCsDialog({type:'alert',icon:'danger',title:'เชื่อมต่อไม่ได้',message:'ไม่สามารถเชื่อมต่อได้'});
+        if (btn) { btn.disabled = false; btn.innerHTML = IC_TICKET + ' รับบัตรขันโตก'; }
       }
     }
 
