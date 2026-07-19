@@ -1583,6 +1583,7 @@
           if (r.status === 409) {
             beepWarn();
             await showCsDialog({type:'alert',icon:'warn',title:'รับบัตรไปแล้ว',message:d.message || 'ออเดอร์นี้รับบัตรขันโตกไปแล้ว'});
+            if (btn) { btn.disabled = false; btn.innerHTML = IC_TICKET + ' รับบัตรขันโตก'; }
             refreshCurrentOrder();
           } else {
             beepError();

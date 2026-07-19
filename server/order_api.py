@@ -4127,6 +4127,10 @@ class OrderRequestHandler(BaseHTTPRequestHandler):
                 status_code, body = mark_khantok_station_claimed(connection, order_code, claim_user)
                 if status_code == HTTPStatus.OK:
                     connection.commit()
+                else:
+                    # _PooledConnection.__exit__ auto-commits on clean exit; roll back
+                    # explicitly so failure paths can never persist stray writes.
+                    connection.rollback()
             cache_invalidate(f"cs_order:{order_code}")
             self._send_json(status_code, body)
             return
