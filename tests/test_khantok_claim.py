@@ -29,9 +29,9 @@ def temp_db(tmp_path, monkeypatch):
     monkeypatch.setattr(order_api, "SLIPS_DIR", tmp_path / "slips")
     monkeypatch.setattr(order_api, "PRODUCT_IMAGES_DIR", tmp_path / "product-images")
     order_api.ensure_db()
-    pooled = order_api.open_db()
-    with pooled as connection:
-        yield connection
+    connection = order_api.open_db().__enter__()
+    yield connection
+    connection.__exit__(None, None, None)
 
 
 class TestStationClaimedColumn:
@@ -63,3 +63,79 @@ class TestStationClaimedColumn:
         row = order_api.fetch_order_by_code(temp_db, "FP2899994")
         data = order_api.serialize_order(row)
         assert data["khantokStationClaimedAt"] == "2026-07-19T05:00:00Z"
+
+
+def _order_payload(student_code="6935001234", slug="single"):
+    product = {
+        "slug": slug, "name": "FRESHER POLO SHIRT", "shortName": "POLO",
+        "tagline": "x", "price": 399, "image": "/p.png", "category": "shirt",
+    }
+    return {
+        "product": product,
+        "customer": {
+            "studentCode": student_code, "email": "a@b.c", "fullName": "Test User",
+            "phone": "0800000000", "school": "MFU", "parentPhone": "0811111111",
+        },
+        "size": "M", "quantity": 1, "totalAmount": 399,
+        "items": [{"product": product, "size": "M", "quantity": 1,
+                   "unitPrice": 399, "totalAmount": 399}],
+    }
+
+
+def _create_phase4_order(connection, student_code="6935001234", status="paid"):
+    connection.execute(
+        "INSERT OR REPLACE INTO site_settings (key, value, updated_at) VALUES ('phase_override', '4', '2026-07-19T00:00:00Z')"
+    )
+    validated, error = order_api.validate_order_payload(_order_payload(student_code))
+    assert error is None, error
+    order = order_api.create_order(connection, validated)
+    connection.execute(
+        "UPDATE orders SET status=?, payment_status='paid' WHERE order_code=?",
+        (status, order["id"]),
+    )
+    connection.commit()
+    return order["id"]
+
+
+def _quota_count(connection):
+    return connection.execute(
+        "SELECT COUNT(*) AS c FROM khantok_ticket_claims"
+    ).fetchone()["c"]
+
+
+class TestMarkKhantokStationClaimed:
+    def test_success_sets_timestamp_enqueues_and_keeps_quota(self, temp_db):
+        code = _create_phase4_order(temp_db)
+        quota_before = _quota_count(temp_db)
+        status, body = order_api.mark_khantok_station_claimed(temp_db, code, "staff1")
+        temp_db.commit()
+        assert status == 200
+        assert body["order"]["khantokStationClaimedAt"]
+        picks = temp_db.execute(
+            "SELECT station, item_index FROM display2_picks WHERE order_code=?", (code,)
+        ).fetchall()
+        assert [(p["station"], p["item_index"]) for p in picks] == [("khantok", -1)]
+        assert _quota_count(temp_db) == quota_before
+
+    def test_double_claim_returns_409(self, temp_db):
+        code = _create_phase4_order(temp_db)
+        order_api.mark_khantok_station_claimed(temp_db, code, "staff1")
+        temp_db.commit()
+        status, body = order_api.mark_khantok_station_claimed(temp_db, code, "staff1")
+        assert status == 409
+        assert body["claimedAt"]
+
+    def test_order_without_ticket_returns_400(self, temp_db):
+        # student code without the 693 prefix -> no ticket reserved
+        code = _create_phase4_order(temp_db, student_code="6805001234")
+        status, _ = order_api.mark_khantok_station_claimed(temp_db, code, "staff1")
+        assert status == 400
+
+    def test_unpaid_order_returns_400(self, temp_db):
+        code = _create_phase4_order(temp_db, status="pending_payment")
+        status, _ = order_api.mark_khantok_station_claimed(temp_db, code, "staff1")
+        assert status == 400
+
+    def test_unknown_order_returns_404(self, temp_db):
+        status, _ = order_api.mark_khantok_station_claimed(temp_db, "FP2800000", "staff1")
+        assert status == 404

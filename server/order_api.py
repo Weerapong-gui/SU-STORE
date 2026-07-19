@@ -288,6 +288,46 @@ def enqueue_display2_khantok(connection, order_row, claim_user) -> int:
     return 1
 
 
+def mark_khantok_station_claimed(
+    connection: sqlite3.Connection, order_code: str, claim_user: str
+) -> tuple[int, dict[str, Any]]:
+    """Mark a ticketed order's khantok ticket as claimed at the claim station and
+    enqueue its khantok pick row. Never touches khantok_ticket_claims (quota).
+    Returns (http_status, response_body). Does not commit."""
+    existing = fetch_order_by_code(connection, order_code)
+    if existing is None:
+        return HTTPStatus.NOT_FOUND, {"message": "ไม่พบออเดอร์"}
+    row_keys = existing.keys()
+    has_ticket = "khantok_ticket" in row_keys and int(existing["khantok_ticket"] or 0) == 1
+    if not has_ticket:
+        return HTTPStatus.BAD_REQUEST, {"message": "ออเดอร์นี้ไม่มีบัตรขันโตก"}
+    if existing["status"] in ("pending_payment", "waiting_confirm", "cancelled", "rejected"):
+        return HTTPStatus.BAD_REQUEST, {
+            "message": f"ออเดอร์มีสถานะ '{existing['status']}' ยังไม่พร้อมรับบัตร"
+        }
+    already = (
+        existing["khantok_station_claimed_at"]
+        if "khantok_station_claimed_at" in row_keys else None
+    )
+    if already:
+        return HTTPStatus.CONFLICT, {
+            "message": "รับบัตรขันโตกไปแล้ว", "claimedAt": already, "alreadyClaimed": True,
+        }
+    ts = now_iso()
+    connection.execute(
+        "UPDATE orders SET khantok_station_claimed_at=?, updated_at=? WHERE order_code=?",
+        (ts, ts, order_code),
+    )
+    log_audit(connection, order_code, "khantok_claimed", f"claimed by {claim_user}")
+    updated_row = fetch_order_by_code(connection, order_code)
+    try:
+        enqueue_display2_khantok(connection, updated_row, claim_user)
+    except Exception as exc:
+        log_audit(connection, order_code,
+                  "display2_enqueue_failed", f"{type(exc).__name__}: {exc}")
+    return HTTPStatus.OK, {"order": serialize_order(updated_row)}
+
+
 def ensure_db() -> None:
     DB_PATH.parent.mkdir(parents=True, exist_ok=True)
     SLIPS_DIR.mkdir(parents=True, exist_ok=True)
@@ -4057,6 +4097,26 @@ class OrderRequestHandler(BaseHTTPRequestHandler):
                 updated = updated_row
             cache_invalidate(f"cs_order:{order_code}")
             self._send_json(HTTPStatus.OK, {"order": serialize_order(updated), "prevStatus": prev_status})
+            return
+
+        khantok_claim_match = re.fullmatch(r"/claim-station/orders/([A-Z0-9-]+)/khantok-claimed", path)
+        if khantok_claim_match:
+            if not self._has_claim_station_authorization():
+                self._deny_unauthorized()
+                return
+            order_code = khantok_claim_match.group(1)
+            try:
+                payload = self._read_json()
+            except json.JSONDecodeError:
+                payload = {}
+            claimed_by = (payload or {}).get("claimedBy", "") if isinstance(payload, dict) else ""
+            with open_db() as connection:
+                claim_user = self._get_claim_station_user() or claimed_by or "staff"
+                status_code, body = mark_khantok_station_claimed(connection, order_code, claim_user)
+                if status_code == HTTPStatus.OK:
+                    connection.commit()
+            cache_invalidate(f"cs_order:{order_code}")
+            self._send_json(status_code, body)
             return
 
         claim_name_match = re.fullmatch(r"/claim-station/orders/([A-Z0-9-]+)/name", path)
