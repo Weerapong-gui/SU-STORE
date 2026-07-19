@@ -767,6 +767,14 @@
             <span class="toggle-thumb"></span>
           </label>
         </div>
+        <div style="display:flex;gap:10px;align-items:center">
+          <label style="font-size:14px;font-weight:600;color:var(--text)">รับแล้ว (station)</label>
+          <label class="toggle">
+            <input type="checkbox" id="oe_khantokStationClaimed" />
+            <span class="toggle-track"></span>
+            <span class="toggle-thumb"></span>
+          </label>
+        </div>
         <div class="field" style="margin:0;flex:1;min-width:100px">
           <label>Ticket Value (฿)</label>
           <input id="oe_khantokValue" type="number" min="0" placeholder="100" />
@@ -1775,6 +1783,7 @@
       document.querySelector("#oe_email").value = c.email || "";
       document.querySelector("#oe_khantokTicket").checked = !!order.khantokTicket;
       document.querySelector("#oe_khantokClaimed").checked = !!order.khantokTicketAlreadyClaimed;
+      document.querySelector("#oe_khantokStationClaimed").checked = !!order.khantokStationClaimedAt;
       document.querySelector("#oe_khantokValue").value = order.khantokTicketValue != null ? order.khantokTicketValue : "";
       renderItemEditors(items);
       var _addPicker = document.querySelector("#oe_addItemPicker");
@@ -2047,6 +2056,7 @@
         email: document.querySelector("#oe_email").value,
         khantokTicket: document.querySelector("#oe_khantokTicket").checked,
         khantokTicketAlreadyClaimed: document.querySelector("#oe_khantokClaimed").checked,
+        khantokStationClaimed: document.querySelector("#oe_khantokStationClaimed").checked,
         khantokTicketValue: khantokVal !== "" ? parseInt(khantokVal, 10) : null,
         items: items,
         adminNote: document.querySelector("#oe_adminNote").value,
