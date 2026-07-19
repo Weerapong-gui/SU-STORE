@@ -21,6 +21,8 @@
 - All timestamps stored via `now_iso()` (UTC); display side adds +7h.
 - Run `python3 -c "import ast; ast.parse(open('server/order_api.py').read())"` before every commit that touches `order_api.py`.
 - Test commands run from repo root: `/Users/park/SU-STORE`.
+- Before any pytest run or local import of `order_api`, export `ORDER_API_SLIDES_DIR=/tmp/su-order-api/slides ORDER_API_ASSETS_DIR=/tmp/su-order-api/display2_assets` — importing `order_api` mkdirs those paths and the default `/var/data/...` hits PermissionError locally.
+- Run repo tests and server tests as **separate** pytest invocations (`pytest tests/ -q` then `pytest server/tests/ -q`) — collecting both in one command fails with a `tests` module-name collision (pre-existing; CI also runs them separately).
 
 ---
 
@@ -139,7 +141,7 @@ Expected: 2 PASS
 
 - [ ] **Step 6: Syntax check + full suite**
 
-Run: `python3 -c "import ast; ast.parse(open('server/order_api.py').read())" && python3 -m pytest tests/ server/tests/ -q`
+Run: `python3 -c "import ast; ast.parse(open('server/order_api.py').read())" && export ORDER_API_SLIDES_DIR=/tmp/su-order-api/slides ORDER_API_ASSETS_DIR=/tmp/su-order-api/display2_assets; python3 -m pytest tests/ -q && python3 -m pytest server/tests/ -q`
 Expected: no syntax error, all tests pass.
 
 - [ ] **Step 7: Commit**
@@ -331,7 +333,7 @@ Expected: all PASS (old + 4 new).
 
 - [ ] **Step 6: Syntax check + full suite**
 
-Run: `python3 -c "import ast; ast.parse(open('server/order_api.py').read())" && python3 -m pytest tests/ server/tests/ -q`
+Run: `python3 -c "import ast; ast.parse(open('server/order_api.py').read())" && export ORDER_API_SLIDES_DIR=/tmp/su-order-api/slides ORDER_API_ASSETS_DIR=/tmp/su-order-api/display2_assets; python3 -m pytest tests/ -q && python3 -m pytest server/tests/ -q`
 Expected: all pass.
 
 - [ ] **Step 7: Commit**
@@ -520,7 +522,7 @@ Expected: all PASS.
 
 - [ ] **Step 6: Syntax check + full suite**
 
-Run: `python3 -c "import ast; ast.parse(open('server/order_api.py').read())" && python3 -m pytest tests/ server/tests/ -q`
+Run: `python3 -c "import ast; ast.parse(open('server/order_api.py').read())" && export ORDER_API_SLIDES_DIR=/tmp/su-order-api/slides ORDER_API_ASSETS_DIR=/tmp/su-order-api/display2_assets; python3 -m pytest tests/ -q && python3 -m pytest server/tests/ -q`
 Expected: all pass.
 
 - [ ] **Step 7: Commit**
@@ -626,7 +628,7 @@ Expected: all PASS.
 
 - [ ] **Step 5: Syntax check + full suite**
 
-Run: `python3 -c "import ast; ast.parse(open('server/order_api.py').read())" && python3 -m pytest tests/ server/tests/ -q`
+Run: `python3 -c "import ast; ast.parse(open('server/order_api.py').read())" && export ORDER_API_SLIDES_DIR=/tmp/su-order-api/slides ORDER_API_ASSETS_DIR=/tmp/su-order-api/display2_assets; python3 -m pytest tests/ -q && python3 -m pytest server/tests/ -q`
 Expected: all pass.
 
 - [ ] **Step 6: Commit**
@@ -751,7 +753,7 @@ Expected: `returncode=0` (no `SyntaxError`). If `node` is unavailable, skip this
 
 - [ ] **Step 4: Run full test suite (regression)**
 
-Run: `python3 -m pytest tests/ server/tests/ -q`
+Run: `export ORDER_API_SLIDES_DIR=/tmp/su-order-api/slides ORDER_API_ASSETS_DIR=/tmp/su-order-api/display2_assets; python3 -m pytest tests/ -q && python3 -m pytest server/tests/ -q`
 Expected: all pass (template change shouldn't affect them; template must still load — `python3 -c "import sys; sys.path.insert(0,'server'); from unittest.mock import MagicMock; sys.modules['ocr']=MagicMock(); import order_api"` exits 0).
 
 - [ ] **Step 5: Commit**
@@ -850,7 +852,7 @@ git commit -m "feat(khantok): admin edit-form station-claimed toggle"
 
 ```bash
 python3 -c "import ast; ast.parse(open('server/order_api.py').read())"
-python3 -m pytest tests/ server/tests/ -q
+export ORDER_API_SLIDES_DIR=/tmp/su-order-api/slides ORDER_API_ASSETS_DIR=/tmp/su-order-api/display2_assets; python3 -m pytest tests/ -q && python3 -m pytest server/tests/ -q
 ```
 
 Expected: all pass.
