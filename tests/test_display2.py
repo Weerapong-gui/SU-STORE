@@ -24,7 +24,10 @@ def _make_conn() -> sqlite3.Connection:
             quantity INTEGER NOT NULL DEFAULT 0,
             student_code TEXT NOT NULL DEFAULT '',
             nickname TEXT NOT NULL DEFAULT '',
-            full_name TEXT NOT NULL DEFAULT ''
+            full_name TEXT NOT NULL DEFAULT '',
+            khantok_ticket INTEGER NOT NULL DEFAULT 0,
+            khantok_ticket_value INTEGER,
+            round_number INTEGER NOT NULL DEFAULT 1
         );
         CREATE TABLE order_audit_log (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -176,6 +179,52 @@ class ReceivedHookEnqueuesTest(unittest.TestCase):
             ("FP280010",),
         ).fetchone()
         self.assertEqual(queued["queued_by"], "park2")
+
+
+class KhantokEnqueueTest(unittest.TestCase):
+    ITEMS = [{"slug": "single", "size": "M", "quantity": 1}]
+
+    def test_phase4_receive_skips_khantok_row(self):
+        conn = _make_conn()
+        row = _insert_order(conn, "FP280014", self.ITEMS,
+                            khantok_ticket=1, khantok_ticket_value=100, round_number=4)
+        order_api.enqueue_display2(conn, row, "staff1")
+        stations = [r["station"] for r in conn.execute(
+            "SELECT station FROM display2_picks WHERE order_code=?", ("FP280014",)
+        ).fetchall()]
+        self.assertEqual(stations, ["polo"])  # product row only, no khantok
+
+    def test_other_phase_receive_still_enqueues_khantok(self):
+        conn = _make_conn()
+        row = _insert_order(conn, "FP280013", self.ITEMS,
+                            khantok_ticket=1, khantok_ticket_value=50, round_number=3)
+        order_api.enqueue_display2(conn, row, "staff1")
+        stations = sorted(r["station"] for r in conn.execute(
+            "SELECT station FROM display2_picks WHERE order_code=?", ("FP280013",)
+        ).fetchall())
+        self.assertEqual(stations, ["khantok", "polo"])
+
+    def test_helper_inserts_khantok_row_idempotently(self):
+        conn = _make_conn()
+        row = _insert_order(conn, "FP280015", self.ITEMS,
+                            khantok_ticket=1, khantok_ticket_value=100, round_number=4)
+        first = order_api.enqueue_display2_khantok(conn, row, "staff1")
+        second = order_api.enqueue_display2_khantok(conn, row, "staff1")
+        self.assertEqual((first, second), (1, 0))
+        picked = conn.execute(
+            "SELECT station, item_index, size FROM display2_picks WHERE order_code=?",
+            ("FP280015",),
+        ).fetchall()
+        self.assertEqual(len(picked), 1)
+        self.assertEqual(picked[0]["station"], "khantok")
+        self.assertEqual(picked[0]["item_index"], -1)
+        self.assertEqual(picked[0]["size"], "฿100")
+
+    def test_helper_returns_zero_without_ticket(self):
+        conn = _make_conn()
+        row = _insert_order(conn, "FP280016", self.ITEMS,
+                            khantok_ticket=0, round_number=4)
+        self.assertEqual(order_api.enqueue_display2_khantok(conn, row, "staff1"), 0)
 
 
 if __name__ == "__main__":

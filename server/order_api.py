@@ -246,33 +246,46 @@ def enqueue_display2(connection, order_row, claim_user):
                   "display2_enqueued", f"station={station} item={idx}")
 
     row_keys = order_row.keys() if hasattr(order_row, "keys") else []
-    has_kt = "khantok_ticket" in row_keys and int(order_row["khantok_ticket"] or 0) == 1
-    if has_kt:
-        kt_idx = -1
-        exists_kt = connection.execute(
-            "SELECT 1 FROM display2_picks WHERE order_internal_id=? AND item_index=?",
-            (order_row["internal_id"], kt_idx),
-        ).fetchone()
-        if not exists_kt:
-            kt_value = 0
-            if "khantok_ticket_value" in row_keys:
-                kt_value = int(order_row["khantok_ticket_value"] or 0)
-            kt_size = f"฿{kt_value}" if kt_value else "บัตร"
-            connection.execute(
-                """INSERT INTO display2_picks
-                   (order_internal_id, order_code, item_index, station,
-                    product_slug, product_name, size, quantity,
-                    student_code, nickname, full_name, queued_at, queued_by)
-                   VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)""",
-                (order_row["internal_id"], order_row["order_code"], kt_idx, "khantok",
-                 "khantok", "บัตรขันโตก", kt_size, 1,
-                 order_row["student_code"], order_row["nickname"], order_row["full_name"],
-                 now, claim_user),
-            )
-            inserted += 1
-            log_audit(connection, order_row["order_code"],
-                      "display2_enqueued", f"station=khantok value={kt_value}")
+    round_number = int(order_row["round_number"] or 0) if "round_number" in row_keys else 0
+    if round_number != 4:
+        # Phase 4 hands out the khantok ticket via its own claim-station button;
+        # every other phase keeps enqueueing it together with the merchandise.
+        inserted += enqueue_display2_khantok(connection, order_row, claim_user)
     return inserted
+
+
+def enqueue_display2_khantok(connection, order_row, claim_user) -> int:
+    """Insert the khantok-station pick row (item_index -1) for a ticketed order.
+    Idempotent on (order_internal_id, -1). Returns 1 if a row was inserted, else 0."""
+    row_keys = order_row.keys() if hasattr(order_row, "keys") else []
+    has_kt = "khantok_ticket" in row_keys and int(order_row["khantok_ticket"] or 0) == 1
+    if not has_kt:
+        return 0
+    kt_idx = -1
+    exists_kt = connection.execute(
+        "SELECT 1 FROM display2_picks WHERE order_internal_id=? AND item_index=?",
+        (order_row["internal_id"], kt_idx),
+    ).fetchone()
+    if exists_kt:
+        return 0
+    kt_value = 0
+    if "khantok_ticket_value" in row_keys:
+        kt_value = int(order_row["khantok_ticket_value"] or 0)
+    kt_size = f"฿{kt_value}" if kt_value else "บัตร"
+    connection.execute(
+        """INSERT INTO display2_picks
+           (order_internal_id, order_code, item_index, station,
+            product_slug, product_name, size, quantity,
+            student_code, nickname, full_name, queued_at, queued_by)
+           VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)""",
+        (order_row["internal_id"], order_row["order_code"], kt_idx, "khantok",
+         "khantok", "บัตรขันโตก", kt_size, 1,
+         order_row["student_code"], order_row["nickname"], order_row["full_name"],
+         now_iso(), claim_user),
+    )
+    log_audit(connection, order_row["order_code"],
+              "display2_enqueued", f"station=khantok value={kt_value}")
+    return 1
 
 
 def ensure_db() -> None:
