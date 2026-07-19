@@ -250,6 +250,150 @@
     .ndp-cursor{display:inline-block;width:2px;height:30px;background:var(--primary);margin-left:3px;vertical-align:middle;animation:ndpBlink 1s step-end infinite}
     @keyframes ndpBlink{0%,100%{opacity:1}50%{opacity:0}}
   </style>
+  <!-- ============ visual refresh (layered on top; overrides tokens + components, keeps all class/id names) ============ -->
+  <style>
+    :root{
+      --bg:#eceff6;--card:#ffffff;--card-2:#f4f6fc;--ink:#131a2c;--muted:#5b6480;--border:#e4e8f3;
+      --primary:#4f6ef7;--primary-dk:#3b56e0;--primary-glow:rgba(79,110,247,.20);
+      --ok:#12a150;--ok-bg:#e4f6ec;--danger:#e0344a;--danger-bg:#fdeaed;
+      --warn:#c9770a;--warn-bg:#fbf0da;--purple:#7c3aed;--purple-bg:#efe9ff;
+      --accent2:#0f9d95;--surface2:#f4f6fc;--fg:var(--ink);
+      --radius:15px;--shadow:0 6px 22px rgba(28,40,80,.09);
+      --ring:0 0 0 1px rgba(79,110,247,.10);
+    }
+    @media(prefers-color-scheme:dark){
+      :root{
+        --bg:#090d18;--card:#141a2c;--card-2:#1b2238;--ink:#eef1fb;--muted:#8892ac;--border:rgba(150,166,224,.13);
+        --primary:#6485fb;--primary-dk:#4f6ef7;--primary-glow:rgba(91,124,250,.38);
+        --ok:#33d17f;--ok-bg:rgba(51,209,127,.13);--danger:#f76a72;--danger-bg:rgba(247,106,114,.14);
+        --warn:#f4b13c;--warn-bg:rgba(244,177,60,.14);--purple:#b39dff;--purple-bg:rgba(179,157,255,.15);
+        --accent2:#39d3c3;--surface2:rgba(255,255,255,.04);--fg:var(--ink);
+        --shadow:0 8px 30px rgba(0,0,0,.42);--ring:0 0 0 1px rgba(150,166,224,.10);
+      }
+    }
+    /* ambient console background */
+    body{font-weight:600;-webkit-font-smoothing:antialiased;text-rendering:optimizeLegibility;position:relative;letter-spacing:-.005em}
+    body::before{content:'';position:fixed;inset:0;z-index:-1;pointer-events:none;
+      background:
+        radial-gradient(58vw 52vw at 12% -12%, var(--primary-glow), transparent 62%),
+        radial-gradient(46vw 46vw at 104% 112%, color-mix(in srgb, var(--accent2) 40%, transparent), transparent 58%);
+      opacity:.9;}
+    @media(prefers-color-scheme:dark){body::before{opacity:1}}
+
+    /* ---- top bar ---- */
+    .top-bar{background:color-mix(in srgb, var(--card) 82%, transparent);backdrop-filter:blur(14px) saturate(150%);-webkit-backdrop-filter:blur(14px) saturate(150%);border-bottom:1px solid var(--border);height:58px;box-shadow:0 1px 0 rgba(255,255,255,.04) inset,0 6px 20px rgba(0,0,0,.10)}
+    .top-bar-title{display:inline-flex;align-items:center;gap:10px;font-size:15px;font-weight:800;letter-spacing:.02em;color:var(--ink)}
+    .top-bar-title::before{content:'';width:24px;height:24px;border-radius:8px;flex:0 0 auto;background:linear-gradient(140deg,var(--primary),var(--accent2));box-shadow:inset 0 0 0 1px rgba(255,255,255,.22),0 4px 14px var(--primary-glow)}
+    .btn-logout{border-radius:9px;padding:6px 12px;font-weight:700;background:var(--card-2)}
+    .btn-icon{border-radius:9px;background:var(--card-2);border:1px solid var(--border);height:30px}
+    .btn-fs{color:var(--muted)}
+    .top-bar-user{font-weight:700;color:var(--ink);opacity:.75}
+
+    /* connection dot with live pulse */
+    .conn-dot{position:relative;box-shadow:0 0 8px var(--ok)}
+    .conn-dot::after{content:'';position:absolute;inset:-2px;border-radius:50%;background:var(--ok);opacity:.5;animation:connpulse 2.2s ease-out infinite}
+    .conn-dot.offline,.conn-dot.warn{box-shadow:none}
+    .conn-dot.offline::after,.conn-dot.warn::after{animation:none;opacity:0}
+    @keyframes connpulse{0%{transform:scale(.7);opacity:.55}100%{transform:scale(2.1);opacity:0}}
+
+    /* ---- layout: give the history a real sidebar width ---- */
+    .main-content{padding:18px}
+    @media(min-width:640px){
+      .main-grid{gap:18px}
+      .scan-col{max-width:480px}
+      .main-grid>.recent-card{width:320px;flex:0 0 320px;align-self:flex-start}
+    }
+
+    /* ---- cards ---- */
+    .scanner-card,.manual-card,.result-card,.recent-card,.err-card{border:1px solid var(--border);box-shadow:var(--shadow)}
+    .card-header,.recent-hdr{background:linear-gradient(var(--card-2),transparent)}
+    .card-header h2,.manual-lbl,.recent-hdr,.items-label,.stat-label{text-transform:uppercase;letter-spacing:.09em}
+    .card-header h2{font-size:12px;color:var(--muted);font-weight:800}
+    .card-header{padding:13px 15px}
+
+    /* ---- scanner hero ---- */
+    .scanner-card{position:relative;background:var(--card)}
+    .scanner-body{aspect-ratio:4/3;background:radial-gradient(circle at 50% 42%,#0d1526,#05070d 78%)}
+    .scan-frame{
+      --c:var(--accent2);--t:3px;--len:30px;--g:14px;
+      width:58%;aspect-ratio:1;border:none;border-radius:0;
+      background:
+        linear-gradient(var(--c),var(--c)) 0 0/var(--len) var(--t) no-repeat,
+        linear-gradient(var(--c),var(--c)) 0 0/var(--t) var(--len) no-repeat,
+        linear-gradient(var(--c),var(--c)) 100% 0/var(--len) var(--t) no-repeat,
+        linear-gradient(var(--c),var(--c)) 100% 0/var(--t) var(--len) no-repeat,
+        linear-gradient(var(--c),var(--c)) 0 100%/var(--len) var(--t) no-repeat,
+        linear-gradient(var(--c),var(--c)) 0 100%/var(--t) var(--len) no-repeat,
+        linear-gradient(var(--c),var(--c)) 100% 100%/var(--len) var(--t) no-repeat,
+        linear-gradient(var(--c),var(--c)) 100% 100%/var(--t) var(--len) no-repeat;
+      box-shadow:0 0 0 9999px rgba(0,0,0,.46);
+      filter:drop-shadow(0 0 7px color-mix(in srgb,var(--accent2) 70%,transparent));
+      position:relative;overflow:hidden;}
+    .scan-line{position:absolute;left:8%;right:8%;top:8%;height:2px;border-radius:2px;
+      background:linear-gradient(90deg,transparent,var(--accent2),transparent);
+      box-shadow:0 0 14px 1px var(--accent2);animation:scanmove 2.6s cubic-bezier(.5,0,.5,1) infinite}
+    @keyframes scanmove{0%{top:8%}50%{top:90%}100%{top:8%}}
+    .scan-status{font-weight:700;font-size:12.5px;letter-spacing:.02em;background:var(--card);border-top:1px solid var(--border)}
+    .scan-status.success{color:var(--ok)}
+    .scan-status .stpill{display:inline-block}
+
+    /* ---- manual search: segmented control ---- */
+    .search-tabs{background:var(--card-2);padding:4px;border-radius:11px;gap:2px;border:1px solid var(--border)}
+    .stab{border:none;background:none;border-radius:8px;height:34px;font-weight:700;color:var(--muted);transition:color .15s,background .15s,box-shadow .15s}
+    .stab:hover{color:var(--ink)}
+    .stab.active{background:var(--primary);color:#fff;box-shadow:0 3px 10px var(--primary-glow)}
+    .manual-inp,.inp,.manual-input{background:var(--card-2)}
+    .manual-inp:focus,.inp:focus{box-shadow:0 0 0 3px var(--primary-glow)}
+    .btn-search{border-radius:9px;box-shadow:0 3px 10px var(--primary-glow)}
+
+    /* ---- buttons: primary/confirm with lift + glow ---- */
+    .btn-primary,.btn-confirm,.btn-print{background:linear-gradient(180deg,var(--primary),var(--primary-dk));box-shadow:0 4px 14px var(--primary-glow);transition:transform .12s,box-shadow .15s,filter .15s}
+    .btn-primary:hover,.btn-print:hover{filter:brightness(1.06);transform:translateY(-1px)}
+    .btn-confirm{background:linear-gradient(180deg,#20c069,#0e9a4c);box-shadow:0 6px 18px rgba(18,161,80,.34)}
+    .btn-confirm:hover{filter:brightness(1.05);transform:translateY(-1px);opacity:1}
+    .btn-primary:active,.btn-confirm:active,.btn-print:active{transform:translateY(0)}
+
+    /* ---- result card ---- */
+    .result-card{overflow:hidden}
+    .order-hdr{background:linear-gradient(var(--card-2),transparent);padding:16px}
+    .order-code{font-size:22px;letter-spacing:.03em;color:var(--primary)}
+    .st-badge{letter-spacing:.04em;text-transform:uppercase;padding:5px 11px}
+    .cust-name{font-size:19px;font-weight:800;letter-spacing:-.01em}
+    .item-row{background:var(--card-2);border:1px solid var(--border);border-radius:12px}
+    .item-name{font-size:16px}
+    .item-size-badge{background:linear-gradient(180deg,var(--primary),var(--primary-dk));box-shadow:0 2px 8px var(--primary-glow)}
+    .khantok-badge{box-shadow:0 2px 10px rgba(18,161,80,.18)}
+
+    /* ---- history / recent sidebar ---- */
+    .recent-card{overflow:hidden}
+    .recent-hdr{font-size:11px;font-weight:800;color:var(--muted);padding:13px 15px}
+    .recent-item{transition:background .14s}
+    .recent-item:hover{background:var(--card-2)}
+    .r-code{color:var(--ink)}
+    .r-ok{color:var(--ok)}
+    .recent-empty{padding:30px 14px;font-weight:600}
+
+    /* ---- stats slide panel + tab ---- */
+    #statsTab{border-radius:0 12px 12px 0;background:linear-gradient(180deg,var(--primary),var(--primary-dk));box-shadow:3px 0 14px var(--primary-glow);padding:14px 9px;font-weight:800}
+    #statsPanel{box-shadow:8px 0 40px rgba(0,0,0,.28)}
+    .stat-value{font-size:30px;letter-spacing:-.03em}
+    .stat-value.session{color:var(--primary)}
+
+    /* ---- login card ---- */
+    .login-card{border:1px solid var(--border);box-shadow:0 20px 60px rgba(10,14,26,.35),var(--ring);border-radius:20px;padding:40px 30px}
+    .login-logo h1{display:inline-flex;align-items:center;gap:10px;font-size:20px;letter-spacing:.02em;color:var(--ink)}
+    .login-logo h1::before{content:'';width:26px;height:26px;border-radius:9px;background:linear-gradient(140deg,var(--primary),var(--accent2));box-shadow:inset 0 0 0 1px rgba(255,255,255,.22),0 5px 16px var(--primary-glow)}
+    .inp{background:var(--card-2);height:46px;border-radius:10px}
+
+    /* ---- name display (customer-facing) ---- */
+    #nameDisplayPanel{border-width:2px;box-shadow:0 12px 50px rgba(0,0,0,.34),0 0 0 1px var(--primary-glow)}
+
+    @media(prefers-reduced-motion:reduce){
+      .scan-line{animation:none;opacity:.55}
+      .conn-dot::after{animation:none;opacity:0}
+      .btn-primary,.btn-confirm,.btn-print{transition:none}
+    }
+  </style>
 </head>
 <body>
 
@@ -310,7 +454,7 @@
             <div class="scanner-body">
               <video id="scanVideo" autoplay playsinline muted></video>
               <canvas id="scanCanvas"></canvas>
-              <div class="scan-overlay"><div class="scan-frame"></div></div>
+              <div class="scan-overlay"><div class="scan-frame"><div class="scan-line"></div></div></div>
             </div>
             <p id="scanStatus" class="scan-status">กำลังเริ่มกล้อง...</p>
           </div>
