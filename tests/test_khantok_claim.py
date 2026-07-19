@@ -28,10 +28,18 @@ def temp_db(tmp_path, monkeypatch):
     monkeypatch.setattr(order_api, "DB_PATH", tmp_path / "orders.db")
     monkeypatch.setattr(order_api, "SLIPS_DIR", tmp_path / "slips")
     monkeypatch.setattr(order_api, "PRODUCT_IMAGES_DIR", tmp_path / "product-images")
+    # _CONN_POOL is module-global and path-unaware: a connection pooled by a previous
+    # test would be handed out here still attached to that test's DB file. Give each
+    # test its own pool and drain it on teardown.
+    pool = []
+    monkeypatch.setattr(order_api, "_CONN_POOL", pool)
     order_api.ensure_db()
-    connection = order_api.open_db().__enter__()
+    pooled = order_api.open_db()
+    connection = pooled.__enter__()
     yield connection
-    connection.__exit__(None, None, None)
+    pooled.__exit__(None, None, None)
+    for leftover in pool:
+        leftover.close()
 
 
 class TestStationClaimedColumn:
