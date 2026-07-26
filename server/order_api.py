@@ -1398,6 +1398,19 @@ def create_orders_summary(connection: sqlite3.Connection, round_filter: int = 0)
         f"SELECT COUNT(*) AS cnt FROM orders WHERE status NOT IN ('refund','refunded') {round_where}",
         round_params,
     ).fetchone()
+    khantok_station_row = connection.execute(
+        f"""
+        SELECT
+            COUNT(*) AS claimed,
+            SUM(CASE WHEN received_at IS NULL OR received_at = '' THEN 1 ELSE 0 END) AS not_received
+        FROM orders
+        WHERE khantok_station_claimed_at IS NOT NULL
+          AND khantok_station_claimed_at != ''
+          AND status NOT IN ('rejected','cancelled','refund','refunded')
+          {round_where}
+        """,
+        round_params,
+    ).fetchone()
     # Count per-category qty from items_json so multi-item orders are fully counted
     # Exclude rejected, cancelled, refund, and refunded orders from product quantity totals
     category_counts: dict[str, int] = {}
@@ -1437,6 +1450,8 @@ def create_orders_summary(connection: sqlite3.Connection, round_filter: int = 0)
         "khantokTicket50Quota": quota_50,
         "khantokTicket50Used": used_50,
         "khantokTicket50Remaining": max(quota_50 - used_50, 0),
+        "khantokStationClaimed": int(khantok_station_row["claimed"] or 0),
+        "khantokStationClaimedNotReceived": int(khantok_station_row["not_received"] or 0),
         "qtySingle": category_counts.get("single", 0),
         "qtyJacket": category_counts.get("jacket", 0),
         "qtyHeadband": category_counts.get("headband", 0),

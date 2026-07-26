@@ -219,3 +219,37 @@ class TestAdminStationClaimedToggle:
         order_api.update_order_fields(temp_db, code, {"khantokStationClaimed": False})
         row = order_api.fetch_order_by_code(temp_db, code)
         assert row["khantok_station_claimed_at"] is None
+
+
+class TestKhantokStationSummaryCounts:
+    def test_counts_claimed_and_claimed_but_not_received(self, temp_db):
+        _insert_summary_order(temp_db, "FP2890001", status="received",
+                              station_claimed_at="2026-07-26T10:00:00+07:00",
+                              received_at="2026-07-26T10:00:00+07:00")
+        _insert_summary_order(temp_db, "FP2890002", status="shipped",
+                              station_claimed_at="2026-07-26T11:00:00+07:00",
+                              received_at=None)
+        _insert_summary_order(temp_db, "FP2890003", status="received",
+                              station_claimed_at=None,
+                              received_at="2026-07-26T12:00:00+07:00")
+        _insert_summary_order(temp_db, "FP2890004", status="rejected",
+                              station_claimed_at="2026-07-26T13:00:00+07:00",
+                              received_at=None)
+        summary = order_api.create_orders_summary(temp_db)
+        assert summary["khantokStationClaimed"] == 2
+        assert summary["khantokStationClaimedNotReceived"] == 1
+
+    def test_counts_are_zero_on_empty_db(self, temp_db):
+        summary = order_api.create_orders_summary(temp_db)
+        assert summary["khantokStationClaimed"] == 0
+        assert summary["khantokStationClaimedNotReceived"] == 0
+
+    def test_round_filter_scopes_the_counts(self, temp_db):
+        _insert_summary_order(temp_db, "FP2890011", round_number=1, status="shipped",
+                              station_claimed_at="2026-07-26T10:00:00+07:00",
+                              received_at=None)
+        _insert_summary_order(temp_db, "FP2890012", round_number=4, status="shipped",
+                              station_claimed_at="2026-07-26T10:00:00+07:00",
+                              received_at=None)
+        assert order_api.create_orders_summary(temp_db, round_filter=4)["khantokStationClaimed"] == 1
+        assert order_api.create_orders_summary(temp_db)["khantokStationClaimed"] == 2
