@@ -614,7 +614,7 @@ Expected: FAIL — เคสแรกและเคสที่สองตก 
 ใน `renderPagination()` เปลี่ยน `<span>` ตรงกลางจาก `'Page ' + currentPage + ' / ' + totalPages + ' (' + totalOrders + ' orders)'` เป็น:
 
 ```javascript
-        '<span style="font-size:13px;color:var(--muted)">Page ' + currentPage + '/' + totalPages + ' — ' + totalOrders + ' total orders</span>' +
+        '<span style="font-size:13px;color:var(--muted)">Page ' + currentPage + '/' + totalPages + ' — ' + totalOrders + ' total orders' + '</span>' +
 ```
 
 - [ ] **Step 5: ลบข้อความซ้ำใน `loadOrders()`**
