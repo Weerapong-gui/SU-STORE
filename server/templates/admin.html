@@ -1439,6 +1439,12 @@
       setOdom('statHeadband', n(summary.qtyHeadband) + ' อัน');
     }
     var _statsStreamCtrl = null;
+    // server ปิด stream ทิ้งเมื่อครบอายุสูงสุด ฝั่งนี้จึงต้องต่อใหม่เอง
+    // ต่อใหม่เฉพาะตอนที่ ctrl ตัวนี้ยังเป็นตัวล่าสุด กันเปิดซ้อนกันหลายเส้น
+    function _statsStreamRetry(ctrl, ms) {
+      if (_statsStreamCtrl !== ctrl || ctrl.signal.aborted) return;
+      setTimeout(startStatsStream, ms);
+    }
     async function startStatsStream() {
       if (_statsStreamCtrl) { _statsStreamCtrl.abort(); _statsStreamCtrl = null; }
       var ctrl = new AbortController();
@@ -1448,7 +1454,7 @@
           headers: { 'Authorization': 'Bearer ' + tokenInput.value.trim() },
           signal: ctrl.signal
         });
-        if (!res.ok) return;
+        if (!res.ok) { _statsStreamRetry(ctrl, 15000); return; }
         var reader = res.body.getReader();
         var dec = new TextDecoder();
         var buf = '';
@@ -1492,8 +1498,9 @@
             } catch(e) {}
           });
         }
+        _statsStreamRetry(ctrl, 2000);
       } catch(e) {
-        if (e.name !== 'AbortError') setTimeout(startStatsStream, 5000);
+        if (e.name !== 'AbortError') _statsStreamRetry(ctrl, 5000);
       }
     }
     function renderOrderStats(summary) {

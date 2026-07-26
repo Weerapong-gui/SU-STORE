@@ -1403,6 +1403,122 @@ def create_orders_summary(connection: sqlite3.Connection, round_filter: int = 0)
     }
 
 
+_SUMMARY_CACHE: dict[int, tuple[float, dict[str, int]]] = {}
+_SUMMARY_CACHE_LOCK = threading.Lock()
+_SUMMARY_CACHE_TTL = float(os.environ.get("ORDER_API_SUMMARY_CACHE_TTL", "2.0"))
+
+
+def create_orders_summary_cached(
+    connection: sqlite3.Connection, round_filter: int = 0
+) -> dict[str, int]:
+    """create_orders_summary() ที่แชร์ผลข้าม request ไม่กี่วินาที
+
+    summary สแกน orders ทั้งตารางแล้ว json.loads ทุกแถว จึงแพงเกินกว่าจะให้ทุก
+    request/stream คำนวณซ้ำเอง ค่าที่ได้เป็นตัวนับ ไม่ใช่ข้อมูลออเดอร์ ช้าไม่กี่
+    วินาทีจึงยอมรับได้
+    """
+    if _SUMMARY_CACHE_TTL <= 0:
+        return create_orders_summary(connection, round_filter)
+    with _SUMMARY_CACHE_LOCK:
+        entry = _SUMMARY_CACHE.get(round_filter)
+        if entry is not None and (time.monotonic() - entry[0]) <= _SUMMARY_CACHE_TTL:
+            return dict(entry[1])
+    summary = create_orders_summary(connection, round_filter)
+    with _SUMMARY_CACHE_LOCK:
+        if len(_SUMMARY_CACHE) > 32:
+            _SUMMARY_CACHE.clear()
+        _SUMMARY_CACHE[round_filter] = (time.monotonic(), summary)
+    return dict(summary)
+
+
+_STATS_SNAPSHOT: tuple[float, dict[str, Any]] | None = None
+_STATS_SNAPSHOT_LOCK = threading.Lock()
+_STATS_SNAPSHOT_TTL = float(os.environ.get("ORDER_API_STATS_SNAPSHOT_TTL", "5.0"))
+
+
+def _compute_stats_snapshot() -> dict[str, Any]:
+    with open_db() as connection:
+        summary = create_orders_summary_cached(connection)
+        rev_row = connection.execute(
+            "SELECT COALESCE(SUM(total_amount),0) AS r FROM orders WHERE status IN ('paid','preparing','shipped','received')"
+        ).fetchone()
+        revenue = int(rev_row["r"] if rev_row else 0)
+        school_cnt = connection.execute(
+            "SELECT COUNT(DISTINCT school) AS c FROM orders"
+        ).fetchone()["c"]
+        cost_rows = connection.execute(
+            "SELECT items_json, product_category, quantity FROM orders WHERE status IN ('paid','preparing','shipped','received')"
+        ).fetchall()
+    cq: dict[str, int] = {}
+    for row in cost_rows:
+        ok = False
+        if row["items_json"]:
+            try:
+                for itm in json.loads(row["items_json"]):
+                    cat = (itm.get("product") or {}).get("category") or ""
+                    if cat:
+                        cq[cat] = cq.get(cat, 0) + int(itm.get("quantity") or 0)
+                ok = True
+            except Exception:
+                pass
+        if not ok:
+            cat = row["product_category"] or ""
+            if cat:
+                cq[cat] = cq.get(cat, 0) + int(row["quantity"] or 0)
+    profit = revenue - sum(cq.get(c, 0) * p for c, p in PRODUCT_COST.items())
+    return {
+        "summary": summary,
+        "analytics": {
+            "total": summary["total"],
+            "revenue": revenue,
+            "schoolCount": school_cnt,
+            "profit": profit,
+        },
+    }
+
+
+def get_stats_snapshot() -> dict[str, Any]:
+    """ส่วนที่มาจาก DB ของ payload /admin/stats-stream คำนวณรอบเดียวแล้วแชร์ทุก connection
+
+    ก่อนหน้านี้ทุก connection ที่ต่ออยู่ query ชุดเดียวกันเองทุก tick — 16 แท็บ
+    เปิดค้าง = ทำงานเดียวกัน 16 รอบ กิน CPU จน request อื่นโดน GIL starve
+    """
+    global _STATS_SNAPSHOT
+    snapshot = _STATS_SNAPSHOT
+    if snapshot is not None and (time.monotonic() - snapshot[0]) <= _STATS_SNAPSHOT_TTL:
+        return snapshot[1]
+    with _STATS_SNAPSHOT_LOCK:
+        snapshot = _STATS_SNAPSHOT
+        if snapshot is not None and (time.monotonic() - snapshot[0]) <= _STATS_SNAPSHOT_TTL:
+            return snapshot[1]
+        payload = _compute_stats_snapshot()
+        _STATS_SNAPSHOT = (time.monotonic(), payload)
+        return payload
+
+
+_STATS_STREAM_MAX = int(os.environ.get("ORDER_API_STATS_STREAM_MAX", "8"))
+_STATS_STREAM_MAX_SECONDS = float(
+    os.environ.get("ORDER_API_STATS_STREAM_MAX_SECONDS", "1800")
+)
+_stats_stream_count = 0
+_stats_stream_lock = threading.Lock()
+
+
+def _stats_stream_acquire() -> bool:
+    global _stats_stream_count
+    with _stats_stream_lock:
+        if _stats_stream_count >= _STATS_STREAM_MAX:
+            return False
+        _stats_stream_count += 1
+        return True
+
+
+def _stats_stream_release() -> None:
+    global _stats_stream_count
+    with _stats_stream_lock:
+        _stats_stream_count = max(0, _stats_stream_count - 1)
+
+
 def update_order_status(
     connection: sqlite3.Connection,
     order_code: str,
@@ -2561,8 +2677,9 @@ class OrderRequestHandler(BaseHTTPRequestHandler):
 
         if path == "/dis3/data":
             # Public live sales counts for the /dis3 venue screen (qty only, not sensitive).
+            # หน้านี้ poll ทุก 3 วินาทีต่อ 1 จอ จึงต้องใช้ตัว cached
             with open_db() as connection:
-                summary = create_orders_summary(connection)
+                summary = create_orders_summary_cached(connection)
             self._send_json(HTTPStatus.OK, {
                 "polo": summary["qtySingle"],
                 "jacket": summary["qtyJacket"],
@@ -2977,6 +3094,12 @@ class OrderRequestHandler(BaseHTTPRequestHandler):
         if path == "/admin/stats-stream":
             if not self._require_admin_authorization():
                 return
+            if not _stats_stream_acquire():
+                self._send_json(
+                    HTTPStatus.SERVICE_UNAVAILABLE,
+                    {"message": "stats stream busy, try again later"},
+                )
+                return
             self.send_response(200)
             self.send_header("Content-Type", "text/event-stream")
             self.send_header("Cache-Control", "no-cache")
@@ -2985,54 +3108,29 @@ class OrderRequestHandler(BaseHTTPRequestHandler):
             self.end_headers()
             last_hash = None
             tick = 0
+            started_at = time.monotonic()
             try:
-                while True:
+                while (time.monotonic() - started_at) < _STATS_STREAM_MAX_SECONDS:
                     cutoff = time.time() - _VISITOR_ACTIVE_SECONDS
                     with _global_lock:
                         visitors = sum(1 for t in list(_visitor_registry.values()) if t >= cutoff)
-                    with open_db() as conn:
-                        summary = create_orders_summary(conn)
-                        rev_row = conn.execute(
-                            "SELECT COALESCE(SUM(total_amount),0) AS r FROM orders WHERE status IN ('paid','preparing','shipped','received')"
-                        ).fetchone()
-                        revenue = int(rev_row["r"] if rev_row else 0)
-                        school_cnt = conn.execute(
-                            "SELECT COUNT(DISTINCT school) AS c FROM orders"
-                        ).fetchone()["c"]
-                        cost_rows = conn.execute(
-                            "SELECT items_json, product_category, quantity FROM orders WHERE status IN ('paid','preparing','shipped','received')"
-                        ).fetchall()
-                    cq: dict[str, int] = {}
-                    for row in cost_rows:
-                        ok = False
-                        if row["items_json"]:
-                            try:
-                                for itm in json.loads(row["items_json"]):
-                                    cat = (itm.get("product") or {}).get("category") or ""
-                                    if cat:
-                                        cq[cat] = cq.get(cat, 0) + int(itm.get("quantity") or 0)
-                                ok = True
-                            except Exception:
-                                pass
-                        if not ok:
-                            cat = row["product_category"] or ""
-                            if cat:
-                                cq[cat] = cq.get(cat, 0) + int(row["quantity"] or 0)
-                    profit = revenue - sum(cq.get(c, 0) * p for c, p in PRODUCT_COST.items())
-                    payload = {
-                        "visitors": visitors,
-                        "summary": summary,
-                        "analytics": {"total": summary["total"], "revenue": revenue, "schoolCount": school_cnt, "profit": profit},
-                    }
+                    payload = {"visitors": visitors, **get_stats_snapshot()}
                     h = hash(json.dumps(payload, sort_keys=True))
                     if h != last_hash:
                         self.wfile.write(("data: " + json.dumps(payload) + "\n\n").encode())
-                        self.wfile.flush()
                         last_hash = h
+                    else:
+                        # heartbeat: ต้องเขียนทุก tick แม้ข้อมูลไม่เปลี่ยน ไม่งั้น client
+                        # ที่ปิดแท็บไปแล้วจะไม่ถูกตรวจเจอ (รู้ได้ทาง BrokenPipe ตอนเขียน
+                        # เท่านั้น) แล้ว thread นี้จะวนกิน CPU ไปจนกว่า process จะตาย
+                        self.wfile.write(b": ping\n\n")
+                    self.wfile.flush()
                     time.sleep(1 if tick < 10 else 5)
                     tick += 1
             except (BrokenPipeError, ConnectionResetError, OSError):
                 pass
+            finally:
+                _stats_stream_release()
             return
 
         if path == "/admin/orders":
@@ -3048,7 +3146,7 @@ class OrderRequestHandler(BaseHTTPRequestHandler):
             round_f = int((qs.get("round") or ["0"])[0]) if (qs.get("round") or ["0"])[0].isdigit() else 0
             with open_db() as connection:
                 orders, total = list_orders(connection, page=page, per_page=per_page, search=search, status_filter=status_f, round_filter=round_f, student_code_filter=student_code_f)
-                summary = create_orders_summary(connection, round_filter=round_f)
+                summary = create_orders_summary_cached(connection, round_filter=round_f)
             self._send_json(
                 HTTPStatus.OK,
                 {

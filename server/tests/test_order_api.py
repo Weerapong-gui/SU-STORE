@@ -87,3 +87,125 @@ class TestKhantokPrefix:
     def test_quotas_are_positive(self):
         assert order_api.KHANTOK_QUOTA_100 > 0
         assert order_api.KHANTOK_QUOTA_50 > 0
+
+
+class TestOrdersSummaryCache:
+    """create_orders_summary_cached must not rescan orders for every caller.
+
+    The uncached summary scans the whole orders table and json.loads every row,
+    so concurrent admin pages / stat streams recomputing it is what starved the
+    server of CPU.
+    """
+
+    @pytest.fixture(autouse=True)
+    def _reset(self, monkeypatch):
+        order_api._SUMMARY_CACHE.clear()
+        monkeypatch.setattr(order_api, "_SUMMARY_CACHE_TTL", 60.0)
+        yield
+        order_api._SUMMARY_CACHE.clear()
+
+    def test_second_call_within_ttl_does_not_recompute(self, monkeypatch):
+        calls = []
+        monkeypatch.setattr(
+            order_api,
+            "create_orders_summary",
+            lambda conn, round_filter=0: calls.append(round_filter) or {"total": 1},
+        )
+        assert order_api.create_orders_summary_cached(None) == {"total": 1}
+        assert order_api.create_orders_summary_cached(None) == {"total": 1}
+        assert len(calls) == 1
+
+    def test_different_round_filters_cached_separately(self, monkeypatch):
+        calls = []
+        monkeypatch.setattr(
+            order_api,
+            "create_orders_summary",
+            lambda conn, round_filter=0: calls.append(round_filter) or {"total": round_filter},
+        )
+        order_api.create_orders_summary_cached(None, 1)
+        order_api.create_orders_summary_cached(None, 2)
+        order_api.create_orders_summary_cached(None, 1)
+        assert calls == [1, 2]
+
+    def test_caller_cannot_mutate_cached_value(self, monkeypatch):
+        monkeypatch.setattr(
+            order_api, "create_orders_summary", lambda conn, round_filter=0: {"total": 1}
+        )
+        first = order_api.create_orders_summary_cached(None)
+        first["total"] = 999
+        assert order_api.create_orders_summary_cached(None)["total"] == 1
+
+    def test_zero_ttl_disables_cache(self, monkeypatch):
+        monkeypatch.setattr(order_api, "_SUMMARY_CACHE_TTL", 0.0)
+        calls = []
+        monkeypatch.setattr(
+            order_api,
+            "create_orders_summary",
+            lambda conn, round_filter=0: calls.append(1) or {"total": 1},
+        )
+        order_api.create_orders_summary_cached(None)
+        order_api.create_orders_summary_cached(None)
+        assert len(calls) == 2
+
+
+class TestStatsSnapshot:
+    """get_stats_snapshot is shared by every open /admin/stats-stream connection."""
+
+    @pytest.fixture(autouse=True)
+    def _reset(self, monkeypatch):
+        order_api._STATS_SNAPSHOT = None
+        monkeypatch.setattr(order_api, "_STATS_SNAPSHOT_TTL", 60.0)
+        yield
+        order_api._STATS_SNAPSHOT = None
+
+    def test_snapshot_computed_once_within_ttl(self, monkeypatch):
+        calls = []
+        monkeypatch.setattr(
+            order_api,
+            "_compute_stats_snapshot",
+            lambda: calls.append(1) or {"summary": {}, "analytics": {}},
+        )
+        order_api.get_stats_snapshot()
+        order_api.get_stats_snapshot()
+        order_api.get_stats_snapshot()
+        assert len(calls) == 1
+
+    def test_snapshot_recomputed_after_ttl(self, monkeypatch):
+        calls = []
+        monkeypatch.setattr(order_api, "_STATS_SNAPSHOT_TTL", -1.0)
+        monkeypatch.setattr(
+            order_api,
+            "_compute_stats_snapshot",
+            lambda: calls.append(1) or {"summary": {}, "analytics": {}},
+        )
+        order_api.get_stats_snapshot()
+        order_api.get_stats_snapshot()
+        assert len(calls) == 2
+
+
+class TestStatsStreamLimit:
+    """Concurrent stat streams are capped so leaked threads cannot pile up again."""
+
+    @pytest.fixture(autouse=True)
+    def _reset(self):
+        order_api._stats_stream_count = 0
+        yield
+        order_api._stats_stream_count = 0
+
+    def test_acquire_up_to_max_then_refuses(self, monkeypatch):
+        monkeypatch.setattr(order_api, "_STATS_STREAM_MAX", 2)
+        assert order_api._stats_stream_acquire() is True
+        assert order_api._stats_stream_acquire() is True
+        assert order_api._stats_stream_acquire() is False
+
+    def test_release_frees_a_slot(self, monkeypatch):
+        monkeypatch.setattr(order_api, "_STATS_STREAM_MAX", 1)
+        assert order_api._stats_stream_acquire() is True
+        assert order_api._stats_stream_acquire() is False
+        order_api._stats_stream_release()
+        assert order_api._stats_stream_acquire() is True
+
+    def test_release_never_goes_negative(self):
+        order_api._stats_stream_release()
+        order_api._stats_stream_release()
+        assert order_api._stats_stream_count == 0
