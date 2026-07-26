@@ -255,7 +255,10 @@ class TestClaimStationTemplate:
         assert "doClaimKhantok(code, needConfirm)" in order_api.CLAIM_STATION_HTML
 
     def test_warning_panel_uses_the_existing_warn_palette(self):
-        assert "var(--warn-bg)" in order_api.CLAIM_STATION_HTML
+        # ต้องเลือกสีตาม warning state จริง ไม่ใช่แค่มีคำว่า var(--warn-bg) ลอยอยู่ที่ไหนก็ได้ในไฟล์
+        # (ตัวแปรนี้มีอยู่แล้วใน CSS :root ก่อนหน้า task นี้ด้วย จึงต้องล็อกไปที่ ternary ที่เลือกสีจริง)
+        assert "accent = warn ? 'var(--warn)' : 'var(--ok)'" in order_api.CLAIM_STATION_HTML
+        assert "accentBg = warn ? 'var(--warn-bg)' : 'var(--ok-bg)'" in order_api.CLAIM_STATION_HTML
 
     def test_timestamp_helper_reads_utc_getters(self):
         # กันการกลับไปใช้ .getHours() ซึ่งบวก offset ซ้ำบนเครื่องที่ตั้งเวลาไทย
