@@ -246,6 +246,7 @@
         <button class="ghost" id="bulkPrintBtn" title="พิมพ์ใบเสร็จของออเดอร์ที่เลือก">พิมพ์ใบเสร็จที่เลือก</button>
         <button class="ghost" id="bulkClearBtn">Clear</button>
       </div>
+      <div id="paginationBar" style="display:flex;gap:12px;align-items:center;padding:4px 0 12px;justify-content:space-between;flex-wrap:wrap"></div>
       <div class="table-card">
         <table>
           <thead>
@@ -263,7 +264,6 @@
           <tbody id="ordersBody"></tbody>
         </table>
       </div>
-      <div id="paginationBar" style="display:flex;gap:12px;align-items:center;padding:12px 0;justify-content:center"></div>
       <p class="notice" id="ordersNotice"></p>
     </main>
   </div>
@@ -2098,7 +2098,7 @@
       var el = document.querySelector("#paginationBar");
       if (!el) return;
       el.innerHTML = '<button class="ghost" id="prevPageBtn"' + (currentPage <= 1 ? ' disabled' : '') + '>← Prev</button>' +
-        '<span style="font-size:13px;color:var(--muted)">Page ' + currentPage + ' / ' + totalPages + ' (' + totalOrders + ' orders)</span>' +
+        '<span style="font-size:13px;color:var(--muted)">Page ' + currentPage + '/' + totalPages + ' — ' + totalOrders + ' total orders' + '</span>' +
         '<button class="ghost" id="nextPageBtn"' + (currentPage >= totalPages ? ' disabled' : '') + '>Next →</button>';
       var prev = document.querySelector("#prevPageBtn");
       var next = document.querySelector("#nextPageBtn");
@@ -2138,7 +2138,7 @@
         totalPages = data.pages || 1;
         renderOrderStats(serverSummary);
         renderOrders();
-        setOrdersNotice("Page " + currentPage + "/" + totalPages + " — " + totalOrders + " total orders");
+        setOrdersNotice("");
       } catch(e) { setOrdersNotice(e.message, true); }
     }
 

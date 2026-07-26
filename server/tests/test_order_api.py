@@ -276,3 +276,17 @@ class TestAdminKhantokStationCards:
         # การ์ดอัปเดตตอน stats-stream ส่งค่าใหม่ ไม่ใช่แค่ตอน render ครั้งแรก
         assert "setOdom('statKhantokClaimed'" in order_api.ADMIN_HTML
         assert "setOdom('statKhantokOnly'" in order_api.ADMIN_HTML
+
+
+class TestAdminPaginationPlacement:
+    def test_pagination_bar_sits_above_the_orders_table(self):
+        html = order_api.ADMIN_HTML
+        assert html.index('id="paginationBar"') < html.index('id="ordersBody"')
+
+    def test_page_info_is_not_duplicated_in_the_notice_line(self):
+        assert 'setOrdersNotice("Page "' not in order_api.ADMIN_HTML
+
+    def test_pagination_bar_uses_the_new_label_format(self):
+        # ต้องเป็นรูปแบบใหม่ที่ renderPagination ประกอบเอง ไม่ใช่ '(n orders)' แบบเดิม
+        assert "'/' + totalPages + ' — ' + totalOrders + ' total orders'" in order_api.ADMIN_HTML
+        assert "' (' + totalOrders + ' orders)'" not in order_api.ADMIN_HTML
