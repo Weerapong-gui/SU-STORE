@@ -243,3 +243,21 @@ class TestKhantokClaimWarning:
     def test_naive_now_is_assumed_bangkok(self):
         naive_now = datetime(2026, 7, 27, 9, 0)
         assert order_api.khantok_claim_warning("2026-07-26T18:00:00+07:00", naive_now) is True
+
+
+class TestClaimStationTemplate:
+    def test_phase_four_gate_is_removed(self):
+        # ด่านเดิมคือ Number(order.roundNumber) === 4 ต้องไม่เหลืออยู่
+        assert "roundNumber) === 4" not in order_api.CLAIM_STATION_HTML
+
+    def test_claim_button_passes_the_warning_flag(self):
+        assert "khantokClaimWarning" in order_api.CLAIM_STATION_HTML
+        assert "doClaimKhantok(code, needConfirm)" in order_api.CLAIM_STATION_HTML
+
+    def test_warning_panel_uses_the_existing_warn_palette(self):
+        assert "var(--warn-bg)" in order_api.CLAIM_STATION_HTML
+
+    def test_timestamp_helper_reads_utc_getters(self):
+        # กันการกลับไปใช้ .getHours() ซึ่งบวก offset ซ้ำบนเครื่องที่ตั้งเวลาไทย
+        assert "function _fmtBkkShort(" in order_api.CLAIM_STATION_HTML
+        assert "getUTCHours()" in order_api.CLAIM_STATION_HTML

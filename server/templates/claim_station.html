@@ -1191,6 +1191,20 @@
 
     var ST_TH = {pending_payment:'รอสลิป',waiting_confirm:'รอยืนยัน',paid:'ชำระแล้ว',preparing:'กำลังเตรียมของ',shipped:'พร้อมรับ',received:'รับแล้ว',cancelled:'ยกเลิก',rejected:'ปฏิเสธ'};
 
+    function _fmtBkkShort(iso) {
+      if (!iso) return '';
+      try {
+        var s = String(iso).replace(' ', 'T');
+        if (!s.endsWith('Z') && !/[+-]\d\d:\d\d$/.test(s)) s += 'Z';
+        var d = new Date(s);
+        if (isNaN(d.getTime())) return '';
+        var b = new Date(d.getTime() + 7 * 3600000);
+        return b.getUTCDate() + '/' + (b.getUTCMonth() + 1) + ' ' +
+               String(b.getUTCHours()).padStart(2, '0') + ':' +
+               String(b.getUTCMinutes()).padStart(2, '0');
+      } catch (e) { return ''; }
+    }
+
     function showOrderCard(order, opts) {
       var silent = !!(opts && opts.silent);
       var prevStatus = lastOrder ? lastOrder.status : null;
@@ -1339,36 +1353,26 @@
           '<div style="font-size:13px;font-weight:600;color:var(--fg)">' + esc(order.adminNote) + '</div></div>';
       }
       // khantok badge with claimedAt
-      var khantokClaimedLine = '';
-      if (order.khantokTicket && order.khantokTicketClaimedAt) {
-        try {
-          var _cr = String(order.khantokTicketClaimedAt).replace(' ', 'T');
-          if (!_cr.endsWith('Z') && !_cr.includes('+')) _cr += 'Z';
-          var cd = new Date(new Date(_cr).getTime() + 7*3600000);
-          if (!isNaN(cd.getTime())) {
-            khantokClaimedLine = ' <span style="font-size:11px;font-weight:400;opacity:.7">รับแล้ว ' + cd.getDate() + '/' + (cd.getMonth()+1) + ' ' + String(cd.getHours()).padStart(2,'0') + ':' + String(cd.getMinutes()).padStart(2,'0') + '</span>';
-          }
-        } catch(e) {}
-      }
       if (order.khantokTicket) {
         var ktLabel = ' บัตรขันโตก' + (order.khantokTicketValue ? ' ฿' + order.khantokTicketValue : '');
-        if (Number(order.roundNumber) === 4 && !order.khantokStationClaimedAt) {
-          khantok = '<div class="khantok-claim-panel" style="margin:8px 14px;padding:14px;border-radius:12px;background:var(--ok-bg);border:1.5px solid var(--ok)">' +
-            '<div style="display:flex;align-items:center;gap:6px;font-weight:800;color:var(--ok);margin-bottom:10px">' + IC_TICKET + ktLabel + ' — ยังไม่ได้รับ</div>' +
-            '<button id="khantokClaimBtn" class="btn-confirm" style="width:100%;display:flex;align-items:center;justify-content:center;gap:6px" onclick="doClaimKhantok(\'' + esc(order.id || '') + '\')">' + IC_TICKET + ' รับบัตรขันโตก</button></div>';
-        } else if (Number(order.roundNumber) === 4 && order.khantokStationClaimedAt) {
-          var ktWhen = '';
-          try {
-            var _kc = String(order.khantokStationClaimedAt).replace(' ', 'T');
-            if (!_kc.endsWith('Z') && !_kc.includes('+')) _kc += 'Z';
-            var kcd = new Date(new Date(_kc).getTime() + 7*3600000);
-            if (!isNaN(kcd.getTime())) {
-              ktWhen = ' เมื่อ ' + kcd.getDate() + '/' + (kcd.getMonth()+1) + ' ' + String(kcd.getHours()).padStart(2,'0') + ':' + String(kcd.getMinutes()).padStart(2,'0');
-            }
-          } catch(e) {}
-          khantok = '<div class="khantok-badge" style="display:flex;align-items:center;gap:4px">' + IC_TICKET + ktLabel + ' — รับบัตรแล้ว' + ktWhen + '</div>';
+        if (!order.khantokStationClaimedAt) {
+          var warn = !!order.khantokClaimWarning;
+          var accent = warn ? 'var(--warn)' : 'var(--ok)';
+          var accentBg = warn ? 'var(--warn-bg)' : 'var(--ok-bg)';
+          var warnLine = '';
+          if (warn) {
+            var rcvWhen = _fmtBkkShort(order.receivedAt);
+            warnLine = '<div style="font-size:12.5px;font-weight:600;margin-bottom:10px;line-height:1.5">' +
+              'รับของไปแล้ว' + (rcvWhen ? 'เมื่อ ' + esc(rcvWhen) : '') +
+              ' — ตรวจสอบก่อนว่ายังไม่ได้รับบัตร</div>';
+          }
+          khantok = '<div class="khantok-claim-panel" style="margin:8px 14px;padding:14px;border-radius:12px;background:' + accentBg + ';border:1.5px solid ' + accent + '">' +
+            '<div style="display:flex;align-items:center;gap:6px;font-weight:800;color:' + accent + ';margin-bottom:10px">' + IC_TICKET + ktLabel + ' — ยังไม่ได้รับ</div>' +
+            warnLine +
+            '<button id="khantokClaimBtn" class="btn-confirm" style="width:100%;display:flex;align-items:center;justify-content:center;gap:6px" onclick="doClaimKhantok(\'' + esc(order.id || '') + '\', ' + (warn ? 'true' : 'false') + ')">' + IC_TICKET + ' รับบัตรขันโตก</button></div>';
         } else {
-          khantok = '<div class="khantok-badge" style="display:flex;align-items:center;gap:4px">' + IC_TICKET + ktLabel + khantokClaimedLine + '</div>';
+          var ktWhen = _fmtBkkShort(order.khantokStationClaimedAt);
+          khantok = '<div class="khantok-badge" style="display:flex;align-items:center;gap:4px">' + IC_TICKET + ktLabel + ' — รับบัตรแล้ว' + (ktWhen ? ' เมื่อ ' + esc(ktWhen) : '') + '</div>';
         }
       }
       var nowTs = new Date();
@@ -1568,7 +1572,17 @@
       }
     }
 
-    async function doClaimKhantok(code) {
+    async function doClaimKhantok(code, needConfirm) {
+      if (needConfirm) {
+        beepWarn();
+        var ok = await showCsDialog({
+          type: 'confirm', icon: 'warn',
+          title: 'ออเดอร์นี้รับของไปแล้ว',
+          message: 'ตรวจสอบให้แน่ใจว่ายังไม่เคยได้รับบัตรขันโตก แล้วจึงกดยืนยัน',
+          confirmText: 'ยืนยัน แจกบัตร'
+        });
+        if (!ok) return;
+      }
       var btn = document.getElementById('khantokClaimBtn');
       if (btn) { btn.disabled = true; btn.textContent = 'กำลังบันทึก...'; }
       try {
