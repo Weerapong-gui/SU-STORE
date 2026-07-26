@@ -73,6 +73,44 @@ class TestStationClaimedColumn:
         assert data["khantokStationClaimedAt"] == "2026-07-19T05:00:00Z"
 
 
+def _insert_summary_order(connection, code, *, round_number=1, status="received",
+                          station_claimed_at=None, received_at=None):
+    connection.execute(
+        "INSERT INTO orders ("
+        "  round_number, status, payment_status, created_at, updated_at, order_code,"
+        "  khantok_station_claimed_at, received_at,"
+        "  product_slug, product_name, product_short_name, product_tagline,"
+        "  product_price, product_image, product_category,"
+        "  size, quantity, total_amount,"
+        "  first_name, last_name, nickname, email, phone, school, access_token"
+        ") VALUES (?, ?, 'paid', '2026-07-19T00:00:00Z', '2026-07-19T00:00:00Z', ?,"
+        "  ?, ?,"
+        "  'single-shirt', 'FRESHER POLO SHIRT', 'POLO', 'tagline',"
+        "  399, '/p.png', 'single',"
+        "  'M', 1, 399,"
+        "  'John', 'Doe', 'nick', 'a@b.c', '0800000000', 'MFU', ?)",
+        (round_number, status, code, station_claimed_at, received_at, "tok-" + code),
+    )
+
+
+class TestSerializerClaimWarning:
+    def test_warning_true_for_order_received_on_an_earlier_day(self, temp_db):
+        _insert_summary_order(
+            temp_db, "FP2899881", status="received",
+            station_claimed_at=None, received_at="2020-01-01T10:00:00+07:00",
+        )
+        row = order_api.fetch_order_by_code(temp_db, "FP2899881")
+        assert order_api.serialize_order(row)["khantokClaimWarning"] is True
+
+    def test_warning_false_when_never_received(self, temp_db):
+        _insert_summary_order(
+            temp_db, "FP2899882", status="shipped",
+            station_claimed_at=None, received_at=None,
+        )
+        row = order_api.fetch_order_by_code(temp_db, "FP2899882")
+        assert order_api.serialize_order(row)["khantokClaimWarning"] is False
+
+
 def _order_payload(student_code="6935001234", slug="single"):
     product = {
         "slug": slug, "name": "FRESHER POLO SHIRT", "shortName": "POLO",

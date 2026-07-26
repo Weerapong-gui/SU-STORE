@@ -186,6 +186,43 @@ def now_iso() -> str:
     return datetime.now(TZ_BANGKOK).replace(microsecond=0).isoformat()
 
 
+def _parse_stored_datetime(value: str | None) -> datetime | None:
+    """แปลงค่า timestamp ในคอลัมน์ให้เป็น datetime ที่มี timezone
+
+    แถวใหม่เขียนด้วย now_iso() จึงมี offset +07:00 ติดมา ส่วนแถวเก่าเก็บเป็น UTC
+    (บางแถวลงท้าย 'Z' บางแถวไม่มี suffix) ค่าที่ไม่มี offset จึงถือเป็น UTC
+    ตรงกับที่ทุกหน้าจอแสดงผลกันอยู่ คืน None เมื่อ parse ไม่ได้ ไม่ raise
+    """
+    if not value:
+        return None
+    text = str(value).strip().replace(" ", "T")
+    if text.endswith("Z"):
+        text = text[:-1] + "+00:00"
+    try:
+        parsed = datetime.fromisoformat(text)
+    except ValueError:
+        return None
+    if parsed.tzinfo is None:
+        parsed = parsed.replace(tzinfo=timezone.utc)
+    return parsed
+
+
+def khantok_claim_warning(received_at: str | None, now: datetime | None = None) -> bool:
+    """True เมื่อออเดอร์รับของไปแล้วในวันไทยที่เก่ากว่าวันนี้
+
+    ออเดอร์ที่รับของไปก่อนจะมีการรับบัตรแยก อาจได้บัตรขันโตกไปพร้อมของแล้ว
+    claim station จึงเตือนก่อนแจกใบใหม่ ส่วนคนที่มารับวันเดียวกันต้องไม่เตือน
+    เพราะ flow ปกติคือ staff กดรับของแล้วกดรับบัตรต่อห่างกันไม่กี่นาที
+    """
+    received = _parse_stored_datetime(received_at)
+    if received is None:
+        return False
+    current = now or datetime.now(TZ_BANGKOK)
+    if current.tzinfo is None:
+        current = current.replace(tzinfo=TZ_BANGKOK)
+    return received.astimezone(TZ_BANGKOK).date() < current.astimezone(TZ_BANGKOK).date()
+
+
 def log_audit(connection: sqlite3.Connection, order_code: str, event: str, detail: str = "") -> None:
     connection.execute(
         "INSERT INTO order_audit_log (order_code, event, detail, created_at) VALUES (?, ?, ?, ?)",
@@ -1045,6 +1082,9 @@ def serialize_order(row: sqlite3.Row, include_access_token: bool = False) -> dic
             row["khantok_station_claimed_at"]
             if "khantok_station_claimed_at" in row_keys
             else None
+        ),
+        "khantokClaimWarning": khantok_claim_warning(
+            row["received_at"] if "received_at" in row_keys else None
         ),
         "khantokTicketValue": int(row["khantok_ticket_value"]) if "khantok_ticket_value" in row_keys and row["khantok_ticket_value"] is not None else None,
         "createdAt": row["created_at"],
