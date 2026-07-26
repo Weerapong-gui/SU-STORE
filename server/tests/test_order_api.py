@@ -213,7 +213,11 @@ class TestStatsStreamLimit:
 
 
 class TestKhantokClaimWarning:
-    """รับของไปคนละวันไทยกับวันนี้ = เตือน staff ว่าอาจเคยได้บัตรไปพร้อมของแล้ว"""
+    """รับของไปคนละวันไทยกับวันนี้ = เตือน staff ว่าอาจเคยได้บัตรไปพร้อมของแล้ว
+
+    หรือรับของไปแล้ว (status == 'received') แต่ received_at พิสูจน์ไม่ได้ว่าเป็นวันนี้
+    (admin กดสถานะ 'received' ตรงๆ ไม่ผ่าน claim station จึงไม่มี timestamp)
+    """
 
     def _now(self):
         return datetime(2026, 7, 27, 9, 0, tzinfo=order_api.TZ_BANGKOK)
@@ -221,28 +225,53 @@ class TestKhantokClaimWarning:
     def test_received_today_does_not_warn(self):
         # flow ปกติ: กดรับของแล้วกดรับบัตรต่อในนาทีเดียวกัน ต้องเงียบ
         now = datetime(2026, 7, 27, 14, 0, tzinfo=order_api.TZ_BANGKOK)
-        assert order_api.khantok_claim_warning("2026-07-27T09:30:00+07:00", now) is False
+        assert order_api.khantok_claim_warning("2026-07-27T09:30:00+07:00", now=now) is False
 
     def test_received_yesterday_warns(self):
-        assert order_api.khantok_claim_warning("2026-07-26T18:00:00+07:00", self._now()) is True
+        assert order_api.khantok_claim_warning("2026-07-26T18:00:00+07:00", now=self._now()) is True
 
     def test_missing_value_does_not_warn(self):
-        assert order_api.khantok_claim_warning(None, self._now()) is False
-        assert order_api.khantok_claim_warning("", self._now()) is False
+        assert order_api.khantok_claim_warning(None, now=self._now()) is False
+        assert order_api.khantok_claim_warning("", now=self._now()) is False
 
     def test_naive_utc_row_is_read_as_utc(self):
         # 2026-07-26T17:30Z == 2026-07-27T00:30 +07 -> วันไทยเดียวกับ now -> ไม่เตือน
-        assert order_api.khantok_claim_warning("2026-07-26T17:30:00Z", self._now()) is False
+        assert order_api.khantok_claim_warning("2026-07-26T17:30:00Z", now=self._now()) is False
+
+    def test_naive_space_separated_value_with_no_offset_is_read_as_utc(self):
+        # ไม่มีทั้ง offset และ 'Z' ต้องยังถูกอ่านเป็น UTC เหมือนกัน (ใช้ branch
+        # tzinfo is None ของ _parse_stored_datetime ซึ่งก่อนหน้านี้ไม่มีเทสต์คุม)
+        # UTC 17:30 26 ก.ค. == ไทย 00:30 27 ก.ค. -> วันเดียวกับ now -> ไม่เตือน
+        assert order_api.khantok_claim_warning("2026-07-26 17:30:00", now=self._now()) is False
 
     def test_space_separated_value_is_accepted(self):
-        assert order_api.khantok_claim_warning("2026-07-26 18:00:00+07:00", self._now()) is True
+        assert order_api.khantok_claim_warning("2026-07-26 18:00:00+07:00", now=self._now()) is True
 
     def test_unparseable_value_does_not_warn(self):
-        assert order_api.khantok_claim_warning("not a date", self._now()) is False
+        assert order_api.khantok_claim_warning("not a date", now=self._now()) is False
 
     def test_naive_now_is_assumed_bangkok(self):
         naive_now = datetime(2026, 7, 27, 9, 0)
-        assert order_api.khantok_claim_warning("2026-07-26T18:00:00+07:00", naive_now) is True
+        assert order_api.khantok_claim_warning("2026-07-26T18:00:00+07:00", now=naive_now) is True
+
+    # --- status-aware rules (Finding 2) ---
+
+    def test_received_status_with_null_timestamp_warns(self):
+        assert order_api.khantok_claim_warning(None, status="received", now=self._now()) is True
+
+    def test_received_status_with_empty_timestamp_warns(self):
+        assert order_api.khantok_claim_warning("", status="received", now=self._now()) is True
+
+    def test_received_status_with_unparseable_timestamp_warns(self):
+        assert order_api.khantok_claim_warning("not a date", status="received", now=self._now()) is True
+
+    def test_received_status_with_todays_timestamp_does_not_warn(self):
+        assert order_api.khantok_claim_warning(
+            "2026-07-27T09:30:00+07:00", status="received", now=self._now()
+        ) is False
+
+    def test_not_received_status_with_null_timestamp_does_not_warn(self):
+        assert order_api.khantok_claim_warning(None, status="shipped", now=self._now()) is False
 
 
 class TestClaimStationTemplate:

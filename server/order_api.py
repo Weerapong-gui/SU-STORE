@@ -207,14 +207,21 @@ def _parse_stored_datetime(value: str | None) -> datetime | None:
     return parsed
 
 
-def khantok_claim_warning(received_at: str | None, now: datetime | None = None) -> bool:
-    """True เมื่อออเดอร์รับของไปแล้วในวันไทยที่เก่ากว่าวันนี้
+def khantok_claim_warning(received_at: str | None, status: str | None = None,
+                          now: datetime | None = None) -> bool:
+    """True เมื่อออเดอร์รับของไปแล้วในวันไทยที่เก่ากว่าวันนี้ หรือรับของไปแล้ว
+    (status == 'received') แต่ไม่มี received_at ที่ใช้พิสูจน์ได้ว่าเป็นวันนี้
 
     ออเดอร์ที่รับของไปก่อนจะมีการรับบัตรแยก อาจได้บัตรขันโตกไปพร้อมของแล้ว
     claim station จึงเตือนก่อนแจกใบใหม่ ส่วนคนที่มารับวันเดียวกันต้องไม่เตือน
     เพราะ flow ปกติคือ staff กดรับของแล้วกดรับบัตรต่อห่างกันไม่กี่นาที
+
+    รับของแล้ว (admin กดสถานะ 'received' ตรงๆ ไม่ผ่าน claim station) แต่ timestamp
+    หาย/ว่าง/parse ไม่ได้ ก็ยังต้องเตือน เพราะพิสูจน์ไม่ได้ว่าเป็นการรับของวันนี้
     """
     received = _parse_stored_datetime(received_at)
+    if status == "received" and received is None:
+        return True
     if received is None:
         return False
     current = now or datetime.now(TZ_BANGKOK)
@@ -282,12 +289,6 @@ def enqueue_display2(connection, order_row, claim_user):
         log_audit(connection, order_row["order_code"],
                   "display2_enqueued", f"station={station} item={idx}")
 
-    row_keys = order_row.keys() if hasattr(order_row, "keys") else []
-    round_number = int(order_row["round_number"] or 0) if "round_number" in row_keys else 0
-    if round_number != 4:
-        # Phase 4 hands out the khantok ticket via its own claim-station button;
-        # every other phase keeps enqueueing it together with the merchandise.
-        inserted += enqueue_display2_khantok(connection, order_row, claim_user)
     return inserted
 
 
@@ -357,12 +358,13 @@ def mark_khantok_station_claimed(
     )
     log_audit(connection, order_code, "khantok_claimed", f"claimed by {claim_user}")
     updated_row = fetch_order_by_code(connection, order_code)
+    queued = 0
     try:
-        enqueue_display2_khantok(connection, updated_row, claim_user)
+        queued = enqueue_display2_khantok(connection, updated_row, claim_user)
     except Exception as exc:
         log_audit(connection, order_code,
                   "display2_enqueue_failed", f"{type(exc).__name__}: {exc}")
-    return HTTPStatus.OK, {"order": serialize_order(updated_row)}
+    return HTTPStatus.OK, {"order": serialize_order(updated_row), "queued": queued}
 
 
 def ensure_db() -> None:
@@ -1084,7 +1086,8 @@ def serialize_order(row: sqlite3.Row, include_access_token: bool = False) -> dic
             else None
         ),
         "khantokClaimWarning": khantok_claim_warning(
-            row["received_at"] if "received_at" in row_keys else None
+            row["received_at"] if "received_at" in row_keys else None,
+            row["status"] if "status" in row_keys else None,
         ),
         "khantokTicketValue": int(row["khantok_ticket_value"]) if "khantok_ticket_value" in row_keys and row["khantok_ticket_value"] is not None else None,
         "createdAt": row["created_at"],
@@ -1402,7 +1405,7 @@ def create_orders_summary(connection: sqlite3.Connection, round_filter: int = 0)
         f"""
         SELECT
             COUNT(*) AS claimed,
-            SUM(CASE WHEN received_at IS NULL OR received_at = '' THEN 1 ELSE 0 END) AS not_received
+            SUM(CASE WHEN (received_at IS NULL OR received_at = '') AND status != 'received' THEN 1 ELSE 0 END) AS not_received
         FROM orders
         WHERE khantok_station_claimed_at IS NOT NULL
           AND khantok_station_claimed_at != ''
@@ -2990,20 +2993,20 @@ class OrderRequestHandler(BaseHTTPRequestHandler):
             with open_db() as connection:
                 if student_code:
                     rows = connection.execute(
-                        "SELECT * FROM orders WHERE student_code=? AND status IN ('shipped','refund') ORDER BY created_at DESC",
+                        "SELECT * FROM orders WHERE student_code=? AND status IN ('shipped','refund','received') ORDER BY created_at DESC",
                         (student_code,),
                     ).fetchall()
                     not_found_msg = "ไม่พบออเดอร์พร้อมรับสำหรับรหัสนักศึกษานี้"
                 elif phone:
                     rows = connection.execute(
-                        "SELECT * FROM orders WHERE phone=? AND status IN ('shipped','refund') ORDER BY created_at DESC",
+                        "SELECT * FROM orders WHERE phone=? AND status IN ('shipped','refund','received') ORDER BY created_at DESC",
                         (phone,),
                     ).fetchall()
                     not_found_msg = "ไม่พบออเดอร์พร้อมรับสำหรับเบอร์โทรนี้"
                 else:
                     pat = f"%{full_name}%"
                     rows = connection.execute(
-                        "SELECT * FROM orders WHERE (full_name LIKE ? OR (first_name || ' ' || last_name) LIKE ?) AND status IN ('shipped','refund') ORDER BY created_at DESC",
+                        "SELECT * FROM orders WHERE (full_name LIKE ? OR (first_name || ' ' || last_name) LIKE ?) AND status IN ('shipped','refund','received') ORDER BY created_at DESC",
                         (pat, pat),
                     ).fetchall()
                     not_found_msg = "ไม่พบออเดอร์พร้อมรับสำหรับชื่อนี้"

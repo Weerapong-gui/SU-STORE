@@ -1608,7 +1608,11 @@
         }
         beepSuccess(); vibrate(80);
         showOrderCard(d.order, {silent: true});
-        setScanStatus('รับบัตรขันโตกแล้ว — พร้อมสแกนต่อ', 'success');
+        if (d.queued === 0) {
+          setScanStatus('รับบัตรขันโตกแล้ว (มีคิวอยู่แล้ว) — พร้อมสแกนต่อ', 'success');
+        } else {
+          setScanStatus('รับบัตรขันโตกแล้ว — พร้อมสแกนต่อ', 'success');
+        }
       } catch(e) {
         beepError();
         await showCsDialog({type:'alert',icon:'danger',title:'เชื่อมต่อไม่ได้',message:'ไม่สามารถเชื่อมต่อได้'});

@@ -194,7 +194,11 @@ class KhantokEnqueueTest(unittest.TestCase):
         ).fetchall()]
         self.assertEqual(stations, ["polo"])  # product row only, no khantok
 
-    def test_other_phase_receive_still_enqueues_khantok(self):
+    def test_other_phase_receive_also_skips_khantok_row(self):
+        # Finding 1 (final review): the round_number != 4 carve-out in
+        # enqueue_display2() is gone entirely -- every phase now hands out the
+        # khantok ticket only via mark_khantok_station_claimed()'s own button, so
+        # no round should get a khantok row from enqueue_display2() anymore.
         conn = _make_conn()
         row = _insert_order(conn, "FP280013", self.ITEMS,
                             khantok_ticket=1, khantok_ticket_value=50, round_number=3)
@@ -202,7 +206,7 @@ class KhantokEnqueueTest(unittest.TestCase):
         stations = sorted(r["station"] for r in conn.execute(
             "SELECT station FROM display2_picks WHERE order_code=?", ("FP280013",)
         ).fetchall())
-        self.assertEqual(stations, ["khantok", "polo"])
+        self.assertEqual(stations, ["polo"])
 
     def test_helper_inserts_khantok_row_idempotently(self):
         conn = _make_conn()

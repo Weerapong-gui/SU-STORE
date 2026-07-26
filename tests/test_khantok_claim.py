@@ -143,6 +143,25 @@ def _create_phase4_order(connection, student_code="6935001234", status="paid"):
     return order["id"]
 
 
+def _create_order_for_round(connection, round_number, student_code="6935001234", status="paid"):
+    """Like _create_phase4_order but for an arbitrary phase, so Finding-1 tests can
+    check that the khantok carve-out is gone for every round, not inverted to round 4."""
+    connection.execute(
+        "INSERT OR REPLACE INTO site_settings (key, value, updated_at) VALUES"
+        " ('phase_override', ?, '2026-07-19T00:00:00Z')",
+        (str(round_number),),
+    )
+    validated, error = order_api.validate_order_payload(_order_payload(student_code))
+    assert error is None, error
+    order = order_api.create_order(connection, validated)
+    connection.execute(
+        "UPDATE orders SET status=?, payment_status='paid' WHERE order_code=?",
+        (status, order["id"]),
+    )
+    connection.commit()
+    return order["id"]
+
+
 def _quota_count(connection):
     return connection.execute(
         "SELECT COUNT(*) AS c FROM khantok_ticket_claims"
@@ -253,3 +272,91 @@ class TestKhantokStationSummaryCounts:
                               received_at=None)
         assert order_api.create_orders_summary(temp_db, round_filter=4)["khantokStationClaimed"] == 1
         assert order_api.create_orders_summary(temp_db)["khantokStationClaimed"] == 2
+
+    def test_admin_marked_received_without_timestamp_is_not_counted_as_not_received(self, temp_db):
+        # Finding 3: an order admin-marked status='received' with no received_at (the
+        # claim-station 'received' PATCH is the only path that writes received_at) must
+        # still count under khantokStationClaimed, but NOT under the "not received yet"
+        # counter -- it's already been received, just not through that endpoint.
+        _insert_summary_order(temp_db, "FP2890021", status="received",
+                              station_claimed_at="2026-07-26T10:00:00+07:00",
+                              received_at=None)
+        summary = order_api.create_orders_summary(temp_db)
+        assert summary["khantokStationClaimed"] == 1
+        assert summary["khantokStationClaimedNotReceived"] == 0
+
+
+class TestEnqueueDisplay2KhantokCarveOutRemoved:
+    """Finding 1: enqueue_display2() must never enqueue the khantok pick row for any
+    round -- mark_khantok_station_claimed() is the only caller of
+    enqueue_display2_khantok() now. Previously round 4 was carved out (skipped); the
+    fix removes the carve-out entirely rather than inverting which round it applies to."""
+
+    def test_round_1_ticketed_order_enqueues_merchandise_but_not_khantok(self, temp_db):
+        code = _create_order_for_round(temp_db, round_number=1)
+        row = order_api.fetch_order_by_code(temp_db, code)
+        assert row["khantok_ticket"] == 1
+        inserted = order_api.enqueue_display2(temp_db, row, "staff1")
+        temp_db.commit()
+        assert inserted == 1  # the merchandise item only
+        picks = temp_db.execute(
+            "SELECT item_index FROM display2_picks WHERE order_code=?", (code,)
+        ).fetchall()
+        item_indexes = [p["item_index"] for p in picks]
+        assert -1 not in item_indexes
+        assert 0 in item_indexes
+
+    def test_round_4_ticketed_order_also_does_not_enqueue_khantok(self, temp_db):
+        # The carve-out is gone for everyone, not inverted -- round 4 must behave
+        # identically to every other round now.
+        code = _create_order_for_round(temp_db, round_number=4)
+        row = order_api.fetch_order_by_code(temp_db, code)
+        assert row["khantok_ticket"] == 1
+        inserted = order_api.enqueue_display2(temp_db, row, "staff1")
+        temp_db.commit()
+        assert inserted == 1  # the merchandise item only
+        picks = temp_db.execute(
+            "SELECT item_index FROM display2_picks WHERE order_code=?", (code,)
+        ).fetchall()
+        item_indexes = [p["item_index"] for p in picks]
+        assert -1 not in item_indexes
+        assert 0 in item_indexes
+
+    def test_mark_khantok_station_claimed_is_the_only_path_that_enqueues_khantok(self, temp_db):
+        code = _create_order_for_round(temp_db, round_number=1)
+        row = order_api.fetch_order_by_code(temp_db, code)
+        order_api.enqueue_display2(temp_db, row, "staff1")  # merchandise only, per above
+        temp_db.commit()
+        status, body = order_api.mark_khantok_station_claimed(temp_db, code, "staff1")
+        temp_db.commit()
+        assert status == 200
+        assert body["queued"] == 1
+        khantok_picks = temp_db.execute(
+            "SELECT item_index FROM display2_picks WHERE order_code=? AND item_index=-1",
+            (code,),
+        ).fetchall()
+        assert len(khantok_picks) == 1
+
+
+class TestClaimStationSearchIncludesReceived:
+    """Finding 4: an order with status='received' is the only kind that can raise
+    khantokClaimWarning, and it must be reachable through claim-station search so a
+    returning customer isn't stuck at a 404 with only the (withheld) QR token to fall
+    back on. This test suite has no HTTP layer to drive OrderRequestHandler.do_GET
+    directly, so it exercises the same query predicate the student-code search branch
+    uses (server/order_api.py, the "/claim-station/orders" handler) against temp_db."""
+
+    def test_student_code_search_predicate_returns_a_received_order(self, temp_db):
+        _insert_summary_order(temp_db, "FP2890041", status="received",
+                              station_claimed_at=None, received_at="2026-07-26T10:00:00+07:00")
+        temp_db.execute(
+            "UPDATE orders SET student_code='6935009999' WHERE order_code=?",
+            ("FP2890041",),
+        )
+        temp_db.commit()
+        rows = temp_db.execute(
+            "SELECT * FROM orders WHERE student_code=? AND status IN ('shipped','refund','received')"
+            " ORDER BY created_at DESC",
+            ("6935009999",),
+        ).fetchall()
+        assert [r["order_code"] for r in rows] == ["FP2890041"]
