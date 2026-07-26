@@ -1605,6 +1605,13 @@ def update_order_status(
         if removed:
             log_audit(connection, order_code, "display2_cleared",
                       f"rollback received→{status}, removed {removed} picks")
+        # The khantok queue row went with the rest, so the stamp claiming it was
+        # handed out at the station has to go too — otherwise the order shows
+        # "รับบัตรแล้ว" with nothing queued and no way back but the edit form.
+        connection.execute(
+            "UPDATE orders SET khantok_station_claimed_at = NULL WHERE order_code = ?",
+            (order_code,),
+        )
     row = fetch_order_by_code(connection, order_code)
     assert row is not None
     return serialize_order(row)
@@ -1687,15 +1694,23 @@ def update_order_fields(
             allowed["khantok_ticket_value"] = new_value
 
     # Station claim state — independent of quota; never touches khantok_ticket_claims
+    # The toggle has to move the Display 2 khantok queue row as well as the column.
+    # Editing only the column left the two out of step: unticking cleared the stamp
+    # while the person stayed queued at the khantok station, and ticking never
+    # queued anyone. "enqueue" runs even when the stamp is already set, so an order
+    # left inconsistent by the old behaviour is repaired by re-ticking it.
+    station_claim_action: str | None = None
     if "khantokStationClaimed" in fields and isinstance(fields["khantokStationClaimed"], bool):
         existing_station_claimed = (
             existing["khantok_station_claimed_at"]
             if "khantok_station_claimed_at" in existing.keys() else None
         )
         if fields["khantokStationClaimed"]:
+            station_claim_action = "enqueue"
             if not existing_station_claimed:
                 allowed["khantok_station_claimed_at"] = now_iso()
         else:
+            station_claim_action = "dequeue"
             allowed["khantok_station_claimed_at"] = None
 
     if "items" in fields and isinstance(fields["items"], list) and fields["items"]:
@@ -1737,6 +1752,29 @@ def update_order_fields(
             first = new_items[0]
             allowed["size"] = first["size"]
             allowed["quantity"] = first["quantity"]
+
+    if station_claim_action == "enqueue":
+        enqueue_display2_khantok(connection, existing, "admin (edit form)")
+    elif station_claim_action == "dequeue":
+        # A row the khantok station already picked is a record that the ticket
+        # physically went out — clearing the admin checkbox must not erase it.
+        removed = connection.execute(
+            "DELETE FROM display2_picks "
+            "WHERE order_internal_id=? AND item_index=-1 AND picked_at IS NULL",
+            (existing["internal_id"],),
+        ).rowcount
+        if removed:
+            log_audit(connection, order_code, "display2_khantok_dequeued",
+                      "admin edit form cleared the station-claimed toggle")
+        else:
+            still_picked = connection.execute(
+                "SELECT 1 FROM display2_picks "
+                "WHERE order_internal_id=? AND item_index=-1 AND picked_at IS NOT NULL",
+                (existing["internal_id"],),
+            ).fetchone()
+            if still_picked:
+                log_audit(connection, order_code, "display2_khantok_kept_picked",
+                          "toggle cleared but the khantok row was already picked — row kept")
 
     if not allowed:
         return serialize_order(existing)

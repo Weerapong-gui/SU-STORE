@@ -360,3 +360,68 @@ class TestClaimStationSearchIncludesReceived:
             ("6935009999",),
         ).fetchall()
         assert [r["order_code"] for r in rows] == ["FP2890041"]
+
+
+class TestStationClaimedToggleMovesTheQueueRow:
+    """The admin edit-form toggle has to move the Display 2 khantok row with it.
+
+    Before this, unticking cleared khantok_station_claimed_at but left the person
+    queued at the khantok station, and ticking never queued anyone — the checkbox
+    was a label that did not control the queue.
+    """
+
+    def _ticketed(self, connection, code, *, station_claimed_at=None):
+        _insert_summary_order(connection, code, status="received",
+                              station_claimed_at=station_claimed_at,
+                              received_at="2026-07-26T10:00:00+07:00")
+        connection.execute(
+            "UPDATE orders SET khantok_ticket=1, khantok_ticket_value=100 WHERE order_code=?",
+            (code,),
+        )
+        return order_api.fetch_order_by_code(connection, code)
+
+    def _khantok_rows(self, connection, code):
+        return connection.execute(
+            "SELECT picked_at FROM display2_picks WHERE order_code=? AND item_index=-1",
+            (code,),
+        ).fetchall()
+
+    def test_ticking_on_queues_the_khantok_row(self, temp_db):
+        self._ticketed(temp_db, "FP2890051")
+        order_api.update_order_fields(temp_db, "FP2890051", {"khantokStationClaimed": True})
+        assert len(self._khantok_rows(temp_db, "FP2890051")) == 1
+        row = order_api.fetch_order_by_code(temp_db, "FP2890051")
+        assert row["khantok_station_claimed_at"]
+
+    def test_ticking_on_repairs_a_stamped_order_with_no_queue_row(self, temp_db):
+        # orders left inconsistent by the old behaviour: stamp set, nothing queued
+        self._ticketed(temp_db, "FP2890052", station_claimed_at="2026-07-26T11:00:00+07:00")
+        order_api.update_order_fields(temp_db, "FP2890052", {"khantokStationClaimed": True})
+        assert len(self._khantok_rows(temp_db, "FP2890052")) == 1
+
+    def test_unticking_removes_an_unpicked_queue_row(self, temp_db):
+        row = self._ticketed(temp_db, "FP2890053")
+        order_api.enqueue_display2_khantok(temp_db, row, "staff1")
+        assert len(self._khantok_rows(temp_db, "FP2890053")) == 1
+        order_api.update_order_fields(temp_db, "FP2890053", {"khantokStationClaimed": False})
+        assert self._khantok_rows(temp_db, "FP2890053") == []
+        assert order_api.fetch_order_by_code(temp_db, "FP2890053")["khantok_station_claimed_at"] is None
+
+    def test_unticking_keeps_a_row_the_station_already_picked(self, temp_db):
+        row = self._ticketed(temp_db, "FP2890054")
+        order_api.enqueue_display2_khantok(temp_db, row, "staff1")
+        temp_db.execute(
+            "UPDATE display2_picks SET picked_at=?, picked_by=? WHERE order_code=? AND item_index=-1",
+            ("2026-07-26T12:00:00+07:00", "staff2", "FP2890054"),
+        )
+        order_api.update_order_fields(temp_db, "FP2890054", {"khantokStationClaimed": False})
+        rows = self._khantok_rows(temp_db, "FP2890054")
+        assert len(rows) == 1 and rows[0]["picked_at"], "a picked ticket is a record of a real handout"
+        assert order_api.fetch_order_by_code(temp_db, "FP2890054")["khantok_station_claimed_at"] is None
+
+    def test_rolling_status_back_off_received_clears_the_stamp(self, temp_db):
+        row = self._ticketed(temp_db, "FP2890055", station_claimed_at="2026-07-26T11:00:00+07:00")
+        order_api.enqueue_display2_khantok(temp_db, row, "staff1")
+        order_api.update_order_status(temp_db, "FP2890055", "shipped")
+        assert self._khantok_rows(temp_db, "FP2890055") == []
+        assert order_api.fetch_order_by_code(temp_db, "FP2890055")["khantok_station_claimed_at"] is None
