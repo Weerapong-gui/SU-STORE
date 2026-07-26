@@ -1437,6 +1437,8 @@
       setOdom('statSingle', n(summary.qtySingle) + ' ตัว');
       setOdom('statJacket', n(summary.qtyJacket) + ' ตัว');
       setOdom('statHeadband', n(summary.qtyHeadband) + ' อัน');
+      setOdom('statKhantokClaimed', n(summary.khantokStationClaimed));
+      setOdom('statKhantokOnly', n(summary.khantokStationClaimedNotReceived));
     }
     var _statsStreamCtrl = null;
     // server ปิด stream ทิ้งเมื่อครบอายุสูงสุด ฝั่งนี้จึงต้องต่อใหม่เอง
@@ -1543,6 +1545,8 @@
         '<div class="stat"><span>ปฏิเสธ</span><strong id="statRejected">' + esc(summary.rejected || 0) + '</strong></div>',
         khantokStatHtml("บัตรขันโตก ฿100", k100Used, k100Quota),
         khantokStatHtml("บัตรขันโตก ฿50", k50Used, k50Quota),
+        '<div class="stat"><span>บัตรขันโตกที่แจกแล้ว</span><strong id="statKhantokClaimed">' + esc(summary.khantokStationClaimed || 0) + '</strong></div>',
+        '<div class="stat"><span>รับบัตร ยังไม่รับของ</span><strong id="statKhantokOnly">' + esc(summary.khantokStationClaimedNotReceived || 0) + '</strong></div>',
       ].join("");
       var row2 = [
         '<div class="stat compact" style="cursor:pointer;border-bottom:2px solid var(--accent)" data-breakdown="single" title="คลิกดูรายละเอียด"><span>โปโล</span><strong id="statSingle">' + esc((summary.qtySingle || 0) + ' ตัว') + '</strong></div>',

@@ -264,3 +264,15 @@ class TestClaimStationTemplate:
         # กันการกลับไปใช้ .getHours() ซึ่งบวก offset ซ้ำบนเครื่องที่ตั้งเวลาไทย
         assert "function _fmtBkkShort(" in order_api.CLAIM_STATION_HTML
         assert "getUTCHours()" in order_api.CLAIM_STATION_HTML
+
+
+class TestAdminKhantokStationCards:
+    def test_both_cards_are_rendered(self):
+        assert 'id="statKhantokClaimed"' in order_api.ADMIN_HTML
+        assert 'id="statKhantokOnly"' in order_api.ADMIN_HTML
+
+    def test_both_cards_are_wired_for_live_updates(self):
+        # setOdom ถูกนิยามเฉพาะใน updateOrderStats() การเจอคู่นี้จึงพิสูจน์ว่า
+        # การ์ดอัปเดตตอน stats-stream ส่งค่าใหม่ ไม่ใช่แค่ตอน render ครั้งแรก
+        assert "setOdom('statKhantokClaimed'" in order_api.ADMIN_HTML
+        assert "setOdom('statKhantokOnly'" in order_api.ADMIN_HTML
