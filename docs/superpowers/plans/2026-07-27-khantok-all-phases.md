@@ -582,8 +582,10 @@ class TestAdminPaginationPlacement:
     def test_page_info_is_not_duplicated_in_the_notice_line(self):
         assert 'setOrdersNotice("Page "' not in order_api.ADMIN_HTML
 
-    def test_pagination_bar_shows_the_total(self):
-        assert "total orders" in order_api.ADMIN_HTML
+    def test_pagination_bar_uses_the_new_label_format(self):
+        # ต้องเป็นรูปแบบใหม่ที่ renderPagination ประกอบเอง ไม่ใช่ '(n orders)' แบบเดิม
+        assert "'/' + totalPages + ' — ' + totalOrders + ' total orders'" in order_api.ADMIN_HTML
+        assert "' (' + totalOrders + ' orders)'" not in order_api.ADMIN_HTML
 ```
 
 - [ ] **Step 2: รันเทสต์ให้เห็นว่าไม่ผ่าน**
@@ -647,6 +649,8 @@ git commit -m "feat(admin): move orders pagination bar above the table"
 ---
 
 ### Task 6: Deploy และตรวจจริงที่หน้างาน
+
+> **ห้ามมอบ task นี้ให้ subagent** — แตะ production (deploy จริง + SSH) ต้องรันจาก session หลักและถามเจ้าของก่อนยิง `deploy-api.sh` ทุกครั้ง
 
 **Files:** ไม่มีการแก้ไฟล์ — เป็นขั้นตรวจรับ
 
