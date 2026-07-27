@@ -9,36 +9,43 @@
   <link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@400;500;600;700;800&display=swap" rel="stylesheet">
   <style>
     :root {
-      color-scheme: light dark;
-      --bg: #f4f4f5; --surface: #fff; --surface2: #f9f9fa; --header-bg: rgba(255,255,255,.9);
-      --line: #d8d8dd; --text: #111114;
-      --muted: #666a73; --accent: #0071e3; --danger: #b42318; --ok: #027a48; --warn: #b45309;
-      --badge-default: #eef2ff; --badge-warn: #fff7ed; --badge-ok: #ecfdf3; --badge-danger: #fef3f2; --badge-purple: #f5f3ff; --purple: #7c3aed;
-      --editing-row: #fef9c3; --toggle-track: #d0d0d5; --bar-track: #eef2ff; --img-bg: #f0f0f0;
-    }
-    @media (prefers-color-scheme: dark) {
-      :root:not([data-theme="light"]) {
-        --bg: #111113; --surface: #1c1c1e; --surface2: #2c2c2e; --header-bg: rgba(28,28,30,.9);
-        --line: #38383a; --text: #f5f5f7;
-        --muted: #8e8e93; --accent: #0a84ff; --danger: #ff453a; --ok: #30d158; --warn: #ff9f0a;
-        --badge-default: #1e2640; --badge-warn: #2d1f00; --badge-ok: #0d2b1a; --badge-danger: #2d0c08; --badge-purple: #1e1040; --purple: #a78bfa;
-        --editing-row: #2d2a00; --toggle-track: #48484a; --bar-track: #2c2c2e; --img-bg: #2c2c2e;
-      }
-    }
-    :root[data-theme="dark"] {
-      --bg: #111113; --surface: #1c1c1e; --surface2: #2c2c2e; --header-bg: rgba(28,28,30,.9);
-      --line: #38383a; --text: #f5f5f7;
-      --muted: #8e8e93; --accent: #0a84ff; --danger: #ff453a; --ok: #30d158; --warn: #ff9f0a;
-      --badge-default: #1e2640; --badge-warn: #2d1f00; --badge-ok: #0d2b1a; --badge-danger: #2d0c08;
-      --editing-row: #2d2a00; --toggle-track: #48484a; --bar-track: #2c2c2e; --img-bg: #2c2c2e;
       color-scheme: dark;
+
+      /* พื้นผิวและเส้น */
+      --bg: #0e0e11; --surface: #1a1a1f; --surface-2: #232329;
+      --line: #2a2a32; --line-strong: #3a3a44;
+
+      /* ตัวอักษร */
+      --text: #f2f2f5; --muted: #9a9aa4; --faint: #6b6b76;
+
+      /* สถานะ — ที่เดียวที่มีสี */
+      --ok: #4ade80;      --ok-bg: #0f2e1c;
+      --warn: #fbbf24;    --warn-bg: #33260a;
+      --danger: #f87171;  --danger-bg: #3a1414;
+      --accent: #60a5fa;  --accent-bg: #10243d;
+      --purple: #a78bfa;  --purple-bg: #241a3d;
+      --neutral-bg: #232329;
+
+      /* ความมน */
+      --r-sm: 8px; --r-md: 12px; --r-lg: 20px; --r-pill: 999px;
+
+      /* เงา */
+      --shadow-1: 0 1px 2px rgba(0,0,0,.5);
+      --shadow-2: 0 8px 24px rgba(0,0,0,.45);
+
+      /* ชื่อเดิมที่โค้ดส่วนอื่นยังอ้างอยู่ — ชี้มาที่ค่าใหม่ ห้ามลบ */
+      --surface2: var(--surface-2);
+      --header-bg: rgba(26,26,31,.9);
+      --badge-default: var(--accent-bg);
+      --badge-warn: var(--warn-bg);
+      --badge-ok: var(--ok-bg);
+      --badge-danger: var(--danger-bg);
+      --badge-purple: var(--purple-bg);
+      --editing-row: #2b2410;
+      --toggle-track: var(--surface-2);
+      --bar-track: var(--surface-2);
+      --img-bg: var(--surface-2);
     }
-    :root[data-theme="light"] { color-scheme: light; }
-    .theme-btn { display:inline-flex; align-items:center; gap:7px; background:none; border:none; cursor:pointer; padding:0; min-height:unset; font-size:13px; color:var(--muted); font-weight:600; }
-    .theme-btn-track { position:relative; width:44px; height:26px; background:var(--toggle-track); border-radius:999px; transition:background .25s; flex-shrink:0; }
-    .theme-btn-thumb { position:absolute; top:3px; left:3px; width:20px; height:20px; background:#fff; border-radius:50%; transition:transform .25s; box-shadow:0 1px 4px rgba(0,0,0,.3); }
-    [data-theme="dark"] .theme-btn-track, :root:not([data-theme="light"]) .theme-btn-track.sys-dark { background:#636366; }
-    [data-theme="dark"] .theme-btn-thumb, :root:not([data-theme="light"]) .theme-btn-thumb.sys-dark { transform:translateX(18px); }
     * { box-sizing: border-box; margin: 0; }
     body { background: var(--bg); color: var(--text); font-family: 'Sarabun', ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
     header {
@@ -172,10 +179,6 @@
   <header>
     <h1>SU STORE Admin <span id="adminClock" style="font-size:14px;font-weight:600;color:var(--muted);margin-left:10px;font-variant-numeric:tabular-nums;letter-spacing:0.03em"></span><span id="srvStatus" style="display:inline-flex;align-items:center;gap:12px;margin-left:18px;font-size:12px;font-weight:600;color:var(--muted);letter-spacing:.02em"><span title="sumfu.store — frontend"><span class="srv-dot" id="dotStore"></span>Store <span id="msStore" style="font-variant-numeric:tabular-nums">…</span></span><span title="order-api — backend"><span class="srv-dot" id="dotApi"></span>API <span id="msApi" style="font-variant-numeric:tabular-nums">…</span></span></span></h1>
     <div class="hdr-right">
-      <button class="theme-btn" id="themeToggleBtn" title="สลับโหมด">
-        <span id="themeIcon" style="display:inline-flex;align-items:center;color:var(--muted)"></span>
-        <span class="theme-btn-track"><span class="theme-btn-thumb" id="themeThumb"></span></span>
-      </button>
       <input id="tokenInput" type="password" autocomplete="current-password" placeholder="API Token" style="max-width:200px" />
       <button class="primary" id="saveTokenBtn">บันทึก</button>
       <button class="ghost" id="clearTokenBtn">Clear</button>
@@ -3247,36 +3250,6 @@
       setOrdersNotice("Enter API Token to load orders");
     }
 
-    // ── DARK MODE TOGGLE ──────────────────────────────────────────────────────
-    (function initTheme() {
-      var SUN = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg>';
-      var MOON = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>';
-      var root = document.documentElement;
-      var btn = document.getElementById("themeToggleBtn");
-      var icon = document.getElementById("themeIcon");
-      var thumb = document.getElementById("themeThumb");
-      var saved = localStorage.getItem("suStoreTheme");
-      var sysDark = window.matchMedia("(prefers-color-scheme: dark)");
-      function isDark() {
-        if (saved === "dark") return true;
-        if (saved === "light") return false;
-        return sysDark.matches;
-      }
-      function applyTheme() {
-        var dark = isDark();
-        root.setAttribute("data-theme", dark ? "dark" : "light");
-        icon.innerHTML = dark ? MOON : SUN;
-        thumb.style.transform = dark ? "translateX(18px)" : "";
-        btn.querySelector(".theme-btn-track").style.background = dark ? "#636366" : "";
-      }
-      applyTheme();
-      btn.addEventListener("click", function() {
-        saved = isDark() ? "light" : "dark";
-        localStorage.setItem("suStoreTheme", saved);
-        applyTheme();
-      });
-      sysDark.addEventListener("change", function() { if (!saved) applyTheme(); });
-    })();
   </script>
 </body>
 </html>

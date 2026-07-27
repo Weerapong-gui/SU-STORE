@@ -319,3 +319,34 @@ class TestAdminPaginationPlacement:
         # ต้องเป็นรูปแบบใหม่ที่ renderPagination ประกอบเอง ไม่ใช่ '(n orders)' แบบเดิม
         assert "'/' + totalPages + ' — ' + totalOrders + ' total orders'" in order_api.ADMIN_HTML
         assert "' (' + totalOrders + ' orders)'" not in order_api.ADMIN_HTML
+
+
+class TestAdminSingleDarkTheme:
+    """หน้า admin เหลือธีมเดียว — ร่องรอยของระบบสองธีมต้องไม่เหลือ"""
+
+    def test_no_light_theme_machinery_remains(self):
+        html = order_api.ADMIN_HTML
+        for leftover in ("prefers-color-scheme", 'data-theme', "suStoreTheme",
+                         "theme-btn", "themeToggleBtn", "initTheme"):
+            assert leftover not in html, "ยังเหลือร่องรอยระบบสองธีม: " + leftover
+
+    def test_root_declares_dark_color_scheme(self):
+        # ถ้าไม่ประกาศ scrollbar/dropdown/date picker ของเบราว์เซอร์จะเป็นกล่องขาว
+        assert "color-scheme: dark" in order_api.ADMIN_HTML
+        assert "color-scheme: light dark" not in order_api.ADMIN_HTML
+
+    def test_new_tokens_are_declared(self):
+        html = order_api.ADMIN_HTML
+        for token in ("--surface-2:", "--line-strong:", "--faint:", "--ok-bg:",
+                      "--warn-bg:", "--danger-bg:", "--accent-bg:", "--purple-bg:",
+                      "--neutral-bg:", "--r-sm:", "--r-md:", "--r-lg:", "--r-pill:",
+                      "--shadow-1:", "--shadow-2:"):
+            assert token in html, "ไม่พบ token: " + token
+
+    def test_legacy_token_names_still_resolve(self):
+        # โค้ดส่วนอื่นยังอ้างชื่อเดิมอยู่ ลบทิ้งแล้วสีจะหายเป็นช่วงๆ
+        html = order_api.ADMIN_HTML
+        for legacy in ("--surface2:", "--header-bg:", "--badge-default:", "--badge-warn:",
+                       "--badge-ok:", "--badge-danger:", "--badge-purple:",
+                       "--editing-row:", "--toggle-track:", "--bar-track:", "--img-bg:"):
+            assert legacy in html, "ลบ token เดิมที่ยังมีคนใช้: " + legacy
