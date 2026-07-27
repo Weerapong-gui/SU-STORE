@@ -116,7 +116,7 @@
     .users-tbl th{font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.06em;padding:8px 12px;text-align:left;border-bottom:1px solid var(--line)}
     .users-tbl td{padding:9px 12px;font-size:13px;border-bottom:1px solid var(--line)}
     .users-tbl tr:last-child td{border-bottom:none}
-    .badge-super{background:#fef9c3;color:#92400e;font-size:10px;font-weight:700;padding:2px 7px;border-radius:999px;margin-left:6px;letter-spacing:.04em}
+    .badge-super{background:var(--warn-bg);color:var(--warn);font-size:10px;font-weight:700;padding:2px 7px;border-radius:999px;margin-left:6px;letter-spacing:.04em}
     main { width: min(1280px, calc(100% - 32px)); margin: 24px auto 56px; }
     input, select, textarea, button {
       border: 1px solid var(--line); border-radius: 8px;
@@ -162,6 +162,7 @@
     tr:last-child td { border-bottom: 0; }
     .muted { color: var(--muted); font-size: 12px; }
     .money { color: var(--accent); font-weight: 700; }
+    .ok-text { color: var(--ok); }
     /* .badge — สถานะทรง pill */
     .badge { display: inline-block; border-radius: var(--r-pill); padding: 3px 11px; font-size: 12px; font-weight: 600; background: var(--neutral-bg); color: var(--muted); }
     .badge.ok      { background: var(--ok-bg);      color: var(--ok); }
@@ -216,6 +217,19 @@
     tr.needs-action td { background: rgba(180,83,9,.05) !important; }
     tr.needs-action td:first-child { box-shadow: inset 3px 0 0 var(--warn); }
     select.statusSelect { font-size:12px; padding:4px 8px; border-radius:8px; border:1px solid var(--line); background:var(--surface2); color:var(--text); cursor:pointer; min-height:32px; width:100%; margin-bottom:6px; }
+    .item-sep { border: none; border-top: 1px solid var(--line); margin: 4px 0; }
+    .mark { font-size: 11px; font-weight: 700; }
+    .mark.ok { color: var(--ok); }
+    .mark.warn { color: var(--warn); }
+    .mark.muted { color: var(--muted); font-weight: 400; }
+    .row-actions { display: flex; gap: 4px; margin-top: 4px; }
+    .row-actions > button { font-size: 12px; min-height: 28px; flex: 1; }
+    .row-actions > button.receiptBtn { flex: 0 0 auto; }
+    .ghost.editing { background: var(--warn-bg); border-color: var(--warn); color: var(--warn); }
+    .note-cell { font-size: 12px; white-space: pre-wrap; }
+    .note-cell.danger { color: var(--danger); font-weight: 700; }
+    .note-cell.ok { color: var(--ok); }
+    .note-cell.muted { color: var(--muted); }
     @media (max-width: 720px) {
       .analytics-grid { grid-template-columns: 1fr; }
       .toolbar input, .toolbar select { max-width: 100%; }
@@ -1593,7 +1607,7 @@
         '<div class="stat"><span>ทั้งหมด</span><strong id="statTotal">' + esc(summary.total || 0) + '</strong></div>',
         '<div class="stat"><span>รอสลิป</span><strong id="statPending">' + esc(summary.pendingPayment || 0) + '</strong></div>',
         '<div class="stat"><span>รอยืนยัน</span><strong id="statWaiting">' + esc(summary.waitingConfirm || 0) + '</strong></div>',
-        '<div class="stat"><span>ชำระแล้ว</span><strong id="statPaid" style="color:var(--ok)">' + esc(summary.paid || 0) + '</strong></div>',
+        '<div class="stat"><span>ชำระแล้ว</span><strong id="statPaid" class="ok-text">' + esc(summary.paid || 0) + '</strong></div>',
         '<div class="stat"><span>ปฏิเสธ</span><strong id="statRejected">' + esc(summary.rejected || 0) + '</strong></div>',
         khantokStatHtml("บัตรขันโตก ฿100", k100Used, k100Quota),
         khantokStatHtml("บัตรขันโตก ฿50", k50Used, k50Quota),
@@ -1792,26 +1806,27 @@
           : [{product: order.product || {}, size: order.size, quantity: order.quantity, totalAmount: order.totalAmount}];
         var itemsHtml = orderItems.map(function(item, idx) {
           var ip = item.product || {};
-          var sep = idx > 0 ? '<hr style="border:none;border-top:1px solid #e5e7eb;margin:4px 0">' : '';
-          var schoolLine = item.school ? '<br/><span class="muted" style="font-size:11px">' + esc(item.school) + '</span>' : '';
+          var sep = idx > 0 ? '<hr class="item-sep">' : '';
+          var schoolLine = item.school ? '<br/><span class="mark muted">' + esc(item.school) + '</span>' : '';
           return sep + '<strong>' + esc(ip.name||"-") + '</strong><br/><span class="muted">Size: ' + esc(item.size||"-") + ' / Qty: ' + esc(item.quantity||0) + '</span>' + schoolLine;
         }).join('');
         var schoolHtml = c.school ? '<br/><span class="muted">' + esc(c.school) + '</span>' : '';
         var needsAction = order.status === 'waiting_confirm' && order.slip;
+        var noteClass = order.adminNote ? (order.adminNote.indexOf('ยังไม่ได้นับ') >= 0 ? 'note-cell danger' : order.adminNote.indexOf('ได้รับผ้าคาดฟรีโควต้า500') >= 0 ? 'note-cell ok' : 'note-cell muted') : 'note-cell muted';
         return '<tr class="' + (isEditing ? 'editing-row' : needsAction ? 'needs-action' : '') + '">' +
           '<td><input type="checkbox" class="orderCheckbox" data-oid="' + esc(order.id) + '" /></td>' +
           '<td><strong>' + esc(order.id) + '</strong><br/><span class="muted">' + fmtDate(order.createdAt) + '</span></td>' +
           '<td><strong>' + esc(c.fullName||"-") + '</strong><br/><span class="muted">' + esc(c.studentCode||"-") + '</span><br/><span class="muted">' + esc(c.phone||"") + '</span></td>' +
           '<td>' + itemsHtml + '<br/><span class="money">' + esc(baht(orderAdjustedTotal(order))) + '</span>' + schoolHtml + '</td>' +
-          '<td><span class="muted">' + (order.slip ? '<span style="color:var(--ok)">✓ Slip uploaded</span>' : 'ไม่มีสลิป') + '</span><br/>' + (order.khantokTicket ? '<span style="font-size:11px;font-weight:700;color:var(--ok)">🎟 บัตรขันโตก ฿' + (order.khantokTicketValue || 100) + '</span>' : order.khantokTicketAlreadyClaimed ? '<span style="font-size:11px;font-weight:700;color:var(--warn)">🎟 ได้ไปแล้ว</span>' : '<span style="font-size:11px;color:var(--muted)">ไม่ได้บัตร</span>') + '</td>' +
-          '<td><span class="badge ' + esc(order.status) + '">' + esc(STATUS_TH[order.status] || order.status) + '</span>' + (needsAction ? '<br/><span style="font-size:10px;color:var(--warn);font-weight:700">⚠ รอยืนยัน</span>' : '') + (order.status === 'received' && order.receivedBy ? '<br/><span style="font-size:10px;color:var(--muted)">โดย ' + esc(order.receivedBy) + '</span>' : '') + '</td>' +
-          '<td style="font-size:12px;white-space:pre-wrap">' + (order.adminNote ? '<span style="color:' + (order.adminNote.includes('ยังไม่ได้นับ') ? 'var(--danger);font-weight:700' : order.adminNote.includes('ได้รับผ้าคาดฟรีโควต้า500') ? 'var(--ok)' : 'var(--muted)') + '">' + esc(order.adminNote) + '</span>' : '') + '</td>' +
+          '<td><span class="muted">' + (order.slip ? '<span class="mark ok">✓ Slip uploaded</span>' : 'ไม่มีสลิป') + '</span><br/>' + (order.khantokTicket ? '<span class="mark ok">🎟 บัตรขันโตก ฿' + (order.khantokTicketValue || 100) + '</span>' : order.khantokTicketAlreadyClaimed ? '<span class="mark warn">🎟 ได้ไปแล้ว</span>' : '<span class="mark muted">ไม่ได้บัตร</span>') + '</td>' +
+          '<td><span class="badge ' + esc(order.status) + '">' + esc(STATUS_TH[order.status] || order.status) + '</span>' + (needsAction ? '<br/><span class="mark warn">⚠ รอยืนยัน</span>' : '') + (order.status === 'received' && order.receivedBy ? '<br/><span class="mark muted">โดย ' + esc(order.receivedBy) + '</span>' : '') + '</td>' +
+          '<td class="note-cell">' + (order.adminNote ? '<span class="' + noteClass + '">' + esc(order.adminNote) + '</span>' : '') + '</td>' +
           '<td>' + statusSelect +
-            '<div style="display:flex;gap:4px">' +
-              '<button class="ghost slipBtn" data-oid="' + esc(order.id) + '" data-total="' + esc(order.totalAmount||0) + '" style="font-size:12px;min-height:28px;flex:1"' + (order.slip ? "" : " disabled") + '>Slip</button>' +
-              (order.status === 'waiting_confirm' ? '<button class="ok-btn confirmPayBtn" data-oid="' + esc(order.id) + '" style="font-size:12px;min-height:28px;flex:1">Confirm</button>' : '') +
-              '<button class="ghost receiptBtn" data-oid="' + esc(order.id) + '" style="font-size:12px;min-height:28px" title="พิมพ์ใบเสร็จ">ใบเสร็จ</button>' +
-              '<button class="ghost editOrderBtn" data-oid="' + esc(order.id) + '" style="font-size:12px;min-height:28px;background:' + (isEditing ? '#fef9c3' : '') + ';border-color:' + (isEditing ? '#ca8a04' : '') + '">Edit</button>' +
+            '<div class="row-actions">' +
+              '<button class="ghost slipBtn" data-oid="' + esc(order.id) + '" data-total="' + esc(order.totalAmount||0) + '"' + (order.slip ? "" : " disabled") + '>Slip</button>' +
+              (order.status === 'waiting_confirm' ? '<button class="ok-btn confirmPayBtn" data-oid="' + esc(order.id) + '">Confirm</button>' : '') +
+              '<button class="ghost receiptBtn" data-oid="' + esc(order.id) + '" title="พิมพ์ใบเสร็จ">ใบเสร็จ</button>' +
+              '<button class="ghost editOrderBtn' + (isEditing ? ' editing' : '') + '" data-oid="' + esc(order.id) + '">Edit</button>' +
             '</div>' +
           '</td>' +
         '</tr>';
@@ -2677,7 +2692,7 @@
         '</g>';
       }).join('');
       container.innerHTML = '<svg width="' + svgW + '" height="' + svgH + '" style="display:block">' +
-        '<line x1="0" y1="' + CHART_H + '" x2="' + svgW + '" y2="' + CHART_H + '" stroke="#e5e7eb" stroke-width="1"/>' +
+        '<line x1="0" y1="' + CHART_H + '" x2="' + svgW + '" y2="' + CHART_H + '" stroke="var(--line)" stroke-width="1"/>' +
         bars +
       '</svg>';
     }
@@ -2709,7 +2724,7 @@
               '<div class="stat"><span>รายได้ที่ยืนยันแล้ว</span><strong id="anRevenue">' + baht(d.revenue) + '</strong></div>' +
               '<div class="stat"><span>คณะ</span><strong id="anSchool">' + d.schoolCount + '</strong></div>' +
               '<div class="stat"><span>นักศึกษาที่เข้าร่วม</span><strong id="anStudent">' + (d.studentCount || 0) + '</strong></div>' +
-              '<div class="stat"><span style="color:var(--ok)">กำไรสุทธิ (~ประมาณ)</span><strong id="anProfit" style="color:var(--ok)">' + baht(d.profit) + '</strong></div>' +
+              '<div class="stat"><span class="ok-text">กำไรสุทธิ (~ประมาณ)</span><strong id="anProfit" class="ok-text">' + baht(d.profit) + '</strong></div>' +
               '<div class="stat"><span style="color:var(--warn)">ยอดคืนเงินสะสม</span><strong id="anRefund" style="color:var(--warn)">' + baht(d.refundedAmount || 0) + ' <span style="font-size:12px;color:var(--muted)">(' + (d.refundedCount || 0) + ' ออเดอร์)</span></strong></div>' +
             '</div>' +
           '</div>' +

@@ -428,3 +428,28 @@ class TestAdminSummaryZoneDeinlined:
         # ที่เหลืออยู่ตัวเดียวในโซนที่ de-inline ไปแล้ว
         assert 'id="addPhaseBtn" class="chip chip-add"' in order_api.ADMIN_HTML
         assert 'id="addPhaseBtn" class="ghost" style=' not in order_api.ADMIN_HTML
+
+
+class TestAdminOrderRowsDeinlined:
+    """แถวตารางต้องไม่มีสีสว่างฝังตรงและใช้ class แทน inline"""
+
+    def test_no_hardcoded_light_colours_remain(self):
+        html = order_api.ADMIN_HTML
+        for hexcolour in ("#e5e7eb", "#fef9c3", "#ca8a04", "#e8e8e8"):
+            assert hexcolour not in html, "ยังมีสีสว่างฝังตรง: " + hexcolour
+
+    def test_item_separator_uses_a_class(self):
+        assert '<hr class="item-sep">' in order_api.ADMIN_HTML
+        assert 'border-top:1px solid #e5e7eb' not in order_api.ADMIN_HTML
+
+    def test_edit_button_editing_state_uses_a_class(self):
+        assert "editOrderBtn' + (isEditing ? ' editing' : '')" in order_api.ADMIN_HTML
+
+    def test_row_action_buttons_use_a_class(self):
+        assert 'class="row-actions"' in order_api.ADMIN_HTML
+        assert 'font-size:12px;min-height:28px;flex:1' not in order_api.ADMIN_HTML
+
+    def test_slip_and_ticket_markers_use_status_classes(self):
+        html = order_api.ADMIN_HTML
+        assert 'class="mark ok"' in html
+        assert 'style="color:var(--ok)"' not in html
