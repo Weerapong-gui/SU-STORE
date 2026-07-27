@@ -2795,7 +2795,7 @@
       var container = document.querySelector("#phaseBtnContainer");
       if (!container) return;
 
-      var fhtml = '<button class="ghost phase-btn' + (currentRound === 0 ? ' active-phase' : '') + '" data-round="0" style="min-height:30px;font-size:12px;padding:4px 12px">All</button>';
+      var fhtml = '<button class="chip' + (currentRound === 0 ? ' active-phase' : '') + ' phase-btn" data-round="0">All</button>';
       for (var j = 1; j <= maxPhase; j++) {
         var cfg = configs[String(j)] || {};
         var dateLabel = '';
@@ -2804,7 +2804,7 @@
         var activeDot = (j === current) ? '<span style="color:var(--accent);font-size:9px;vertical-align:middle;margin-left:3px">●</span>' : '';
         var dateSub = dateLabel ? '<span style="font-size:10px;color:var(--muted);margin-left:4px">' + dateLabel + '</span>' : '';
         var editIcon = '<span class="phase-edit-icon" data-phase="' + j + '" title="แก้ไขวันที่" style="margin-left:5px;opacity:0;font-size:11px;cursor:pointer;transition:opacity .15s;color:var(--accent)">✎</span>';
-        fhtml += '<button class="ghost phase-btn' + (currentRound === j ? ' active-phase' : '') + '" data-round="' + j + '" style="min-height:30px;font-size:12px;padding:4px 12px">'
+        fhtml += '<button class="chip' + (currentRound === j ? ' active-phase' : '') + ' phase-btn" data-round="' + j + '">'
           + 'Phase ' + j + activeDot + dateSub + editIcon + '</button>';
       }
       fhtml += '<button id="addPhaseBtn" class="ghost" style="min-height:30px;font-size:12px;padding:4px 14px;color:var(--accent);border-style:dashed;border-color:var(--accent)">+ Phase ' + (maxPhase + 1) + '</button>';

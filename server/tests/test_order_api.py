@@ -392,6 +392,14 @@ class TestAdminSummaryZoneDeinlined:
     def test_phase_chips_use_the_chip_class(self):
         assert 'class="chip active-phase phase-btn"' in order_api.ADMIN_HTML
 
+    def test_phase_button_renderer_paints_chip_not_ghost(self):
+        # #phaseBtnContainer มี chip seed อยู่ในมาร์กอัปนิ่ง แต่ renderPhase() เขียนทับ
+        # innerHTML ใหม่ทุกครั้งที่โหลด phase config — ถ้าฟังก์ชันนี้ยังปั้นปุ่มด้วย
+        # "ghost phase-btn" ผู้ใช้จะเห็นปุ่มเก่าทันทีที่หน้าโหลดเสร็จ ไม่ใช่แค่ตอน seed
+        assert 'fhtml = \'<button class="chip' in order_api.ADMIN_HTML
+        assert 'ghost phase-btn' not in order_api.ADMIN_HTML
+        assert 'style="min-height:30px;font-size:12px;padding:4px 12px"' not in order_api.ADMIN_HTML
+
     def test_pagination_bar_has_no_inline_style(self):
         assert '<div id="paginationBar" class="pager"></div>' in order_api.ADMIN_HTML
         assert 'id="paginationBar" style=' not in order_api.ADMIN_HTML
