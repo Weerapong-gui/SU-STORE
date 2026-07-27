@@ -74,6 +74,29 @@
     .tab-btn.active { color: var(--accent); border-bottom-color: var(--accent); }
     .tab-pane { display: none; }
     .tab-pane.active { display: block; }
+
+    .card { background: var(--surface); border-radius: var(--r-lg); box-shadow: var(--shadow-1); padding: 24px; }
+    .card.tight { padding: 16px; }
+
+    .chip {
+      display: inline-flex; align-items: center; gap: 6px;
+      background: var(--surface-2); color: var(--muted);
+      border: none; border-radius: var(--r-pill);
+      padding: 6px 14px; font: inherit; font-size: 12px; font-weight: 600;
+      cursor: pointer; min-height: 30px; transition: background .15s, color .15s;
+    }
+    .chip:hover { background: var(--line-strong); }
+    /* JS สลับ class ชื่อ active-phase ไม่ใช่ active — ต้องรับทั้งสองชื่อ
+       ไม่งั้นชิปที่เลือกอยู่จะไม่มีทางเปลี่ยนสี */
+    .chip.active, .chip.active-phase { background: var(--text); color: var(--bg); }
+
+    .pager {
+      display: flex; gap: 12px; align-items: center;
+      justify-content: space-between; flex-wrap: wrap;
+      padding: 4px 0 12px;
+    }
+    .pager .pager-info { font-size: 13px; color: var(--muted); }
+
     /* Superadmin / Users tab */
     .sa-modal-backdrop{display:none;position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:200;align-items:center;justify-content:center}
     .sa-modal-backdrop.open{display:flex}
@@ -105,29 +128,42 @@
       gap: 1px; background: var(--line); border: 1px solid var(--line);
       border-radius: 8px; overflow: hidden; margin-bottom: 16px;
     }
-    .stat { background: var(--surface); padding: 14px 16px; }
-    .stat > span { display: block; color: var(--muted); font-size: 11px; font-weight: 700; letter-spacing: .1em; text-transform: uppercase; }
-    .stat strong { display: block; margin-top: 6px; font-size: 24px; letter-spacing: -.04em; word-break: break-all; }
-    .stat.compact strong { font-size: 14px; letter-spacing: 0; }
+    /* .stat — การ์ดตัวเลขสรุป */
+    .stat { background: var(--surface); border-radius: var(--r-lg); box-shadow: var(--shadow-1); padding: 22px 24px; }
+    .stat > span { display: block; font-size: 12px; color: var(--muted); }
+    .stat > strong { display: block; font-size: 44px; font-weight: 800; line-height: 1.05; margin-top: 6px; }
+    .stat.compact > strong { font-size: 30px; font-weight: 750; }
     .stat.stat-ring { display: flex; align-items: center; gap: 12px; padding: 12px 14px; }
     .stat.stat-ring span { font-size: 11px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); }
     .stat.stat-ring strong { font-size: 13px; margin-top: 3px; letter-spacing: 0; font-weight: 600; white-space: nowrap; }
     .toolbar { display: flex; flex-wrap: wrap; gap: 10px; margin-bottom: 14px; align-items: center; }
     .toolbar input, .toolbar select { max-width: 220px; }
-    .table-card { border: 1px solid var(--line); border-radius: 8px; background: var(--surface); overflow: hidden; }
+    /* .table-card — กล่องตาราง มน ไม่มีกรอบนอก */
+    .table-card { background: var(--surface); border: none; border-radius: var(--r-lg); overflow: hidden; }
+    .table-card th { padding: 10px 22px; font-size: 11px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: var(--faint); text-align: left; }
+    .table-card td { padding: 11px 22px; font-size: 13px; border-top: 1px solid var(--line); vertical-align: top; }
+    .table-card tbody tr:hover { background: var(--surface-2); }
     table { width: 100%; border-collapse: collapse; }
     th, td { padding: 10px 12px; border-bottom: 1px solid var(--line); text-align: left; vertical-align: top; word-break: break-word; }
     th { background: var(--surface2); color: var(--muted); font-size: 11px; font-weight: 700; letter-spacing: .1em; text-transform: uppercase; }
     tr:last-child td { border-bottom: 0; }
     .muted { color: var(--muted); font-size: 12px; }
     .money { color: var(--accent); font-weight: 700; }
-    .badge { display: inline-flex; align-items: center; padding: 2px 9px; border-radius: 999px; background: var(--badge-default); font-size: 12px; font-weight: 700; white-space: nowrap; }
-    .badge.waiting_confirm { background: var(--badge-warn); color: var(--warn); }
-    .badge.paid, .badge.preparing, .badge.shipped { background: var(--badge-ok); color: var(--ok); }
-    .badge.received { background: var(--badge-purple); color: var(--purple); }
-    .badge.rejected, .badge.cancelled { background: var(--badge-danger); color: var(--danger); }
-    .badge.refund { background: var(--badge-warn); color: var(--warn); }
-    .badge.refunded { background: var(--badge-default); color: var(--muted); }
+    /* .badge — สถานะทรง pill */
+    .badge { display: inline-block; border-radius: var(--r-pill); padding: 3px 11px; font-size: 12px; font-weight: 600; background: var(--neutral-bg); color: var(--muted); }
+    .badge.ok      { background: var(--ok-bg);      color: var(--ok); }
+    .badge.warn    { background: var(--warn-bg);    color: var(--warn); }
+    .badge.danger  { background: var(--danger-bg);  color: var(--danger); }
+    .badge.accent  { background: var(--accent-bg);  color: var(--accent); }
+    .badge.purple  { background: var(--purple-bg);  color: var(--purple); }
+    .badge.neutral { background: var(--neutral-bg); color: var(--muted); }
+    /* .badge.<status> — ชื่อสถานะจาก ORDER_STATUSES ใช้เป็น modifier ตรงๆ (ดู renderOrders) */
+    .badge.waiting_confirm { background: var(--warn-bg); color: var(--warn); }
+    .badge.paid, .badge.preparing, .badge.shipped { background: var(--ok-bg); color: var(--ok); }
+    .badge.received { background: var(--purple-bg); color: var(--purple); }
+    .badge.rejected, .badge.cancelled { background: var(--danger-bg); color: var(--danger); }
+    .badge.refund { background: var(--warn-bg); color: var(--warn); }
+    .badge.refunded { background: var(--neutral-bg); color: var(--muted); }
     .products-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px,1fr)); gap: 16px; }
     .product-card { background: var(--surface); border: 1px solid var(--line); border-radius: 12px; overflow: hidden; transition: box-shadow .2s; }
     .product-card:hover { box-shadow: 0 4px 20px rgba(0,0,0,.08); }

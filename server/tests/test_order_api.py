@@ -350,3 +350,25 @@ class TestAdminSingleDarkTheme:
                        "--badge-ok:", "--badge-danger:", "--badge-purple:",
                        "--editing-row:", "--toggle-track:", "--bar-track:", "--img-bg:"):
             assert legacy in html, "ลบ token เดิมที่ยังมีคนใช้: " + legacy
+
+
+class TestAdminComponentLayer:
+    """คอมโพเนนต์ที่ Task 3-5 จะใช้ ต้องมี rule รองรับก่อน"""
+
+    def test_new_component_rules_exist(self):
+        html = order_api.ADMIN_HTML
+        for rule in (".card {", ".card.tight {", ".chip {", ".pager {"):
+            assert rule in html, "ไม่พบ rule: " + rule
+
+    def test_active_chip_matches_the_class_js_actually_toggles(self):
+        # JS สลับ active-phase ถ้า CSS รับแต่ .active ชิปที่เลือกจะไม่เปลี่ยนสี
+        assert ".chip.active-phase" in order_api.ADMIN_HTML
+
+    def test_badge_status_modifiers_exist(self):
+        html = order_api.ADMIN_HTML
+        for mod in (".badge.ok", ".badge.warn", ".badge.danger",
+                    ".badge.accent", ".badge.purple", ".badge.neutral"):
+            assert mod in html, "ไม่พบ badge modifier: " + mod
+
+    def test_large_radius_is_used_for_cards(self):
+        assert "border-radius: var(--r-lg)" in order_api.ADMIN_HTML
