@@ -47,6 +47,10 @@
       --img-bg: var(--surface-2);
     }
     * { box-sizing: border-box; margin: 0; }
+    /* หลายคลาสในไฟล์นี้ประกาศ display แบบไม่มีเงื่อนไข (.toolbar, .chip-row, .pager, ฯลฯ)
+       ซึ่งชนะ [hidden]{display:none} ของ UA stylesheet เสมอ เพราะ origin ตัดสินก่อน
+       specificity — ต้องประกาศเองที่นี่ ไม่งั้น element ที่ตั้ง .hidden = true จะไม่ซ่อนจริง */
+    [hidden] { display: none !important; }
     body { background: var(--bg); color: var(--text); font-family: 'Sarabun', ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
     header {
       position: sticky; top: 0; z-index: 10;
@@ -90,6 +94,9 @@
        ไม่งั้นชิปที่เลือกอยู่จะไม่มีทางเปลี่ยนสี */
     .chip.active, .chip.active-phase { background: var(--text); color: var(--bg); }
     .chip-row { display: flex; gap: 6px; flex-wrap: wrap; }
+    /* ปุ่ม "+ Phase N" — ไม่ใช่ chip เลือก phase แต่เป็นปุ่ม add จึงต้องแยกจากกลุ่ม
+       chip ด้วยกรอบ dashed สี accent ในขณะที่ยังคงรูปทรง pill เดียวกันไว้ */
+    .chip.chip-add { background: none; border: 1px dashed var(--accent); color: var(--accent); }
 
     .pager {
       display: flex; gap: 12px; align-items: center;
@@ -2807,7 +2814,7 @@
         fhtml += '<button class="chip' + (currentRound === j ? ' active-phase' : '') + ' phase-btn" data-round="' + j + '">'
           + 'Phase ' + j + activeDot + dateSub + editIcon + '</button>';
       }
-      fhtml += '<button id="addPhaseBtn" class="ghost" style="min-height:30px;font-size:12px;padding:4px 14px;color:var(--accent);border-style:dashed;border-color:var(--accent)">+ Phase ' + (maxPhase + 1) + '</button>';
+      fhtml += '<button id="addPhaseBtn" class="chip chip-add">+ Phase ' + (maxPhase + 1) + '</button>';
       container.innerHTML = fhtml;
 
       container.querySelectorAll(".phase-btn").forEach(function(btn) {

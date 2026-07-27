@@ -409,6 +409,12 @@ class TestAdminSummaryZoneDeinlined:
         assert 'id="bulkBar" class="toolbar" hidden' in order_api.ADMIN_HTML
         assert 'display:none;padding:10px 0;display:flex' not in order_api.ADMIN_HTML
 
+    def test_hidden_attribute_actually_hides(self):
+        # .toolbar { display: flex } (author, normal) ชนะ [hidden]{display:none}
+        # ของ UA stylesheet (user-agent, normal) เสมอ เพราะ origin ตัดสินก่อน specificity —
+        # ถ้าไม่มี guard ของเราเอง #bulkBar จะกางค้างแม้ .hidden = true
+        assert "[hidden] { display: none !important; }" in order_api.ADMIN_HTML
+
     def test_khantok_ring_track_uses_a_token(self):
         assert "#e8e8e8" not in order_api.ADMIN_HTML
         assert 'stroke="var(--surface-2)"' in order_api.ADMIN_HTML
@@ -416,3 +422,9 @@ class TestAdminSummaryZoneDeinlined:
     def test_clickable_stat_card_uses_a_class(self):
         assert 'class="stat compact clickable"' in order_api.ADMIN_HTML
         assert 'cursor:pointer;border-bottom:2px solid var(--accent)' not in order_api.ADMIN_HTML
+
+    def test_add_phase_button_uses_a_chip_class_not_inline_style(self):
+        # #addPhaseBtn ต้องแยกจากกลุ่ม chip ด้วย class ไม่ใช่ inline style เกาะเดี่ยว
+        # ที่เหลืออยู่ตัวเดียวในโซนที่ de-inline ไปแล้ว
+        assert 'id="addPhaseBtn" class="chip chip-add"' in order_api.ADMIN_HTML
+        assert 'id="addPhaseBtn" class="ghost" style=' not in order_api.ADMIN_HTML
