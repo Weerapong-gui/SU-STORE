@@ -89,6 +89,7 @@
     /* JS สลับ class ชื่อ active-phase ไม่ใช่ active — ต้องรับทั้งสองชื่อ
        ไม่งั้นชิปที่เลือกอยู่จะไม่มีทางเปลี่ยนสี */
     .chip.active, .chip.active-phase { background: var(--text); color: var(--bg); }
+    .chip-row { display: flex; gap: 6px; flex-wrap: wrap; }
 
     .pager {
       display: flex; gap: 12px; align-items: center;
@@ -136,8 +137,13 @@
     .stat.stat-ring { display: flex; align-items: center; gap: 12px; padding: 12px 14px; }
     .stat.stat-ring span { font-size: 11px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); }
     .stat.stat-ring strong { font-size: 13px; margin-top: 3px; letter-spacing: 0; font-weight: 600; white-space: nowrap; }
+    .stat.clickable { cursor: pointer; border-bottom: 2px solid var(--accent); }
+    .stats-row { display: flex; gap: 12px; flex-wrap: wrap; margin-bottom: 8px; }
+    .stats-row.last { margin-bottom: 0; }
     .toolbar { display: flex; flex-wrap: wrap; gap: 10px; margin-bottom: 14px; align-items: center; }
     .toolbar input, .toolbar select { max-width: 220px; }
+    .toolbar-phase { margin-bottom: 12px; }
+    .label-cap { font-size: 12px; font-weight: 700; color: var(--muted); letter-spacing: .08em; text-transform: uppercase; margin-right: 4px; }
     /* .table-card — กล่องตาราง มน ไม่มีกรอบนอก */
     .table-card { background: var(--surface); border: none; border-radius: var(--r-lg); overflow: hidden; }
     .table-card th { padding: 10px 22px; font-size: 11px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: var(--faint); text-align: left; }
@@ -241,10 +247,10 @@
   <div class="tab-pane active" id="tab-orders">
     <main>
       <div id="orderStats"></div>
-      <div style="display:flex;gap:6px;align-items:center;margin-bottom:12px;flex-wrap:wrap">
-        <span style="font-size:12px;font-weight:700;color:var(--muted);letter-spacing:.08em;text-transform:uppercase;margin-right:4px">Phase</span>
-        <div id="phaseBtnContainer" style="display:flex;gap:6px;flex-wrap:wrap">
-          <button class="ghost phase-btn active-phase" data-round="0" style="min-height:30px;font-size:12px;padding:4px 12px">All</button>
+      <div class="toolbar toolbar-phase">
+        <span class="label-cap">Phase</span>
+        <div id="phaseBtnContainer" class="chip-row">
+          <button class="chip active-phase phase-btn" data-round="0">All</button>
         </div>
       </div>
       <div class="toolbar">
@@ -266,7 +272,7 @@
         <button class="ghost" id="exportCsvBtn">Export CSV</button>
         <button class="primary" id="refreshOrdersBtn">Refresh</button>
       </div>
-      <div id="bulkBar" style="display:none;padding:10px 0;display:flex;gap:10px;align-items:center">
+      <div id="bulkBar" class="toolbar" hidden>
         <span id="bulkCount" style="font-size:13px;color:var(--muted)"></span>
         <select id="bulkStatusSelect">
           <option value="">-- Change status to --</option>
@@ -285,7 +291,7 @@
         <button class="ghost" id="bulkPrintBtn" title="พิมพ์ใบเสร็จของออเดอร์ที่เลือก">พิมพ์ใบเสร็จที่เลือก</button>
         <button class="ghost" id="bulkClearBtn">Clear</button>
       </div>
-      <div id="paginationBar" style="display:flex;gap:12px;align-items:center;padding:4px 0 12px;justify-content:space-between;flex-wrap:wrap"></div>
+      <div id="paginationBar" class="pager"></div>
       <div class="table-card">
         <table>
           <thead>
@@ -1560,7 +1566,7 @@
         var arc = circ * pct / 100;
         return '<div class="stat stat-ring">' +
           '<svg width="52" height="52" viewBox="0 0 50 50" style="flex-shrink:0">' +
-          '<circle cx="25" cy="25" r="18" fill="none" stroke="#e8e8e8" stroke-width="5"/>' +
+          '<circle cx="25" cy="25" r="18" fill="none" stroke="var(--surface-2)" stroke-width="5"/>' +
           '<circle cx="25" cy="25" r="18" fill="none" stroke="var(--accent)" stroke-width="5" stroke-linecap="round"' +
           ' stroke-dasharray="0 ' + circ.toFixed(2) + '" transform="rotate(-90 25 25)">' +
           '<animate attributeName="stroke-dasharray" from="0 ' + circ.toFixed(2) + '" to="' + arc.toFixed(2) + ' ' + (circ - arc).toFixed(2) + '"' +
@@ -1574,7 +1580,7 @@
           '</div></div>';
       }
       function statClickHtml(label, value, category) {
-        return '<div class="stat compact" style="cursor:pointer;border-bottom:2px solid var(--accent)" data-breakdown="' + esc(category) + '" title="คลิกดูรายละเอียด"><span>' + esc(label) + '</span><strong>' + esc(value) + '</strong></div>';
+        return '<div class="stat compact clickable" data-breakdown="' + esc(category) + '" title="คลิกดูรายละเอียด"><span>' + esc(label) + '</span><strong>' + esc(value) + '</strong></div>';
       }
       var row1 = [
         '<div class="stat"><span>ทั้งหมด</span><strong id="statTotal">' + esc(summary.total || 0) + '</strong></div>',
@@ -1588,13 +1594,13 @@
         '<div class="stat"><span>รับบัตร ยังไม่รับของ</span><strong id="statKhantokOnly">' + esc(summary.khantokStationClaimedNotReceived || 0) + '</strong></div>',
       ].join("");
       var row2 = [
-        '<div class="stat compact" style="cursor:pointer;border-bottom:2px solid var(--accent)" data-breakdown="single" title="คลิกดูรายละเอียด"><span>โปโล</span><strong id="statSingle">' + esc((summary.qtySingle || 0) + ' ตัว') + '</strong></div>',
-        '<div class="stat compact" style="cursor:pointer;border-bottom:2px solid var(--accent)" data-breakdown="jacket" title="คลิกดูรายละเอียด"><span>แจ็คเก็ต</span><strong id="statJacket">' + esc((summary.qtyJacket || 0) + ' ตัว') + '</strong></div>',
-        '<div class="stat compact" style="cursor:pointer;border-bottom:2px solid var(--accent)" data-breakdown="headband" title="คลิกดูรายละเอียด"><span>Headband</span><strong id="statHeadband">' + esc((summary.qtyHeadband || 0) + ' อัน') + '</strong></div>',
+        '<div class="stat compact clickable" data-breakdown="single" title="คลิกดูรายละเอียด"><span>โปโล</span><strong id="statSingle">' + esc((summary.qtySingle || 0) + ' ตัว') + '</strong></div>',
+        '<div class="stat compact clickable" data-breakdown="jacket" title="คลิกดูรายละเอียด"><span>แจ็คเก็ต</span><strong id="statJacket">' + esc((summary.qtyJacket || 0) + ' ตัว') + '</strong></div>',
+        '<div class="stat compact clickable" data-breakdown="headband" title="คลิกดูรายละเอียด"><span>Headband</span><strong id="statHeadband">' + esc((summary.qtyHeadband || 0) + ' อัน') + '</strong></div>',
       ].join("");
       document.querySelector("#orderStats").innerHTML =
-        '<div class="stats" style="margin-bottom:8px">' + row1 + '</div>' +
-        '<div class="stats" style="margin-bottom:0">' + row2 + '</div>';
+        '<div class="stats stats-row">' + row1 + '</div>' +
+        '<div class="stats stats-row last">' + row2 + '</div>';
       // Count-up animation on numeric stat cards
       document.querySelectorAll('#orderStats .stat strong').forEach(function(el) {
         var txt = el.textContent.trim();
@@ -2153,7 +2159,7 @@
       var selected = getSelectedOrderIds();
       var bar = document.querySelector("#bulkBar");
       var countEl = document.querySelector("#bulkCount");
-      if (bar) bar.style.display = selected.length ? "flex" : "none";
+      if (bar) bar.hidden = !selected.length;
       if (countEl) countEl.textContent = selected.length + " selected";
     }
 

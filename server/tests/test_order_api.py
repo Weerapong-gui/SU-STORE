@@ -384,3 +384,27 @@ class TestAdminComponentLayer:
         idx = html.index(".stat > strong {")
         rule = html[idx:html.index("}", idx)]
         assert "overflow-wrap: anywhere" in rule, "ไม่มี overflow-wrap guard ใน .stat > strong"
+
+
+class TestAdminSummaryZoneDeinlined:
+    """โซนที่เห็นทันทีที่เปิดหน้าต้องใช้ class ไม่ใช่ inline"""
+
+    def test_phase_chips_use_the_chip_class(self):
+        assert 'class="chip active-phase phase-btn"' in order_api.ADMIN_HTML
+
+    def test_pagination_bar_has_no_inline_style(self):
+        assert '<div id="paginationBar" class="pager"></div>' in order_api.ADMIN_HTML
+        assert 'id="paginationBar" style=' not in order_api.ADMIN_HTML
+
+    def test_bulk_bar_starts_hidden(self):
+        # เดิมประกาศ display สองครั้งในสตริงเดียว ตัวหลังชนะ แถบเลยกางค้าง
+        assert 'id="bulkBar" class="toolbar" hidden' in order_api.ADMIN_HTML
+        assert 'display:none;padding:10px 0;display:flex' not in order_api.ADMIN_HTML
+
+    def test_khantok_ring_track_uses_a_token(self):
+        assert "#e8e8e8" not in order_api.ADMIN_HTML
+        assert 'stroke="var(--surface-2)"' in order_api.ADMIN_HTML
+
+    def test_clickable_stat_card_uses_a_class(self):
+        assert 'class="stat compact clickable"' in order_api.ADMIN_HTML
+        assert 'cursor:pointer;border-bottom:2px solid var(--accent)' not in order_api.ADMIN_HTML
