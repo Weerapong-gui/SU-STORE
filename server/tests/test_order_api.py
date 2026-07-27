@@ -462,3 +462,13 @@ class TestAdminOrderRowsDeinlined:
             ".row-actions > button.receiptBtn, .row-actions > button.editOrderBtn { flex: 0 0 auto; }"
             in order_api.ADMIN_HTML
         )
+
+
+class TestAdminPagerDeinlined:
+    def test_pager_info_uses_a_class(self):
+        assert 'class="pager-info"' in order_api.ADMIN_HTML
+        assert 'style="font-size:13px;color:var(--muted)">Page ' not in order_api.ADMIN_HTML
+
+    def test_pager_label_format_is_unchanged(self):
+        # เทสต์เดิมของแถบนี้ต้องไม่ตก
+        assert "'/' + totalPages + ' — ' + totalOrders + ' total orders'" in order_api.ADMIN_HTML

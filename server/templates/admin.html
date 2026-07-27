@@ -130,6 +130,7 @@
     button.ok-btn { border-color: var(--ok); background: var(--ok); color: #fff; }
     button.ghost { background: var(--surface); }
     button.active-phase { background: var(--accent); color: #fff; border-color: var(--accent); }
+    .ghost.pill, .primary.pill { border-radius: var(--r-pill); }
     button:disabled { cursor: not-allowed; opacity: .5; }
     .stats {
       display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
@@ -2164,9 +2165,9 @@
     function renderPagination() {
       var el = document.querySelector("#paginationBar");
       if (!el) return;
-      el.innerHTML = '<button class="ghost" id="prevPageBtn"' + (currentPage <= 1 ? ' disabled' : '') + '>← Prev</button>' +
-        '<span style="font-size:13px;color:var(--muted)">Page ' + currentPage + '/' + totalPages + ' — ' + totalOrders + ' total orders' + '</span>' +
-        '<button class="ghost" id="nextPageBtn"' + (currentPage >= totalPages ? ' disabled' : '') + '>Next →</button>';
+      el.innerHTML = '<button class="ghost pill" id="prevPageBtn"' + (currentPage <= 1 ? ' disabled' : '') + '>← Prev</button>' +
+        '<span class="pager-info">Page ' + currentPage + '/' + totalPages + ' — ' + totalOrders + ' total orders' + '</span>' +
+        '<button class="ghost pill" id="nextPageBtn"' + (currentPage >= totalPages ? ' disabled' : '') + '>Next →</button>';
       var prev = document.querySelector("#prevPageBtn");
       var next = document.querySelector("#nextPageBtn");
       if (prev) prev.addEventListener("click", function() { if (currentPage > 1) { currentPage--; loadOrders(); } });
