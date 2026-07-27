@@ -453,3 +453,12 @@ class TestAdminOrderRowsDeinlined:
         html = order_api.ADMIN_HTML
         assert 'class="mark ok"' in html
         assert 'style="color:var(--ok)"' not in html
+
+    def test_edit_button_is_exempt_from_the_row_actions_stretch(self):
+        # เดิม editOrderBtn ไม่มี flex เลย ขนาดพอดีกับข้อความ "Edit" เหมือน receiptBtn
+        # ถ้า .row-actions > button.receiptBtn ยกเว้นให้ตัวเดียว editOrderBtn จะรับ
+        # flex:1 จาก .row-actions > button แล้วยืดเต็มแถว เปลี่ยน layout ของ action cell
+        assert (
+            ".row-actions > button.receiptBtn, .row-actions > button.editOrderBtn { flex: 0 0 auto; }"
+            in order_api.ADMIN_HTML
+        )
