@@ -372,3 +372,15 @@ class TestAdminComponentLayer:
 
     def test_large_radius_is_used_for_cards(self):
         assert "border-radius: var(--r-lg)" in order_api.ADMIN_HTML
+
+    def test_stat_cards_wide_enough_for_hero_numerals(self):
+        # 44px/800 hero numerals (e.g. "3,158") need more room than the old
+        # 130px grid floor gave near auto-fit's minimum — the number bled into
+        # the next card. Floor was widened to 190px, and .stat > strong got
+        # overflow-wrap as a second line of defence. Both must hold.
+        html = order_api.ADMIN_HTML
+        assert "minmax(190px, 1fr)" in html, "grid floor ไม่ได้ถูกขยายเป็น 190px"
+        assert "minmax(130px, 1fr)" not in html, "grid floor เก่า (130px) ยังเหลืออยู่"
+        idx = html.index(".stat > strong {")
+        rule = html[idx:html.index("}", idx)]
+        assert "overflow-wrap: anywhere" in rule, "ไม่มี overflow-wrap guard ใน .stat > strong"
