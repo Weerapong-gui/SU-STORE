@@ -125,11 +125,11 @@
     input, select { padding: 0 12px; width: 100%; }
     textarea { padding: 8px 12px; width: 100%; resize: vertical; }
     button { cursor: pointer; padding: 0 16px; font-weight: 600; }
-    button.primary { border-color: var(--accent); background: var(--accent); color: #fff; }
-    button.danger-btn { border-color: var(--danger); background: var(--danger); color: #fff; }
-    button.ok-btn { border-color: var(--ok); background: var(--ok); color: #fff; }
+    button.primary { border-color: var(--accent); background: var(--accent); color: var(--bg); }
+    button.danger-btn { border-color: var(--danger); background: var(--danger); color: var(--bg); }
+    button.ok-btn { border-color: var(--ok); background: var(--ok); color: var(--bg); }
     button.ghost { background: var(--surface); }
-    button.active-phase { background: var(--accent); color: #fff; border-color: var(--accent); }
+    button.active-phase { background: var(--accent); color: var(--bg); border-color: var(--accent); }
     .ghost.pill, .primary.pill { border-radius: var(--r-pill); }
     button:disabled { cursor: not-allowed; opacity: .5; }
     .stats {
@@ -140,14 +140,29 @@
     /* .stat — การ์ดตัวเลขสรุป */
     .stat { background: var(--surface); border-radius: var(--r-lg); box-shadow: var(--shadow-1); padding: 22px 24px; }
     .stat > span { display: block; font-size: 12px; color: var(--muted); }
-    .stat > strong { display: block; font-size: 44px; font-weight: 800; line-height: 1.05; margin-top: 6px; overflow-wrap: anywhere; }
+    /* ขนาดฐาน — ใช้โดย Analytics (.stats ไม่มี .stats-row) ต้องพอดีกับ track
+       ที่แคบกว่า #orderStats มาก ตัวเลขฮีโร่ 44px แยก scope ไปที่ #orderStats
+       ด้านล่าง ไม่งั้นเลขบาทของ Analytics ล้นออกไปการ์ดถัดไป (Finding 3) */
+    .stat > strong { display: block; font-size: 24px; font-weight: 700; line-height: 1.05; margin-top: 6px; overflow-wrap: anywhere; }
     .stat.compact > strong { font-size: 30px; font-weight: 750; }
     .stat.stat-ring { display: flex; align-items: center; gap: 12px; padding: 12px 14px; }
     .stat.stat-ring span { font-size: 11px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); }
     .stat.stat-ring strong { font-size: 13px; margin-top: 3px; letter-spacing: 0; font-weight: 600; white-space: nowrap; }
     .stat.clickable { cursor: pointer; border-bottom: 2px solid var(--accent); }
-    .stats-row { display: flex; gap: 12px; flex-wrap: wrap; margin-bottom: 8px; }
+    /* .stats-row คือ layout จริงของสรุปยอด Orders (class="stats stats-row") —
+       ต้อง neutralise chrome ของ .stats เอง (background/border/radius/overflow
+       เขียนไว้สำหรับ grid แบบ hairline) ไม่งั้นกลายเป็นแผ่นเทาใต้การ์ดที่กางไม่
+       เท่ากันภายใต้ flex gap 12px มุมการ์ดริมก็โดน radius ของ container ตัดด้วย
+       (Finding 2) */
+    .stats-row { display: flex; gap: 12px; flex-wrap: wrap; margin-bottom: 8px; background: none; border: none; border-radius: 0; overflow: visible; }
     .stats-row.last { margin-bottom: 0; }
+    /* แทนที่ minmax(190px, 1fr) ของ grid ที่ .stats-row ทำให้ inert — คงความกว้าง
+       ขั้นต่ำเดิมไว้ด้วย flex-basis ไม่งั้นตัวเลขฮีโร่ 44px/800 บีบจนล้น (Finding 2) */
+    .stats-row > .stat { flex: 1 1 190px; }
+    /* ตัวเลขฮีโร่ 44px ผูกกับโซน #orderStats เท่านั้น (ไม่รวมการ์ด .compact ซึ่งมี
+       ขนาดของตัวเอง) — Analytics ใช้ .stat คลาสเดียวกันแต่ไม่ได้ห่อด้วย id นี้
+       จึงตกไปใช้ขนาดฐานที่เล็กกว่าซึ่งพอดีกับความกว้าง track ของมัน (Finding 3) */
+    #orderStats .stat:not(.compact) > strong { font-size: 44px; font-weight: 800; }
     .toolbar { display: flex; flex-wrap: wrap; gap: 10px; margin-bottom: 14px; align-items: center; }
     .toolbar input, .toolbar select { max-width: 220px; }
     .toolbar-phase { margin-bottom: 12px; }
@@ -173,6 +188,10 @@
     .badge.purple  { background: var(--purple-bg);  color: var(--purple); }
     .badge.neutral { background: var(--neutral-bg); color: var(--muted); }
     /* .badge.<status> — ชื่อสถานะจาก ORDER_STATUSES ใช้เป็น modifier ตรงๆ (ดู renderOrders) */
+    /* pending_payment ไม่มี modifier ของตัวเอง เดิมตกไปใช้ค่า default ของ .badge
+       (--neutral-bg/--muted) ซึ่งซ้ำกับ .badge.refunded เป๊ะ — คืนสีเดิมตามที่
+       --badge-default: var(--accent-bg) ตั้งใจไว้ (Finding 4) */
+    .badge.pending_payment { background: var(--accent-bg); color: var(--accent); }
     .badge.waiting_confirm { background: var(--warn-bg); color: var(--warn); }
     .badge.paid, .badge.preparing, .badge.shipped { background: var(--ok-bg); color: var(--ok); }
     .badge.received { background: var(--purple-bg); color: var(--purple); }
@@ -215,7 +234,7 @@
     .settings-card { background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: 20px; margin-bottom: 16px; }
     .settings-card h3 { font-size: 14px; font-weight: 700; margin-bottom: 14px; }
     tr.editing-row td { background: var(--editing-row) !important; }
-    tr.needs-action td { background: rgba(180,83,9,.05) !important; }
+    tr.needs-action td { background: rgba(180,83,9,.14) !important; }
     tr.needs-action td:first-child { box-shadow: inset 3px 0 0 var(--warn); }
     select.statusSelect { font-size:12px; padding:4px 8px; border-radius:8px; border:1px solid var(--line); background:var(--surface2); color:var(--text); cursor:pointer; min-height:32px; width:100%; margin-bottom:6px; }
     .item-sep { border: none; border-top: 1px solid var(--line); margin: 4px 0; }

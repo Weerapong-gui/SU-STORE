@@ -374,16 +374,87 @@ class TestAdminComponentLayer:
         assert "border-radius: var(--r-lg)" in order_api.ADMIN_HTML
 
     def test_stat_cards_wide_enough_for_hero_numerals(self):
-        # 44px/800 hero numerals (e.g. "3,158") need more room than the old
-        # 130px grid floor gave near auto-fit's minimum — the number bled into
-        # the next card. Floor was widened to 190px, and .stat > strong got
-        # overflow-wrap as a second line of defence. Both must hold.
+        # Orders summary renders class="stats stats-row" — .stats-row is a
+        # single-class selector declared after .stats with equal specificity,
+        # so it wins on every property it sets, including display: flex. The
+        # grid's minmax(190px, 1fr) floor is therefore inert on this element
+        # (see Finding 2) — the width floor that keeps a 44px/800 hero
+        # numeral from bleeding into the next card must come from a
+        # flex-basis on the row's children instead. .stat > strong keeps
+        # overflow-wrap as a second line of defence regardless of layout mode.
         html = order_api.ADMIN_HTML
-        assert "minmax(190px, 1fr)" in html, "grid floor ไม่ได้ถูกขยายเป็น 190px"
-        assert "minmax(130px, 1fr)" not in html, "grid floor เก่า (130px) ยังเหลืออยู่"
-        idx = html.index(".stat > strong {")
+        idx = html.index(".stats-row > .stat {")
         rule = html[idx:html.index("}", idx)]
-        assert "overflow-wrap: anywhere" in rule, "ไม่มี overflow-wrap guard ใน .stat > strong"
+        assert "flex: 1 1 190px" in rule, "ไม่มี flex-basis 190px บน .stats-row > .stat"
+        idx2 = html.index(".stat > strong {")
+        rule2 = html[idx2:html.index("}", idx2)]
+        assert "overflow-wrap: anywhere" in rule2, "ไม่มี overflow-wrap guard ใน .stat > strong"
+
+    def test_stats_row_neutralises_the_grid_chrome(self):
+        # .stats' background/border/border-radius/overflow were written for a
+        # flush hairline grid (1px gaps). Orders renders class="stats
+        # stats-row", and since only display is overridden by the later,
+        # equally-specific .stats-row rule, those container-chrome
+        # properties still apply — under 12px flex gaps that turns into a
+        # visible grey plate behind unequal cards with clipped corners
+        # (Finding 2). .stats-row must null the chrome out itself.
+        html = order_api.ADMIN_HTML
+        idx = html.index(".stats-row {")
+        rule = html[idx:html.index("}", idx)]
+        for prop in ("background: none", "border: none", "border-radius: 0", "overflow: visible"):
+            assert prop in rule, ".stats-row ขาด " + prop
+
+    def test_hero_numeral_size_is_scoped_to_order_stats(self):
+        # .stat > strong used to be 44px/800 unconditionally, so Analytics'
+        # plain .stat cards — same class, ~158px track — inherited it too,
+        # and baht() strings like "฿1,234,567" spilled into the next card
+        # (Finding 3). The hero size must be scoped to #orderStats, and the
+        # unscoped base rule must stay small enough to fit Analytics' track.
+        html = order_api.ADMIN_HTML
+        idx = html.index(".stat > strong {")
+        base_rule = html[idx:html.index("}", idx)]
+        assert "44px" not in base_rule, "hero 44px ยังอยู่ใน .stat > strong ฐาน จะรั่วไปที่ Analytics"
+        idx2 = html.index("#orderStats .stat")
+        hero_rule = html[idx2:html.index("}", idx2)]
+        assert "font-size: 44px" in hero_rule, "ไม่มี hero 44px ที่ scope ด้วย #orderStats"
+        assert "font-weight: 800" in hero_rule, "hero rule ควรคง font-weight: 800 ไว้"
+
+    def test_no_button_rule_pairs_status_token_background_with_white_foreground(self):
+        # Task 1 replaced saturated --ok/--accent/--danger with pastels meant
+        # to sit as *foreground* colour on --ok-bg/--accent-bg — not as a
+        # background with white text on top, which measures as low as
+        # 1.74:1. Any button rule that still backgrounds with a status token
+        # and colours the text white is unreadable under venue lighting
+        # (Finding 1).
+        html = order_api.ADMIN_HTML
+        style_block = html[html.index("<style>"):html.index("</style>")]
+        status_tokens = ("var(--ok)", "var(--accent)", "var(--danger)", "var(--warn)", "var(--purple)")
+        for line in style_block.splitlines():
+            stripped = line.strip()
+            if not stripped.startswith("button"):
+                continue
+            if "color: #fff" not in stripped and "color:#fff" not in stripped:
+                continue
+            assert not any(tok in stripped for tok in status_tokens), (
+                "button rule pairs a status token background with a white foreground: " + stripped
+            )
+
+    def test_pending_payment_badge_is_distinct_from_refunded(self):
+        # pending_payment has no .badge.<status> rule of its own, so it fell
+        # through to .badge's default — the same --neutral-bg/--muted pair
+        # .badge.refunded uses. Scanning rows by colour no longer separated
+        # "waiting for a slip" from "already refunded" (Finding 4).
+        html = order_api.ADMIN_HTML
+        assert ".badge.pending_payment { background: var(--accent-bg); color: var(--accent); }" in html
+
+    def test_needs_action_row_tint_is_visible_on_dark_surface(self):
+        # rgba(180,83,9,.05) over --surface #1a1a1f moves the row by ~4 RGB
+        # units — invisible. The left bar and the ⚠ marker still carry the
+        # cue, but the row highlight itself needs a higher alpha to read on
+        # a dark surface (Finding 5).
+        html = order_api.ADMIN_HTML
+        assert "rgba(180,83,9,.05)" not in html, "alpha เดิม .05 ที่มองไม่เห็นบนพื้นมืดยังอยู่"
+        assert "rgba(180,83,9,.14)" in html, "ไม่พบ alpha ใหม่ .14 สำหรับ tr.needs-action"
 
 
 class TestAdminSummaryZoneDeinlined:
