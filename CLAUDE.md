@@ -32,7 +32,7 @@ SU STORE เป็นระบบสั่งซื้อเสื้อรั�
 แอดมิน → Cloudflare Tunnel → admin.sumfu.xyz → order-api (:3010 → :10000)
 ```
 
-**เซิร์ฟเวอร์จริง:** `park@arch.sumfu.xyz` (password: ดูจาก admin)
+**เซิร์ฟเวอร์จริง:** `park@100.94.120.103` (Tailscale) หรือ `park@192.168.31.242` (LAN) — SSH key เท่านั้น
 
 **Docker containers:**
 - `su-store` — port 3000, connects to order-api via `http://order-api:10000`
@@ -61,7 +61,7 @@ SU STORE เป็นระบบสั่งซื้อเสื้อรั�
    - SQL: `DATE(created_at, '+7 hours')`
    - JS: `new Date(iso + 'Z').getTime() + 7*3600000`
 
-3. **แก้แค่ `server/` → ใช้ `bash deploy-api.sh` เท่านั้น** — ห้ามใช้ `deploy.sh` เพราะมัน rebuild Next.js ไปด้วย ระหว่างนั้นลูกค้าจะเห็น "Unable to connect to the ordering service right now"
+3. **แก้แค่ `server/` → ใช้ `./deploy.sh api` เท่านั้น** — ห้ามใช้ `./deploy.sh` (all) เพราะมัน rebuild Next.js ไปด้วย ระหว่างนั้นลูกค้าจะเห็น "Unable to connect to the ordering service right now"
 
 ---
 
@@ -117,11 +117,15 @@ pending_payment → waiting_confirm → paid → preparing → shipped
 
 ## 5. การ Deploy
 
-| แก้ไขอะไร | ใช้ script ไหน | ผลกระทบต่อลูกค้า |
-|-----------|---------------|----------------|
-| เฉพาะ `server/` (order-api + templates) | `bash deploy-api.sh` | น้อยมาก (order-api restart ~3-5 วินาที) |
-| Next.js frontend (`src/`) | `bash deploy.sh` | su-store + order-api restart ~1-3 นาที |
-| ทั้งคู่ | `bash deploy.sh` | ~1-3 นาที |
+| แก้ไขอะไร | คำสั่ง | ผลกระทบต่อลูกค้า |
+|-----------|-------|----------------|
+| เฉพาะ `server/` (order-api + templates) | `./deploy.sh api` | น้อยมาก (order-api restart ~3-5 วินาที) |
+| เฉพาะ Next.js (`src/`, `public/`) | `./deploy.sh store` | su-store restart หลัง build |
+| ทั้งคู่ | `./deploy.sh` | ทั้งสอง service restart |
+
+deploy เฉพาะ commit ที่ commit แล้ว (มี uncommitted changes จะไม่ยอม deploy)
+
+**Dev บนเครื่อง:** `./dev.sh` — รัน order-api (:10000) + Next.js (:3000) กับ DB ทดลองใน `data/dev/` ไม่แตะข้อมูลจริง
 
 ขั้นตอนภายใน, การ SSH, และคำสั่ง docker ที่ใช้บ่อย → skill `deploy`
 
@@ -194,7 +198,7 @@ pending_payment → waiting_confirm → paid → preparing → shipped
 
 - [ ] Python syntax: `python3 -c "import ast; ast.parse(open('server/order_api.py').read())"`
 - [ ] pytest ผ่าน (ดู env vars ที่ต้องตั้งใน `.github/workflows/ci.yml` — import ของ `order_api.py` สร้าง data dir ตอน import)
-- [ ] ถ้าแก้แค่ `server/` → ใช้ `bash deploy-api.sh`
-- [ ] ถ้าแก้ Next.js → ใช้ `bash deploy.sh` (แจ้งผู้ดูแลก่อนถ้ามีลูกค้ากำลังสั่งซื้อ)
+- [ ] ถ้าแก้แค่ `server/` → `./deploy.sh api`
+- [ ] ถ้าแก้ Next.js → `./deploy.sh store` (แจ้งผู้ดูแลก่อนถ้ามีลูกค้ากำลังสั่งซื้อ)
 - [ ] หลัง deploy รอ ~30 วินาที แล้วรีเฟรชหน้า admin เพื่อตรวจสอบ
 - [ ] commit + push ขึ้น GitHub ทุกครั้ง

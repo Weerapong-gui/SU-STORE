@@ -1,37 +1,42 @@
 ---
 name: deploy
-description: Deploy SU STORE to the production server (order-api and/or su-store), SSH into arch.sumfu.xyz, and run the docker commands used for checking the live services. Use when deploying, restarting a container, tailing production logs, or inspecting the production database.
+description: Deploy SU STORE to the production server (order-api and/or su-store), SSH into the arch server, and run the docker commands used for checking the live services. Use when deploying, restarting a container, tailing production logs, or inspecting the production database.
 ---
 
 # Deploy SU STORE
 
 ## เลือก script
 
-| แก้ไขอะไร | script | ผลกระทบต่อลูกค้า |
+| แก้ไขอะไร | คำสั่ง | ผลกระทบต่อลูกค้า |
 |-----------|--------|----------------|
-| เฉพาะ `server/` (order-api + templates) | `bash deploy-api.sh` | order-api restart ~3-5 วินาที |
-| Next.js frontend (`src/`) | `bash deploy.sh` | su-store + order-api restart ~1-3 นาที |
-| ทั้งคู่ | `bash deploy.sh` | ~1-3 นาที |
+| เฉพาะ `server/` (order-api + templates) | `./deploy.sh api` (หรือ `bash deploy-api.sh`) | order-api restart ~3-5 วินาที |
+| เฉพาะ Next.js (`src/`, `public/`) | `./deploy.sh store` | su-store restart หลัง build เสร็จ |
+| ทั้งคู่ | `./deploy.sh` | ทั้งสอง service restart |
 
-**ห้ามใช้ `deploy.sh` ถ้าแก้แค่ `server/`** — มัน rebuild Next.js ไปด้วย ระหว่างนั้นลูกค้าเห็น "Unable to connect to the ordering service right now"
+**ห้ามใช้ `./deploy.sh` (all) ถ้าแก้แค่ `server/`** — มัน rebuild Next.js ไปด้วย
 
-## ขั้นตอนภายใน `deploy-api.sh`
+## ขั้นตอนภายใน `deploy.sh`
 
 ```
-1. tar เฉพาะ ./server และ ./docker-compose.yml (~60KB, ไม่รวม .env)
-2. scp ขึ้น server ด้วย deploy key ~/.ssh/su_store_deploy_ed25519
-3. extract ที่ /home/park/SU-STORE/
-4. docker compose up -d --build --no-deps order-api   (su-store ไม่ถูกแตะ)
+1. ปฏิเสธถ้ามี uncommitted changes — deploy เฉพาะ HEAD ที่ commit แล้ว
+2. git archive HEAD → rsync ขึ้น /home/park/SU-STORE/ (ใช้ SSH key, ไม่ใช้ password)
+   .env / .env.local / data/ ไม่อยู่ใน git จึงไม่ถูกแตะ
+3. เขียน REVISION (commit + เวลา) ไว้บน server
+4. docker compose up -d --build --no-deps <services>
+5. รอ healthcheck จน healthy (fail ถ้าเกิน 90 วินาที)
+6. warm Next.js image cache (เฉพาะ store/all)
 ```
 
-ไม่ restart cloudflared → tunnel ไม่ดับ
-`deploy.sh` **restart** `cloudflared` (tunnel ของ `sumfu.xyz`) → ดับ ~10-15 วินาที แต่ไม่กระทบ `sumfu.store` เพราะคนละ tunnel (`cloudflared-store`)
+ไม่ restart cloudflared — ไม่จำเป็น container restart แล้ว tunnel ต่อเองได้
 
 ## SSH เข้าเซิร์ฟเวอร์
 
 ```bash
-ssh park@arch.sumfu.xyz          # ใช้ key ที่ติดตั้งไว้แล้ว ไม่ต้องใส่ password
+ssh park@100.94.120.103   # Tailscale (ค่า default ของ deploy.sh)
+ssh park@192.168.31.242   # LAN — ใช้ได้ถ้าอยู่วงเดียวกัน: DEPLOY_HOST=park@192.168.31.242 ./deploy.sh
 ```
+
+ดูว่า production รัน commit ไหน: `ssh park@100.94.120.103 cat SU-STORE/REVISION`
 
 ## คำสั่งที่ใช้บ่อยบนเซิร์ฟเวอร์
 

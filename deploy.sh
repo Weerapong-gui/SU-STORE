@@ -1,61 +1,74 @@
 #!/usr/bin/env bash
+# Deploy the committed HEAD to the production server and rebuild containers.
+#
+#   ./deploy.sh          # su-store + order-api
+#   ./deploy.sh store    # su-store only
+#   ./deploy.sh api      # order-api only
+#
+# Ships `git archive HEAD` (never uncommitted edits) via rsync over SSH key auth.
+# Server-only files (.env, .env.local, data/) are not in git, so they are never touched.
+# Override the target with DEPLOY_HOST=park@192.168.31.242 (LAN) if Tailscale is down.
 set -euo pipefail
 
-# SSH auth uses a dedicated deploy key (no password / no sshpass). Install it on the
-# server once with:
-#   ssh-copy-id -i ~/.ssh/su_store_deploy_ed25519.pub park@arch.sumfu.xyz
-# The two `sudo -S` steps below still need the server's sudo password: provide it via
-# DEPLOY_SSH_PASS, or (better) add a NOPASSWD sudoers rule and drop those pipes.
-SUDO_PASS="${DEPLOY_SSH_PASS:-}"
+TARGET="${1:-all}"
+case "$TARGET" in
+  all)   SERVICES="su-store order-api" ;;
+  store) SERVICES="su-store" ;;
+  api)   SERVICES="order-api" ;;
+  *) echo "usage: $0 [all|store|api]" >&2; exit 1 ;;
+esac
 
-SERVER="park@arch.sumfu.xyz"
+SERVER="${DEPLOY_HOST:-park@100.94.120.103}"
 REMOTE_DIR="/home/park/SU-STORE"
-DEPLOY_KEY="${DEPLOY_KEY:-$HOME/.ssh/su_store_deploy_ed25519}"
-SSH_OPTS="-o StrictHostKeyChecking=accept-new -o PreferredAuthentications=publickey -i $DEPLOY_KEY"
-SSH="ssh $SSH_OPTS $SERVER"
-SCP="scp $SSH_OPTS"
+SSH="ssh -o ConnectTimeout=10 -o BatchMode=yes $SERVER"
 
-echo "==> Packing files..."
-tar -czf /tmp/su-store-deploy.tar.gz \
-  --exclude='./.git' \
-  --exclude='./node_modules' \
-  --exclude='./.next' \
-  --exclude='./tsconfig.tsbuildinfo' \
-  --exclude='./.env' \
-  --exclude='./deploy.sh' \
-  .
+cd "$(dirname "$0")"
 
-echo "==> Uploading to server ($(du -sh /tmp/su-store-deploy.tar.gz | cut -f1))..."
-$SCP /tmp/su-store-deploy.tar.gz $SERVER:/tmp/su-store-deploy.tar.gz
+if [ -n "$(git status --porcelain)" ]; then
+  echo "✗ Working tree has uncommitted changes. Commit or stash them first." >&2
+  exit 1
+fi
+REV="$(git rev-parse --short HEAD) ($(git rev-parse --abbrev-ref HEAD))"
 
-echo "==> Extracting on server..."
-$SSH "
-  mkdir -p $REMOTE_DIR
-  tar -xzf /tmp/su-store-deploy.tar.gz -C $REMOTE_DIR --warning=no-unknown-keyword
-  rm /tmp/su-store-deploy.tar.gz
-"
+STAGE="$(mktemp -d)"
+trap 'rm -rf "$STAGE"' EXIT
 
-echo "==> Ensuring image cache dir exists..."
-$SSH "mkdir -p $REMOTE_DIR/data/next-image-cache && echo '$SUDO_PASS' | sudo -S chown -R 1001:1001 $REMOTE_DIR/data/next-image-cache 2>/dev/null || chmod 777 $REMOTE_DIR/data/next-image-cache"
+echo "==> Exporting $REV..."
+git archive HEAD | tar -x -C "$STAGE"
+echo "$REV $(date -u +%FT%TZ)" > "$STAGE/REVISION"
 
-echo "==> Rebuilding Docker (su-store + order-api)..."
-$SSH "sg docker -c 'cd $REMOTE_DIR && docker compose --env-file $REMOTE_DIR/.env up -d --build --no-deps su-store order-api'" 2>&1
+echo "==> Syncing to $SERVER:$REMOTE_DIR..."
+rsync -rlcz "$STAGE/" "$SERVER:$REMOTE_DIR/"
 
-echo "==> Restarting cloudflared tunnel..."
-$SSH "echo '$SUDO_PASS' | sudo -S systemctl restart cloudflared" || true  # connection drops briefly on tunnel restart — expected
+echo "==> Rebuilding: $SERVICES"
+$SSH "cd $REMOTE_DIR && docker compose --env-file .env up -d --build --no-deps $SERVICES"
 
-echo "==> Warming Next.js image cache..."
-$SSH "
-  STORE_ORIGIN=http://localhost:3000
-  for IMG in STAY_TUNED_horizontal STAY_TUNED_vertical BE_BACK_horizontal BE_BACK_vertical BE_RIGHT_BACK_horizontal BE_RIGHT_BACK_vertical; do
-    for W in 640 750 828 1080 1200 1920 2048; do
-      curl -s -o /dev/null \"\${STORE_ORIGIN}/_next/image?url=%2Fimages%2Fanc%2F\${IMG}.png&w=\${W}&q=75\" &
+echo "==> Waiting for health checks..."
+for i in $(seq 1 30); do
+  sleep 3
+  STATUS="$($SSH "docker inspect -f '{{.Name}}={{.State.Health.Status}}' su-store su-order-api")"
+  if ! echo "$STATUS" | grep -qv '=healthy'; then
+    echo "$STATUS"
+    break
+  fi
+  if [ "$i" = 30 ]; then
+    echo "✗ Not healthy after 90s:" >&2; echo "$STATUS" >&2
+    echo "  Check logs: ssh $SERVER docker logs --tail 50 su-store" >&2
+    exit 1
+  fi
+done
+
+if [ "$TARGET" != api ]; then
+  echo "==> Warming Next.js image cache..."
+  $SSH '
+    for IMG in STAY_TUNED_horizontal STAY_TUNED_vertical BE_BACK_horizontal BE_BACK_vertical BE_RIGHT_BACK_horizontal BE_RIGHT_BACK_vertical; do
+      for W in 640 750 828 1080 1200 1920 2048; do
+        curl -s -o /dev/null "http://localhost:3000/_next/image?url=%2Fimages%2Fanc%2F${IMG}.png&w=${W}&q=75" &
+      done
     done
-  done
-  wait
-  echo 'Image cache warmed'
-" 2>/dev/null || true
+    wait
+  ' || true
+fi
 
-rm -f /tmp/su-store-deploy.tar.gz
 echo ""
-echo "✓ Done! https://sumfu.store"
+echo "✓ Deployed $REV → https://sumfu.store"
