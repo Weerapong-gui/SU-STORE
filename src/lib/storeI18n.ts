@@ -15,6 +15,9 @@ const text = {
     noProductsHint: "Please check back soon.",
     from: "from",
     soldOut: "Sold out",
+    opensAt: (when: string) => `Opens ${when}`,
+    salesEnded: "Orders closed",
+    closesAt: (when: string) => `Order by ${when}`,
     left: (n: number) => `${n} left`,
     size: "Size",
     color: "Colour / style",
@@ -42,7 +45,6 @@ const text = {
     payStep1: (amount: string) => `Transfer exactly ${amount} to the account below`,
     payStep2: "Upload your transfer slip here",
     payStep3: "We check your slip and update the status on this page",
-    bankName: "Bangkok Bank",
     accountName: "Account",
     uploadSlip: "Upload slip",
     replaceSlip: "Replace slip",
@@ -82,6 +84,9 @@ const text = {
     noProductsHint: "แวะกลับมาใหม่เร็วๆ นี้",
     from: "เริ่มต้น",
     soldOut: "สินค้าหมด",
+    opensAt: (when: string) => `เปิดขาย ${when}`,
+    salesEnded: "ปิดรับสั่งแล้ว",
+    closesAt: (when: string) => `สั่งได้ถึง ${when}`,
     left: (n: number) => `เหลือ ${n} ชิ้น`,
     size: "ไซซ์",
     color: "สี / แบบ",
@@ -109,7 +114,6 @@ const text = {
     payStep1: (amount: string) => `โอนเงิน ${amount} พอดี เข้าบัญชีด้านล่าง`,
     payStep2: "อัปโหลดสลิปการโอนที่หน้านี้",
     payStep3: "ทีมงานตรวจสลิปแล้วอัปเดตสถานะในหน้านี้",
-    bankName: "ธนาคารกรุงเทพ",
     accountName: "บัญชี",
     uploadSlip: "อัปโหลดสลิป",
     replaceSlip: "เปลี่ยนสลิป",
@@ -142,6 +146,18 @@ const text = {
 };
 
 export type StoreText = (typeof text)["en"];
+
+export function useSaleDate() {
+  const { lang } = useLang();
+  return (iso: string) =>
+    new Date(iso).toLocaleString(lang === "th" ? "th-TH" : "en-GB", {
+      timeZone: "Asia/Bangkok",
+      day: "numeric",
+      month: "short",
+      hour: "2-digit",
+      minute: "2-digit",
+    });
+}
 
 export function useStoreText(): StoreText {
   const { lang } = useLang();

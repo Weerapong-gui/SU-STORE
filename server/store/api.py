@@ -57,7 +57,8 @@ def _route(handler: Any, method: str, path: str, query: dict[str, str], core: An
 
     # ── Public ────────────────────────────────────────────────────────────────
     if method == "GET" and path in ("/v2/meta", "/v2/admin/meta"):
-        return send(HTTPStatus.OK, db.meta())
+        with core.open_db() as conn:
+            return send(HTTPStatus.OK, db.meta(conn))
 
     if method == "GET" and path == "/v2/products":
         with core.open_db() as conn:
@@ -126,6 +127,23 @@ def _route(handler: Any, method: str, path: str, query: dict[str, str], core: An
 
     if method == "GET" and path == "/v2/admin/me":
         return send(HTTPStatus.OK, {"username": _admin_user(handler)})
+
+    if method == "GET" and path == "/v2/admin/dashboard":
+        with core.open_db() as conn:
+            return send(HTTPStatus.OK, db.dashboard(conn, _int(query.get("days"), 30)))
+
+    if path == "/v2/admin/settings":
+        if method == "GET":
+            with core.open_db() as conn:
+                return send(HTTPStatus.OK, db.get_settings(conn))
+        if method in ("PUT", "PATCH"):
+            payload = _json_body(handler)
+            with core.open_db() as conn:
+                settings = db.update_settings(conn, payload)
+                if "siteClosed" in payload:
+                    core.log_audit(conn, "-", "v2_site_closed" if payload["siteClosed"] else "v2_site_opened",
+                                   f"by {_admin_user(handler)}")
+            return send(HTTPStatus.OK, settings)
 
     if path == "/v2/admin/products":
         if method == "GET":

@@ -33,6 +33,12 @@ export default function OrdersPage() {
       .catch((e: Error) => toast(e.message, "error"));
   }, [page, status, query, toast]);
 
+  useEffect(() => {
+    // Dashboard tiles link here with ?status=…
+    const initial = new URLSearchParams(window.location.search).get("status");
+    if (initial && (STATUSES as string[]).includes(initial)) setStatus(initial as OrderStatus);
+  }, []);
+
   useEffect(load, [load]);
 
   const totalAll = data ? Object.values(data.statusCounts).reduce((a, b) => a + b, 0) : 0;

@@ -4,7 +4,7 @@ import { useRouter } from "next/navigation";
 import { useMemo, useState } from "react";
 import { MAX_ITEM_QUANTITY, useCart } from "@/components/CartProvider";
 import { formatPrice } from "@/lib/formatPrice";
-import { useStoreText } from "@/lib/storeI18n";
+import { useSaleDate, useStoreText } from "@/lib/storeI18n";
 import { cn } from "@/lib/utils";
 import type { StoreProduct, StoreVariant } from "@/types/store";
 
@@ -50,6 +50,7 @@ function OptionButtons({ label, options, selected, isAvailable, onSelect }: {
 
 export function ProductDetail({ product }: { product: StoreProduct }) {
   const t = useStoreText();
+  const saleDate = useSaleDate();
   const router = useRouter();
   const { addItem } = useCart();
   const variants = product.variants;
@@ -72,7 +73,10 @@ export function ProductDetail({ product }: { product: StoreProduct }) {
   const inStock = (v: StoreVariant) => !v.soldOut;
   const maxQty = Math.min(MAX_ITEM_QUANTITY, variant?.stock ?? MAX_ITEM_QUANTITY);
 
+  const saleOpen = product.saleState === "open";
+
   function add(goToCheckout: boolean) {
+    if (!saleOpen) return;
     if (!variant || variant.soldOut) {
       setNotice(t.chooseOption);
       return;
@@ -161,11 +165,21 @@ export function ProductDetail({ product }: { product: StoreProduct }) {
           </div>
         </div>
 
+        {product.saleState === "upcoming" && product.saleStartsAt && (
+          <p className="rounded-2xl bg-apple-blue-soft px-4 py-3 text-sm font-semibold text-apple-blue">{t.opensAt(saleDate(product.saleStartsAt))}</p>
+        )}
+        {product.saleState === "ended" && (
+          <p className="rounded-2xl bg-zinc-100 px-4 py-3 text-sm font-semibold text-ink-soft">{t.salesEnded}</p>
+        )}
+        {saleOpen && product.saleEndsAt && (
+          <p className="text-sm text-ink-soft">{t.closesAt(saleDate(product.saleEndsAt))}</p>
+        )}
+
         <div className="flex flex-wrap gap-3">
           <button
             type="button"
             onClick={() => add(true)}
-            disabled={variant?.soldOut || product.soldOut}
+            disabled={!saleOpen || variant?.soldOut || product.soldOut}
             className="rounded-full bg-apple-blue px-7 py-3 text-sm font-semibold text-white shadow-[0_4px_14px_rgba(0,113,227,0.35)] transition hover:bg-apple-blue-dark disabled:cursor-not-allowed disabled:opacity-40"
           >
             {t.buyNow}
@@ -173,7 +187,7 @@ export function ProductDetail({ product }: { product: StoreProduct }) {
           <button
             type="button"
             onClick={() => add(false)}
-            disabled={variant?.soldOut || product.soldOut}
+            disabled={!saleOpen || variant?.soldOut || product.soldOut}
             className="rounded-full bg-apple-blue-soft px-7 py-3 text-sm font-semibold text-apple-blue transition hover:bg-[#dcecff] disabled:cursor-not-allowed disabled:opacity-40"
           >
             {t.addToCart}

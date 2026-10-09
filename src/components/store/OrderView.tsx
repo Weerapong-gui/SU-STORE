@@ -6,13 +6,14 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { BankAccountCopyField } from "@/components/BankAccountCopyField";
 import { formatPrice } from "@/lib/formatPrice";
 import { getOrderToken, orderPageHref, saveOrderToken } from "@/lib/orderTokens";
-import { PAYMENT_ACCOUNT_COPY_VALUE, PAYMENT_ACCOUNT_NUMBER } from "@/lib/paymentDetails";
+import { PAYMENT_ACCOUNT_NUMBER } from "@/lib/paymentDetails";
 import { useStoreText } from "@/lib/storeI18n";
 import { cn } from "@/lib/utils";
-import type { OrderStatus, StoreOrder } from "@/types/store";
+import type { OrderStatus, PaymentAccount, StoreMeta, StoreOrder } from "@/types/store";
 
 const FLOW: OrderStatus[] = ["pending_payment", "waiting_confirm", "paid", "ready", "completed"];
 const MAX_SLIP_BYTES = 5 * 1024 * 1024;
+const FALLBACK_PAYMENT: PaymentAccount = { bankName: "ธนาคารกรุงเทพ", accountNumber: PAYMENT_ACCOUNT_NUMBER, accountName: "" };
 
 export function OrderView({ code }: { code: string }) {
   const t = useStoreText();
@@ -23,6 +24,8 @@ export function OrderView({ code }: { code: string }) {
   const [uploading, setUploading] = useState(false);
   const [message, setMessage] = useState<{ tone: "ok" | "error"; text: string } | null>(null);
   const [copied, setCopied] = useState(false);
+  // undefined while loading; the built-in account is only a fallback if settings can't load
+  const [payment, setPayment] = useState<PaymentAccount | undefined>(undefined);
   const fileInput = useRef<HTMLInputElement>(null);
 
   const load = useCallback(async (accessToken: string) => {
@@ -47,6 +50,13 @@ export function OrderView({ code }: { code: string }) {
     if (accessToken) load(accessToken);
     else setState("notfound");
   }, [code, searchParams, load]);
+
+  useEffect(() => {
+    fetch("/api/store/meta")
+      .then((r) => r.json())
+      .then((m: StoreMeta) => setPayment(m.payment ?? FALLBACK_PAYMENT))
+      .catch(() => setPayment(FALLBACK_PAYMENT));
+  }, []);
 
   useEffect(() => {
     if (!token) return;
@@ -145,8 +155,18 @@ export function OrderView({ code }: { code: string }) {
             <li>{t.payStep3}</li>
           </ol>
           <div className="rounded-2xl bg-white p-4">
-            <p className="text-sm text-ink-soft">{t.bankName}</p>
-            <BankAccountCopyField formattedAccountNumber={PAYMENT_ACCOUNT_NUMBER} copyValue={PAYMENT_ACCOUNT_COPY_VALUE} />
+            {payment ? (
+              <>
+                <p className="text-sm text-ink-soft">{payment.bankName}</p>
+                {payment.accountName && <p className="text-sm font-semibold text-ink">{payment.accountName}</p>}
+                <BankAccountCopyField
+                  formattedAccountNumber={payment.accountNumber}
+                  copyValue={payment.accountNumber.replace(/\D/g, "")}
+                />
+              </>
+            ) : (
+              <div className="h-16 animate-pulse rounded-xl bg-zinc-100" />
+            )}
             <p className="mt-3 text-2xl font-semibold text-apple-blue">{formatPrice(order.totalAmount)}</p>
           </div>
           <div>

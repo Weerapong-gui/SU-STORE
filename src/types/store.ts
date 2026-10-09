@@ -13,6 +13,7 @@ export type StoreVariant = {
 };
 
 export type ProductStatus = "draft" | "active" | "archived";
+export type SaleState = "open" | "upcoming" | "ended";
 
 export type StoreProduct = {
   id: number;
@@ -23,6 +24,9 @@ export type StoreProduct = {
   status: ProductStatus;
   buyerFields: string[];
   sortOrder: number;
+  saleStartsAt: string | null;
+  saleEndsAt: string | null;
+  saleState: SaleState;
   minPrice: number | null;
   maxPrice: number | null;
   soldOut: boolean;
@@ -63,4 +67,19 @@ export type StoreMeta = {
   buyerFields: { key: string; label: string; alwaysRequired: boolean }[];
   orderStatuses: { key: OrderStatus; label: string }[];
   productStatuses: { key: ProductStatus; label: string }[];
+  payment?: PaymentAccount;
+  announcement?: string;
+};
+
+export type PaymentAccount = { bankName: string; accountNumber: string; accountName: string };
+
+export type StoreSettings = { payment: PaymentAccount; announcement: string; siteClosed: boolean };
+
+export type Dashboard = {
+  paidAmount: number;
+  awaitingAmount: number;
+  orderCount: number;
+  statusCounts: Record<OrderStatus, number>;
+  byDay: { date: string; paidAmount: number; orders: number }[];
+  byVariant: { productName: string; variantLabel: string; paidQuantity: number; unpaidQuantity: number; paidAmount: number }[];
 };

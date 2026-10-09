@@ -23,6 +23,8 @@ from store import db  # noqa: E402
 def _conn(path=":memory:") -> sqlite3.Connection:
     conn = sqlite3.connect(path, check_same_thread=False)
     conn.row_factory = sqlite3.Row
+    # site_settings is a v1 table the store reads/writes only for site_closed
+    conn.execute("CREATE TABLE IF NOT EXISTS site_settings (key TEXT PRIMARY KEY, value TEXT NOT NULL, updated_at TEXT NOT NULL)")
     db.ensure_store_db(conn)
     return conn
 
@@ -207,6 +209,84 @@ class TestOrders:
         )
         rows = db.orders_csv_rows(conn)
         assert len(rows) == 3 and rows[0][0] == "เลขออเดอร์"
+
+
+class TestSaleWindow:
+    def test_states(self):
+        now = datetime(2026, 10, 10, 12, 0, tzinfo=db.TZ_BANGKOK)
+        assert db.sale_state(None, None, now) == "open"
+        assert db.sale_state("2026-10-11T00:00:00+07:00", None, now) == "upcoming"
+        assert db.sale_state(None, "2026-10-10T12:00:00+07:00", now) == "ended"
+        assert db.sale_state("2026-10-01T00:00:00+07:00", "2026-10-31T00:00:00+07:00", now) == "open"
+
+    def test_naive_input_is_bangkok_time(self):
+        conn = _conn()
+        p = _product(conn)
+        p = db.update_product(conn, p["id"], {"saleStartsAt": "2026-10-12T10:00", "saleEndsAt": None})
+        assert p["saleStartsAt"] == "2026-10-12T10:00:00+07:00"
+
+    def test_end_must_be_after_start(self):
+        conn = _conn()
+        p = _product(conn)
+        with pytest.raises(db.StoreError):
+            db.update_product(conn, p["id"], {"saleStartsAt": "2026-10-12T10:00", "saleEndsAt": "2026-10-12T09:00"})
+
+    @pytest.mark.parametrize("window", [{"saleStartsAt": "2999-01-01T00:00"}, {"saleEndsAt": "2000-01-01T00:00"}])
+    def test_orders_blocked_outside_window(self, window):
+        conn = _conn()
+        p = _product(conn)
+        db.update_product(conn, p["id"], window)
+        with pytest.raises(db.StoreError) as err:
+            db.create_order(conn, {"items": [{"variantId": p["variants"][0]["id"], "quantity": 1}], "customer": CUSTOMER})
+        assert err.value.status == 409
+        assert conn.execute("SELECT stock FROM store_variants").fetchone()[0] == 5
+
+    def test_migration_is_idempotent_and_adds_columns(self):
+        conn = _conn()
+        db.ensure_store_db(conn)
+        cols = {r[1] for r in conn.execute("PRAGMA table_info(store_products)")}
+        assert {"sale_starts_at", "sale_ends_at"} <= cols
+
+
+class TestSettings:
+    def test_defaults_and_update(self):
+        conn = _conn()
+        assert db.get_settings(conn)["payment"]["accountNumber"] == "672-3000-615"
+        s = db.update_settings(conn, {"payment": {"bankName": "กสิกรไทย", "accountNumber": "123-4-56789-0",
+                                                  "accountName": "องค์การนักศึกษา"},
+                                      "announcement": "รับของ 20 ต.ค.", "siteClosed": True})
+        assert s["payment"]["bankName"] == "กสิกรไทย" and s["announcement"] == "รับของ 20 ต.ค." and s["siteClosed"]
+        assert conn.execute("SELECT value FROM site_settings WHERE key='site_closed'").fetchone()[0] == "1"
+        assert db.update_settings(conn, {"siteClosed": False})["siteClosed"] is False
+
+    def test_bad_account_number(self):
+        with pytest.raises(db.StoreError):
+            db.update_settings(_conn(), {"payment": {"accountNumber": "abc"}})
+
+    def test_meta_includes_payment(self):
+        conn = _conn()
+        assert db.meta(conn)["payment"]["bankName"] == "ธนาคารกรุงเทพ"
+
+
+class TestDashboard:
+    def test_totals_and_breakdown(self):
+        conn = _conn()
+        p = _product(conn, variants=[{"size": "M", "price": 100, "stock": None}, {"size": "L", "price": 150, "stock": None}])
+        m, l = (v["id"] for v in p["variants"])
+        buy = lambda items: db.create_order(conn, {"items": items, "customer": CUSTOMER})["orderCode"]
+        paid = buy([{"variantId": m, "quantity": 2}, {"variantId": l, "quantity": 1}])  # 350
+        db.update_order(conn, paid, {"status": "completed"})
+        buy([{"variantId": m, "quantity": 1}])  # 100 pending
+        cancelled = buy([{"variantId": l, "quantity": 3}])
+        db.update_order(conn, cancelled, {"status": "cancelled"})
+
+        d = db.dashboard(conn, days=7)
+        assert d["paidAmount"] == 350 and d["awaitingAmount"] == 100 and d["orderCount"] == 2
+        assert d["statusCounts"]["cancelled"] == 1
+        assert len(d["byDay"]) == 7 and d["byDay"][-1]["paidAmount"] == 350 and d["byDay"][-1]["orders"] == 2
+        rows = {r["variantLabel"]: r for r in d["byVariant"]}
+        assert rows["M"]["paidQuantity"] == 2 and rows["M"]["unpaidQuantity"] == 1 and rows["M"]["paidAmount"] == 200
+        assert rows["L"]["paidQuantity"] == 1  # cancelled order excluded
 
 
 def test_ensure_db_leaves_v1_orders_untouched(tmp_path, monkeypatch):

@@ -131,8 +131,17 @@ def ensure_store_db(connection: sqlite3.Connection) -> None:
             period TEXT PRIMARY KEY,
             last_seq INTEGER NOT NULL
         );
+        CREATE TABLE IF NOT EXISTS store_settings (
+            key TEXT PRIMARY KEY,
+            value TEXT NOT NULL,
+            updated_at TEXT NOT NULL
+        );
         """
     )
+    columns = {r[1] for r in connection.execute("PRAGMA table_info(store_products)")}
+    for column in ("sale_starts_at", "sale_ends_at"):
+        if column not in columns:
+            connection.execute(f"ALTER TABLE store_products ADD COLUMN {column} TEXT")
 
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
@@ -178,6 +187,31 @@ def _unique_slug(connection: sqlite3.Connection, base: str, exclude_id: int | No
 
 def variant_label(size: str, color: str) -> str:
     return " / ".join(p for p in (size, color) if p) or "-"
+
+
+def _parse_when(value: Any, field: str) -> str | None:
+    """Accept an ISO datetime (naive = Bangkok time) or empty; store as +07:00 ISO."""
+    if value in (None, ""):
+        return None
+    if not isinstance(value, str):
+        raise StoreError(400, f"{field} ไม่ถูกต้อง")
+    try:
+        parsed = datetime.fromisoformat(value.strip().replace("Z", "+00:00"))
+    except ValueError:
+        raise StoreError(400, f"{field} ไม่ถูกต้อง") from None
+    if parsed.tzinfo is None:
+        parsed = parsed.replace(tzinfo=TZ_BANGKOK)
+    return parsed.astimezone(TZ_BANGKOK).replace(microsecond=0).isoformat()
+
+
+def sale_state(starts_at: str | None, ends_at: str | None, now: datetime | None = None) -> str:
+    """'upcoming' before the window opens, 'ended' after it closes, else 'open'."""
+    now = now or datetime.now(TZ_BANGKOK)
+    if starts_at and now < datetime.fromisoformat(starts_at):
+        return "upcoming"
+    if ends_at and now >= datetime.fromisoformat(ends_at):
+        return "ended"
+    return "open"
 
 
 def next_order_code(connection: sqlite3.Connection, when: datetime | None = None) -> str:
@@ -226,6 +260,9 @@ def _serialize_product(connection: sqlite3.Connection, row: sqlite3.Row, *, publ
         "status": row["status"],
         "buyerFields": json.loads(row["buyer_fields_json"] or "[]"),
         "sortOrder": row["sort_order"],
+        "saleStartsAt": row["sale_starts_at"],
+        "saleEndsAt": row["sale_ends_at"],
+        "saleState": sale_state(row["sale_starts_at"], row["sale_ends_at"]),
         "minPrice": min(prices) if prices else None,
         "maxPrice": max(prices) if prices else None,
         "soldOut": bool(variants) and all(v["soldOut"] for v in variants if v["active"]),
@@ -269,6 +306,10 @@ def _product_fields(payload: dict[str, Any]) -> dict[str, Any]:
         fields["buyer_fields_json"] = json.dumps(list(dict.fromkeys(chosen)))
     if "sortOrder" in payload:
         fields["sort_order"] = _as_int(payload["sortOrder"], "ลำดับ")
+    if "saleStartsAt" in payload:
+        fields["sale_starts_at"] = _parse_when(payload["saleStartsAt"], "วันเริ่มขาย")
+    if "saleEndsAt" in payload:
+        fields["sale_ends_at"] = _parse_when(payload["saleEndsAt"], "วันปิดขาย")
     if "status" in payload:
         if payload["status"] not in PRODUCT_STATUSES:
             raise StoreError(400, "สถานะสินค้าไม่ถูกต้อง")
@@ -322,6 +363,11 @@ def update_product(connection: sqlite3.Connection, product_id: int, payload: dic
         _check_can_activate(connection, product_id)
     if fields:
         _apply_product_fields(connection, product_id, fields)
+    window = connection.execute(
+        "SELECT sale_starts_at, sale_ends_at FROM store_products WHERE id = ?", (product_id,)
+    ).fetchone()
+    if window[0] and window[1] and window[1] <= window[0]:
+        raise StoreError(400, "วันปิดขายต้องอยู่หลังวันเริ่มขาย")
     return get_product(connection, product_id, public=False)
 
 
@@ -481,12 +527,17 @@ def create_order(connection: sqlite3.Connection, payload: Any) -> dict[str, Any]
         required_fields: list[str] = list(ALWAYS_REQUIRED_FIELDS)
         for variant_id, qty in quantities.items():
             row = connection.execute(
-                "SELECT v.*, p.name AS product_name, p.status AS product_status, p.buyer_fields_json "
+                "SELECT v.*, p.name AS product_name, p.status AS product_status, p.buyer_fields_json, "
+                "p.sale_starts_at, p.sale_ends_at "
                 "FROM store_variants v JOIN store_products p ON p.id = v.product_id WHERE v.id = ?",
                 (variant_id,),
             ).fetchone()
             if row is None or not row["active"] or row["product_status"] != "active":
                 raise StoreError(409, "มีสินค้าในตะกร้าที่ไม่เปิดขายแล้ว กรุณาเลือกใหม่")
+            state = sale_state(row["sale_starts_at"], row["sale_ends_at"])
+            if state != "open":
+                when = "ยังไม่ถึงเวลาเปิดขาย" if state == "upcoming" else "ปิดรับสั่งแล้ว"
+                raise StoreError(409, f"{row['product_name']} {when}")
             label = variant_label(row["size"], row["color"])
             updated = connection.execute(
                 "UPDATE store_variants SET stock = stock - ? WHERE id = ? AND stock IS NOT NULL AND stock >= ?",
@@ -648,11 +699,144 @@ def orders_csv_rows(connection: sqlite3.Connection, status: str | None = None) -
     return out
 
 
-def meta() -> dict[str, Any]:
+# ── Settings ──────────────────────────────────────────────────────────────────
+
+SETTING_DEFAULTS: dict[str, str] = {
+    "payment_bank_name": "ธนาคารกรุงเทพ",
+    "payment_account_number": "672-3000-615",
+    "payment_account_name": "",
+    "announcement": "",
+}
+
+
+def get_settings(connection: sqlite3.Connection) -> dict[str, Any]:
+    stored = {r[0]: r[1] for r in connection.execute("SELECT key, value FROM store_settings")}
+    values = {k: stored.get(k, v) for k, v in SETTING_DEFAULTS.items()}
+    closed = connection.execute("SELECT value FROM site_settings WHERE key = 'site_closed'").fetchone()
     return {
+        "payment": {
+            "bankName": values["payment_bank_name"],
+            "accountNumber": values["payment_account_number"],
+            "accountName": values["payment_account_name"],
+        },
+        "announcement": values["announcement"],
+        "siteClosed": bool(closed and closed[0] == "1"),
+    }
+
+
+def update_settings(connection: sqlite3.Connection, payload: dict[str, Any]) -> dict[str, Any]:
+    """Store settings live in store_settings. `siteClosed` is the one exception: it is the
+    shared site_settings.site_closed flag the storefront middleware reads, also used by the
+    FP28 admin."""
+    now = now_iso()
+    updates: dict[str, str] = {}
+    payment = payload.get("payment")
+    if isinstance(payment, dict):
+        if "bankName" in payment:
+            updates["payment_bank_name"] = _clean_text(payment["bankName"], "ชื่อธนาคาร", required=True, max_len=80)
+        if "accountNumber" in payment:
+            number = _clean_text(payment["accountNumber"], "เลขบัญชี", required=True, max_len=30)
+            if not re.fullmatch(r"[0-9\- ]{6,30}", number):
+                raise StoreError(400, "เลขบัญชีต้องเป็นตัวเลข (ใส่ขีดได้)")
+            updates["payment_account_number"] = number
+        if "accountName" in payment:
+            updates["payment_account_name"] = _clean_text(payment["accountName"], "ชื่อบัญชี", max_len=120)
+    if "announcement" in payload:
+        updates["announcement"] = _clean_text(payload["announcement"], "ข้อความประกาศ", max_len=300)
+    for key, value in updates.items():
+        connection.execute(
+            "INSERT INTO store_settings (key, value, updated_at) VALUES (?, ?, ?) "
+            "ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_at = excluded.updated_at",
+            (key, value, now),
+        )
+    if "siteClosed" in payload:
+        connection.execute(
+            "INSERT INTO site_settings (key, value, updated_at) VALUES ('site_closed', ?, ?) "
+            "ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_at = excluded.updated_at",
+            ("1" if payload["siteClosed"] else "0", now),
+        )
+    return get_settings(connection)
+
+
+# ── Dashboard ─────────────────────────────────────────────────────────────────
+
+PAID_STATUSES = ("paid", "ready", "completed")
+UNPAID_STATUSES = ("pending_payment", "waiting_confirm")
+
+
+def dashboard(connection: sqlite3.Connection, days: int = 30, now: datetime | None = None) -> dict[str, Any]:
+    """Sales summary. created_at is written with a +07:00 offset, so its first 10 chars
+    are already the Bangkok calendar date."""
+    days = min(max(days, 7), 366)
+    today = (now or datetime.now(TZ_BANGKOK)).astimezone(TZ_BANGKOK).date()
+    paid = ",".join("?" * len(PAID_STATUSES))
+    unpaid = ",".join("?" * len(UNPAID_STATUSES))
+
+    counts = {r[0]: r[1] for r in connection.execute("SELECT status, COUNT(*) FROM store_orders GROUP BY status")}
+    revenue = connection.execute(
+        f"SELECT COALESCE(SUM(total_amount), 0) FROM store_orders WHERE status IN ({paid})", PAID_STATUSES
+    ).fetchone()[0]
+    awaiting = connection.execute(
+        f"SELECT COALESCE(SUM(total_amount), 0) FROM store_orders WHERE status IN ({unpaid})", UNPAID_STATUSES
+    ).fetchone()[0]
+
+    first_day = today - timedelta(days=days - 1)
+    per_day = {
+        r[0]: (r[1], r[2])
+        for r in connection.execute(
+            f"SELECT substr(created_at, 1, 10) AS day, "
+            f"COALESCE(SUM(CASE WHEN status IN ({paid}) THEN total_amount END), 0), "
+            f"SUM(CASE WHEN status != 'cancelled' THEN 1 ELSE 0 END) "
+            f"FROM store_orders WHERE substr(created_at, 1, 10) >= ? GROUP BY day",
+            (*PAID_STATUSES, first_day.isoformat()),
+        )
+    }
+    by_day = []
+    for offset in range(days):
+        day = (first_day + timedelta(days=offset)).isoformat()
+        amount, orders = per_day.get(day, (0, 0))
+        by_day.append({"date": day, "paidAmount": amount, "orders": orders})
+
+    by_variant = [
+        {
+            "productName": r["product_name"],
+            "variantLabel": r["variant_label"],
+            "paidQuantity": r["paid_qty"],
+            "unpaidQuantity": r["unpaid_qty"],
+            "paidAmount": r["paid_amount"],
+        }
+        for r in connection.execute(
+            f"SELECT i.product_name, i.variant_label, "
+            f"SUM(CASE WHEN o.status IN ({paid}) THEN i.quantity ELSE 0 END) AS paid_qty, "
+            f"SUM(CASE WHEN o.status IN ({unpaid}) THEN i.quantity ELSE 0 END) AS unpaid_qty, "
+            f"SUM(CASE WHEN o.status IN ({paid}) THEN i.quantity * i.unit_price ELSE 0 END) AS paid_amount "
+            f"FROM store_order_items i JOIN store_orders o ON o.id = i.order_id "
+            f"WHERE o.status != 'cancelled' "
+            f"GROUP BY i.product_id, i.product_name, i.variant_id, i.variant_label "
+            f"ORDER BY i.product_name, MIN(i.variant_id)",
+            (*PAID_STATUSES, *UNPAID_STATUSES, *PAID_STATUSES),
+        )
+    ]
+    return {
+        "paidAmount": revenue,
+        "awaitingAmount": awaiting,
+        "orderCount": sum(v for k, v in counts.items() if k != "cancelled"),
+        "statusCounts": {s: counts.get(s, 0) for s in ORDER_STATUSES},
+        "byDay": by_day,
+        "byVariant": by_variant,
+    }
+
+
+def meta(connection: sqlite3.Connection | None = None) -> dict[str, Any]:
+    result: dict[str, Any] = {
         "buyerFields": [
             {"key": k, "label": v, "alwaysRequired": k in ALWAYS_REQUIRED_FIELDS} for k, v in BUYER_FIELDS.items()
         ],
         "orderStatuses": [{"key": k, "label": v} for k, v in ORDER_STATUSES.items()],
         "productStatuses": [{"key": k, "label": v} for k, v in PRODUCT_STATUSES.items()],
     }
+    if connection is not None:
+        settings = get_settings(connection)
+        result["payment"] = settings["payment"]
+        result["announcement"] = settings["announcement"]
+    return result

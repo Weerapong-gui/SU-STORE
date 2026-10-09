@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useState } from "react";
-import { adminFetch, formatBaht } from "@/lib/adminApi";
+import { adminFetch, formatBaht, formatThaiDateTime } from "@/lib/adminApi";
 import { Badge, EmptyState, useToast } from "@/components/admin/ui";
 import type { StoreProduct } from "@/types/store";
 
@@ -76,6 +76,13 @@ export default function ProductsPage() {
                 <p className="text-xs text-zinc-500">
                   {p.variants.filter((v) => v.active).length} ตัวเลือก · {stockText(p)}
                 </p>
+                {p.status === "active" && p.saleState !== "open" && (
+                  <p className="text-xs font-semibold text-amber-700">
+                    {p.saleState === "upcoming"
+                      ? `รอเปิดขาย ${formatThaiDateTime(p.saleStartsAt!)}`
+                      : `ปิดรับสั่งแล้ว (${formatThaiDateTime(p.saleEndsAt!)})`}
+                  </p>
+                )}
               </div>
             </Link>
           ))}

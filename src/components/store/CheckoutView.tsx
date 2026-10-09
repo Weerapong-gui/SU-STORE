@@ -51,7 +51,7 @@ export function CheckoutView() {
     products?.forEach((p) => p.variants.forEach((v) => byVariant.set(v.id, { product: p, variant: v })));
     return items.map((item) => {
       const live = byVariant.get(item.variantId);
-      const unavailable = products !== null && (!live || live.variant.soldOut);
+      const unavailable = products !== null && (!live || live.variant.soldOut || live.product.saleState !== "open");
       const stockLeft = live?.variant.stock ?? null;
       return {
         item,

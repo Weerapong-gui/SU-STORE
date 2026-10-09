@@ -57,6 +57,8 @@ export function ProductEditor({ productId }: { productId?: number }) {
   const [rows, setRows] = useState<Row[]>([{ size: "", color: "", price: "", stock: "", active: true }]);
   const [buyerFields, setBuyerFields] = useState<string[]>([]);
   const [status, setStatus] = useState<ProductStatus>("draft");
+  const [saleStartsAt, setSaleStartsAt] = useState("");
+  const [saleEndsAt, setSaleEndsAt] = useState("");
   const [uploading, setUploading] = useState(false);
   const fileInput = useRef<HTMLInputElement>(null);
 
@@ -72,6 +74,9 @@ export function ProductEditor({ productId }: { productId?: number }) {
     setColorsText(Array.from(new Set(r.map((x) => x.color).filter(Boolean))).join(", "));
     setBuyerFields(p.buyerFields);
     setStatus(p.status);
+    // stored as Bangkok-time ISO (+07:00); datetime-local wants "YYYY-MM-DDTHH:mm"
+    setSaleStartsAt(p.saleStartsAt?.slice(0, 16) ?? "");
+    setSaleEndsAt(p.saleEndsAt?.slice(0, 16) ?? "");
     setDirty(false);
   }
 
@@ -136,8 +141,9 @@ export function ProductEditor({ productId }: { productId?: number }) {
       if (r.stock !== "" && !/^\d+$/.test(r.stock)) list.push(`สต็อกของ "${rowLabel(r)}" ต้องเป็นตัวเลข หรือเว้นว่าง`);
     });
     if (status === "active" && rows.length === 0) list.push("ต้องมีตัวเลือกอย่างน้อย 1 แบบก่อนเปิดขาย");
+    if (saleStartsAt && saleEndsAt && saleEndsAt <= saleStartsAt) list.push("เวลาปิดขายต้องอยู่หลังเวลาเปิดขาย");
     return list;
-  }, [name, rows, status]);
+  }, [name, rows, status, saleStartsAt, saleEndsAt]);
 
   async function save() {
     if (problems.length) {
@@ -150,6 +156,8 @@ export function ProductEditor({ productId }: { productId?: number }) {
       description,
       buyerFields,
       status,
+      saleStartsAt: saleStartsAt || null,
+      saleEndsAt: saleEndsAt || null,
       variants: rows.map((r) => ({
         id: r.id,
         size: r.size,
@@ -418,6 +426,15 @@ export function ProductEditor({ productId }: { productId?: number }) {
               <span className="mt-1 block text-xs text-zinc-500">{STATUS_HELP[s]}</span>
             </label>
           ))}
+        </div>
+        <div className="mt-5 grid gap-4 border-t border-zinc-100 pt-5 sm:grid-cols-2">
+          <Field label="เปิดขายตั้งแต่ (ไม่บังคับ)" hint="ก่อนเวลานี้ลูกค้าเห็นสินค้าแต่ยังสั่งไม่ได้ · เว้นว่าง = ขายได้ทันที">
+            <input type="datetime-local" className={inputClass} value={saleStartsAt} onChange={(e) => touch(setSaleStartsAt)(e.target.value)} />
+          </Field>
+          <Field label="ปิดขายเมื่อ (ไม่บังคับ)" hint="หลังเวลานี้ปิดรับสั่งอัตโนมัติ · เว้นว่าง = ไม่มีกำหนดปิด">
+            <input type="datetime-local" className={inputClass} value={saleEndsAt} onChange={(e) => touch(setSaleEndsAt)(e.target.value)} />
+          </Field>
+          <p className="text-xs text-zinc-500 sm:col-span-2">เวลาเป็นเวลาประเทศไทย และมีผลเฉพาะเมื่อสถานะเป็น &quot;เปิดขาย&quot;</p>
         </div>
       </Card>
 

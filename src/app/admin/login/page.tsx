@@ -22,7 +22,7 @@ export default function AdminLoginPage() {
         body: JSON.stringify({ username, password }),
       });
       if (res.ok) {
-        router.push("/admin/products");
+        router.push("/admin/dashboard");
         router.refresh();
       } else {
         const data = (await res.json()) as { message?: string };

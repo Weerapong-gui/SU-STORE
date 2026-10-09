@@ -19,7 +19,7 @@ SU STORE เป็นระบบสั่งซื้อเสื้อรั�
 
 **หลังร้านใหม่ (store v2):** `https://sumfu.store/admin` — Next.js ภาษาไทย สำหรับ staff ที่ไม่ใช่ dev (เพิ่มสินค้า/ตัวเลือก/สต็อก, จัดการออเดอร์ `SU…`) login ด้วยบัญชีใน `admin_users` เดียวกับ claim station · ส่วน `admin.sumfu.xyz` คือระบบ FP28 เดิม (ออเดอร์ `FP28…`, claim station, display)
 
-- หน้า: `src/app/admin/(panel)/{products,orders}` · component กลาง `src/components/admin/{ui,ProductEditor}.tsx`
+- หน้า: `src/app/admin/(panel)/{dashboard,products,orders,settings}` (ภาพรวมยอดขาย, สินค้า+รอบขาย, ออเดอร์, เปิด/ปิดร้าน+บัญชีรับเงิน+ประกาศ) · component กลาง `src/components/admin/{ui,ProductEditor}.tsx`
 - ทุกคำขอจากหน้า admin ผ่าน proxy `src/app/api/admin/v2/[...path]/route.ts` → order-api `/v2/admin/*` โดยแนบ cookie `su-admin-auth` (`Claim <token>`)
 - รูปสินค้าที่อัปโหลดเสิร์ฟผ่าน `src/app/product-images/[name]/route.ts`
 - `middleware.ts` บังคับ login สำหรับ `/admin/*` และไม่ให้หน้า "ปิดร้าน" บังหน้า admin

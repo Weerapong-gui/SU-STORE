@@ -2,12 +2,13 @@
 
 import Link from "next/link";
 import { formatPrice } from "@/lib/formatPrice";
-import { useStoreText } from "@/lib/storeI18n";
+import { useSaleDate, useStoreText } from "@/lib/storeI18n";
 import { cn } from "@/lib/utils";
 import type { StoreProduct } from "@/types/store";
 
 export function ProductGrid({ products }: { products: StoreProduct[] }) {
   const t = useStoreText();
+  const saleDate = useSaleDate();
 
   if (products.length === 0) {
     return (
@@ -26,7 +27,7 @@ export function ProductGrid({ products }: { products: StoreProduct[] }) {
           href={`/products/${p.slug}`}
           className={cn(
             "group overflow-hidden rounded-3xl bg-mist transition duration-300 hover:shadow-card focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-apple-blue/20",
-            p.soldOut && "opacity-60"
+            (p.soldOut || p.saleState === "ended") && "opacity-60"
           )}
         >
           <div className="relative aspect-square overflow-hidden bg-zinc-200">
@@ -41,9 +42,13 @@ export function ProductGrid({ products }: { products: StoreProduct[] }) {
             ) : (
               <div className="flex h-full items-center justify-center text-4xl font-bold text-zinc-300">SU</div>
             )}
-            {p.soldOut && (
+            {(p.soldOut || p.saleState !== "open") && (
               <span className="absolute left-4 top-4 rounded-full bg-ink px-3 py-1 text-xs font-semibold text-white">
-                {t.soldOut}
+                {p.saleState === "upcoming" && p.saleStartsAt
+                  ? t.opensAt(saleDate(p.saleStartsAt))
+                  : p.saleState === "ended"
+                    ? t.salesEnded
+                    : t.soldOut}
               </span>
             )}
           </div>
