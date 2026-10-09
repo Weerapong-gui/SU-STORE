@@ -1,122 +1,70 @@
 # SU-STORE
 
-เว็บขายเสื้อรับน้อง (FRESHER PACKAGE) ของมหาวิทยาลัยแม่ฟ้าหลวง — ประกอบด้วย `su-store`
-(Next.js frontend) และ `su-order-api` (Python HTTP server + admin panel).
+เว็บร้านค้าขององค์การนักศึกษา มฟล. (https://sumfu.store)
 
-## Deployment (primary): self-hosted Docker + Cloudflare Tunnel
+เริ่มจากเว็บขาย Fresher Package 28 แล้วค่อยๆ ปรับมาเป็นร้านที่ขายของได้หลายอย่าง
+ข้อมูลออเดอร์ FP28 เดิมยังอยู่ใน DB เหมือนเดิม ส่วนระบบใหม่ใช้ตาราง `store_*` แยกออกมา
 
-The live production system is **self-hosted with Docker Compose behind Cloudflare Tunnel**
-(not Render). Both services are defined in `docker-compose.yml` and deployed with the
-scripts in this repo:
+มีสองส่วน
 
-- `deploy.sh` — rebuilds/redeploys **both** `su-store` and `order-api` (~1-3 min; customers
-  may briefly see a connection error while it rebuilds).
-- `deploy-api.sh` — rebuilds **only** `order-api` (fast, `su-store` is untouched). Use this
-  whenever you only changed `server/` (e.g. `server/order_api.py` or `server/templates/`).
+- `su-store` หน้าเว็บ Next.js 14 (หน้าร้าน + หลังร้านที่ `/admin`)
+- `su-order-api` Python (`server/order_api.py`) เก็บข้อมูลใน SQLite, API ของร้านใหม่อยู่ใต้ `/v2/` (โค้ดใน `server/store/`)
 
-Architecture, server paths, Cloudflare Tunnel layout, and Docker commands are documented in
-`CLAUDE.md` §3 (Server Architecture) and §7 (Deploy). Quick reference:
-
-- `su-store` — Next.js on port 3000, reaches the API at `http://order-api:10000`
-- `order-api` — Python server on internal port 10000 (exposed to localhost as 3010)
-- Persistent data on the host (see `docker-compose.yml` volume `/home/park/SU-STORE/data/order-api:/var/data`):
-  - SQLite DB: `/home/park/SU-STORE/data/order-api/su-order-api/orders.db`
-    (container path `/var/data/su-order-api/orders.db`)
-  - Uploaded slips: `/home/park/SU-STORE/data/order-api/su-order-api/slips/`
-    (container path `/var/data/su-order-api/slips/`)
-
-There is **no systemd unit for the app itself** — the containers run via Docker Compose with
-`restart: unless-stopped`. The only systemd units involved are the two `cloudflared` tunnels
-(see `CLAUDE.md` §3).
-
-## Alternative: Render Web Service hosting (optional, not the live deployment)
-
-> The section below documents an **optional/alternative** way to host the order API on Render.
-> It is **not** how production currently runs (production is the self-hosted Docker setup above).
-> Kept for reference in case a managed HTTPS host is ever needed.
-
-The order API can run as a separate Render Web Service with a permanent HTTPS URL
-and a persistent disk for SQLite + uploaded slips.
-
-Files added for this:
-
-- `server/Dockerfile`: Docker image for `server/order_api.py`
-- `docker-compose.order-api.yml`: local/server Docker Compose runner with a persistent named volume
-- `render.yaml`: Render Blueprint for a Docker web service with a 1 GB persistent disk mounted at `/var/data`
-
-Recommended Render environment values:
-
-- `ORDER_API_HOST=0.0.0.0`
-- `ORDER_API_DB_PATH=/var/data/su-order-api/orders.db`
-- `ORDER_API_SLIPS_DIR=/var/data/su-order-api/slips`
-- `ORDER_PREFIX=FP28`
-- `ORDER_ROUND=1`
-- `KHANTOKE_TICKET_QUOTA=2000`
-- `GOOGLE_SHEETS_WEBHOOK_URL=<Apps Script /exec URL>`
-- `GOOGLE_SHEETS_WEBHOOK_TOKEN=<optional>`
-
-After Render deploys, copy its public URL, for example
-`https://su-order-api.onrender.com`, into Vercel as:
-
-- `ORDER_API_BASE_URL=https://su-order-api.onrender.com`
-
-Then redeploy the Vercel app. Check:
+## รันในเครื่อง
 
 ```bash
-curl https://su-order-api.onrender.com/health
+./dev.sh
 ```
 
-For local or self-hosted Docker testing:
+สคริปต์จะสร้าง `.env.local` ให้ถ้ายังไม่มี แล้วเปิด order-api ที่พอร์ต 10000 กับ Next ที่พอร์ต 3000
+DB ที่ใช้คือ `data/dev/orders.db` ไม่ใช่ของจริง ลบทิ้งได้ตลอด
+
+เข้าหลังร้านที่ http://localhost:3000/admin ด้วย `staff` / `dev`
+
+## เทสต์
 
 ```bash
-docker compose --env-file .env.order-api.example -f docker-compose.order-api.yml up --build -d
-curl http://localhost:3010/health
+npm test
+npx tsc --noEmit && npm run lint
+
+python3 -m pytest server/tests/
+python3 -m pytest tests/
 ```
 
-Docker Compose stores the SQLite database and uploaded slips in the named volume
-`su-store_order-api-data`.
+pytest ต้องรันแยกสองรอบ เพราะทั้งสองโฟลเดอร์ชื่อ package `tests` เหมือนกัน รวมกันแล้วจะชน
 
-Admin page:
+## Deploy
 
-- URL: `http://localhost:3010/admin`
-- Server URL: `http://172.26.55.36:3010/admin`
-- Auth: paste `ORDER_API_TOKEN` into the token field
-- Features: list orders, open uploaded slips, and update order status
+production รันบนเครื่อง arch ของเรา ใช้ Docker Compose และเปิดออกเน็ตผ่าน Cloudflare Tunnel
 
-Read-only order display:
+```bash
+./deploy.sh          # ทั้งสอง service
+./deploy.sh store    # เฉพาะหน้าเว็บ
+./deploy.sh api      # เฉพาะ order-api (แก้แค่ server/ ใช้อันนี้ เร็วกว่า)
+```
 
-- URL: `http://localhost:3010/orders`
-- Server URL: `http://172.26.55.36:3010/orders`
-- Auth: paste `ORDER_API_TOKEN` into the token field
-- Features: view, search, filter, and open uploaded slips without editing order status
+ต้อง commit ให้เรียบร้อยก่อน ถ้ามีไฟล์ค้างสคริปต์จะไม่ยอม deploy
+มันจะส่งโค้ดตาม commit ปัจจุบันขึ้นไป build ใหม่ รอจน container healthy แล้วค่อยเขียน `REVISION`
+ค่าเริ่มต้นจะต่อไปที่ `park@100.94.120.103` (Tailscale) ถ้าจะใช้ host อื่นให้ตั้ง `DEPLOY_HOST`
 
-Google Sheets webhook:
+ข้อมูลจริงอยู่บน host ที่
 
-- Orders are routed into product tabs named `POLO`, `BUNDLE`, `JACKET`, and `HEADBAND`
-- After updating Apps Script, run `resetOrderSheets()` once to clear old rows and rewrite headers
+- DB: `/home/park/SU-STORE/data/order-api/su-order-api/orders.db`
+- สลิป: `/home/park/SU-STORE/data/order-api/su-order-api/slips/`
 
-เว็บขายเสื้อพี่เก็ต
+backup DB ให้ใช้ `sqlite3 orders.db ".backup ..."` ห้าม `cp` เพราะเป็นโหมด WAL ไฟล์ที่ได้อาจไม่ครบ
 
-## Order API
+## หลังร้าน
 
-ถ้าต้องการให้ Vercel ใช้ฐานข้อมูลบน server ภายนอก ให้ตั้ง environment variables ต่อไปนี้ในโปรเจกต์:
+- `/admin` (หลังร้านใหม่) ใช้เพิ่มสินค้า ตั้งไซซ์/สี/สต็อก ตรวจสลิป เปลี่ยนสถานะออเดอร์ ดูยอดขาย และเปิด/ปิดหน้าร้าน
+  login ด้วยบัญชีใน `admin_users`
+- admin FP28 ตัวเก่า (`admin.sumfu.xyz`) กับ claim station ยังใช้ดูออเดอร์ FP28 ได้
 
-- `ORDER_API_BASE_URL`
-- `ORDER_API_TOKEN`
-- `GOOGLE_SHEETS_WEBHOOK_URL` (optional)
-- `GOOGLE_SHEETS_WEBHOOK_TOKEN` (optional)
+เลขออเดอร์ร้านใหม่เป็น `SU{ปีเดือน}-{ลำดับ}` เช่น `SU2610-0001` เริ่มนับใหม่ทุกเดือน
+ออเดอร์ FP28 เดิมเป็นแบบ `FP2801501`
 
-service ฝั่ง server ใช้ไฟล์ [server/order_api.py](server/order_api.py) และเก็บข้อมูลใน SQLite
+## อ่านเพิ่ม
 
-- รันด้วย Docker Compose (ไม่มี systemd service สำหรับตัวแอป — ดู "Deployment (primary)" ด้านบน)
-- DB path บน host: `/home/park/SU-STORE/data/order-api/su-order-api/orders.db`
-  (path ใน container: `/var/data/su-order-api/orders.db`)
-- slip uploads บน host: `/home/park/SU-STORE/data/order-api/su-order-api/slips/`
-  (path ใน container: `/var/data/su-order-api/slips/`)
-- รูปแบบเลขออเดอร์: `{ORDER_PREFIX}{sequence:04d}{phase}` — prefix + เลขลำดับ 4 หลัก (zero-pad) + เลข phase ต่อท้าย
-  ตัวอย่าง prefix `FP28`, sequence 150, phase 1 → `FP2801501`
-- Google Sheets webhook sample: `server/google_sheets_webhook.gs`
-  - ใส่ spreadsheet id ของคุณเองในตัวอย่าง (placeholder: `YOUR_SPREADSHEET_ID`, `gid=0`)
-  - note: Google Sheets `pubhtml` URL is read-only publish view, not a webhook URL
+รายละเอียดโครงสร้าง server, tunnel และข้อควรระวังเวลาแก้โค้ดอยู่ใน `CLAUDE.md` กับ `server/CLAUDE.md`
 
-ถ้าต้องการเปิดอัปโหลดสลิปบน Vercel ด้วย ต้องตั้ง `BLOB_READ_WRITE_TOKEN` หรือเชื่อม Vercel Blob กับ project.
+`render.yaml` กับ `docker-compose.order-api.yml` เป็นของเก่าตอนที่เคยคิดจะย้ายไป Render ตอนนี้ไม่ได้ใช้
