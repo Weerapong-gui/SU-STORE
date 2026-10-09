@@ -2697,6 +2697,13 @@ class OrderRequestHandler(BaseHTTPRequestHandler):
             self._send_json(HTTPStatus.OK, {"status": "ok"})
             return
 
+        if path == "/":
+            self.send_response(HTTPStatus.FOUND)
+            self.send_header("Location", "/admin")
+            self.send_header("Content-Length", "0")
+            self.end_headers()
+            return
+
         if path == "/admin/users":
             if not self._has_superadmin_authorization():
                 self._deny_unauthorized()
