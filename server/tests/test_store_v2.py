@@ -187,6 +187,17 @@ class TestOrders:
         with pytest.raises(db.StoreError):
             db.update_order(conn, order["orderCode"], {"status": "paid"})
 
+    def test_lookup_by_code_and_phone(self):
+        conn = _conn()
+        vid = _product(conn)["variants"][0]["id"]
+        order = db.create_order(conn, {"items": [{"variantId": vid, "quantity": 1}], "customer": CUSTOMER})
+        found = db.lookup_order(conn, order["orderCode"].lower(), "081-234-5678")
+        assert found["accessToken"] == order["accessToken"]
+        for code, phone in [(order["orderCode"], "0899999999"), ("SU0000-0001", CUSTOMER["phone"]), (order["orderCode"], "")]:
+            with pytest.raises(db.StoreError) as err:
+                db.lookup_order(conn, code, phone)
+            assert err.value.status == 404
+
     def test_csv_export_has_one_row_per_item(self):
         conn = _conn()
         p = _product(conn, variants=[{"size": "M", "price": 100}, {"size": "L", "price": 120}])

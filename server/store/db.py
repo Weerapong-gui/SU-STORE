@@ -531,6 +531,22 @@ def create_order(connection: sqlite3.Connection, payload: Any) -> dict[str, Any]
     return get_order(connection, order_code, include_token=True)
 
 
+def lookup_order(connection: sqlite3.Connection, order_code: Any, phone: Any) -> dict[str, Any]:
+    """Customer self-service: order code + the phone used at checkout returns the order
+    with its access token. Both failure cases give the same answer so codes can't be
+    probed."""
+    not_found = StoreError(404, "ไม่พบออเดอร์ หรือเบอร์โทรไม่ตรงกับที่ใช้สั่งซื้อ")
+    if not isinstance(order_code, str) or not isinstance(phone, str):
+        raise not_found
+    row = connection.execute(
+        "SELECT * FROM store_orders WHERE order_code = ?", (order_code.strip().upper(),)
+    ).fetchone()
+    digits = re.sub(r"\D", "", phone)
+    if row is None or not digits or re.sub(r"\D", "", json.loads(row["customer_json"]).get("phone", "")) != digits:
+        raise not_found
+    return _serialize_order(connection, row, include_token=True)
+
+
 def attach_slip(connection: sqlite3.Connection, order_code: str, slip: dict[str, Any]) -> dict[str, Any]:
     row = _fetch_order_row(connection, order_code)
     if row["status"] not in ("pending_payment", "waiting_confirm"):

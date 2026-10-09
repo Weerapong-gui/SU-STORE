@@ -75,6 +75,11 @@ def _route(handler: Any, method: str, path: str, query: dict[str, str], core: An
             core.log_audit(conn, order["orderCode"], "v2_order_created", f"total={order['totalAmount']}")
         return send(HTTPStatus.CREATED, order)
 
+    if method == "POST" and path == "/v2/orders/lookup":
+        payload = _json_body(handler)
+        with core.open_db() as conn:
+            return send(HTTPStatus.OK, db.lookup_order(conn, payload.get("orderCode"), payload.get("phone")))
+
     m = re.fullmatch(r"/v2/orders/(SU\d{4}-\d{4,})", path)
     if method == "GET" and m:
         with core.open_db() as conn:

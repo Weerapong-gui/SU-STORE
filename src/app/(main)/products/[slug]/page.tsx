@@ -1,33 +1,22 @@
-import { redirect } from "next/navigation";
 import type { Metadata } from "next";
-import { getProductBySlug, products } from "@/data/products";
-import { createConfiguratorHref } from "@/lib/cart";
+import { notFound } from "next/navigation";
+import { Container } from "@/components/ui/Container";
+import { ProductDetail } from "@/components/store/ProductDetail";
+import { getStoreProduct } from "@/lib/storeApi";
 
-type ProductDetailPageProps = {
-  params: {
-    slug: string;
-  };
-};
+export const dynamic = "force-dynamic";
 
-export function generateStaticParams() {
-  return products.map((product) => ({ slug: product.slug }));
+export async function generateMetadata({ params }: { params: { slug: string } }): Promise<Metadata> {
+  const product = await getStoreProduct(params.slug);
+  return { title: product ? `${product.name} · SU STORE` : "SU STORE" };
 }
 
-export function generateMetadata({ params }: ProductDetailPageProps): Metadata {
-  const selectedProduct = getProductBySlug(params.slug);
-
-  if (!selectedProduct) {
-    return {
-      title: "Product Not Found"
-    };
-  }
-
-  return {
-    title: `${selectedProduct.name} | SU STORE`,
-    description: selectedProduct.description
-  };
-}
-
-export default function ProductDetailPage({ params }: ProductDetailPageProps) {
-  redirect(createConfiguratorHref(params.slug, "payment"));
+export default async function ProductPage({ params }: { params: { slug: string } }) {
+  const product = await getStoreProduct(params.slug);
+  if (!product) notFound();
+  return (
+    <Container className="py-10 md:py-14">
+      <ProductDetail product={product} />
+    </Container>
+  );
 }

@@ -1,35 +1,16 @@
-import { ProductCard } from "@/components/ProductCard";
-import { ProductsEmptyState } from "@/components/ProductsEmptyState";
 import { Container } from "@/components/ui/Container";
-import { getAvailableProducts } from "@/lib/getProducts";
+import { ProductGrid } from "@/components/store/ProductGrid";
+import { SectionHeading } from "@/components/store/SectionHeading";
+import { getStoreProducts } from "@/lib/storeApi";
 
 export const dynamic = "force-dynamic";
 
 export default async function ProductsPage() {
-  const products = await getAvailableProducts();
-
+  const products = await getStoreProducts();
   return (
-    <section className="bg-mist py-20 md:py-28">
-      <Container>
-        <div className="mb-14 text-center">
-          <p className="text-xs font-semibold tracking-[0.16em] text-ink-tertiary">
-            FRESHER PACKAGE 28TH
-          </p>
-          <h1 className="mt-3 text-5xl font-bold tracking-tight text-ink md:text-6xl">
-            Products
-          </h1>
-        </div>
-
-        {products.length === 0 ? (
-          <ProductsEmptyState />
-        ) : (
-          <div className="grid gap-5 md:grid-cols-2">
-            {products.map((product, index) => (
-              <ProductCard key={product.slug} product={product} priority={index === 0} />
-            ))}
-          </div>
-        )}
-      </Container>
-    </section>
+    <Container className="py-12 md:py-16">
+      <SectionHeading textKey="allProducts" className="mb-8 text-3xl font-semibold tracking-tight text-ink md:text-4xl" />
+      <ProductGrid products={products} />
+    </Container>
   );
 }

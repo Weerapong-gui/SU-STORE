@@ -45,8 +45,8 @@ export async function middleware(request: NextRequest) {
     return NextResponse.next();
   }
 
-  // ── Rate-limit POST /api/order ──────────────────────────────────────────────
-  if (request.method === "POST" && pathname === "/api/order") {
+  // ── Rate-limit order creation and order lookup ──────────────────────────────
+  if (request.method === "POST" && (pathname === "/api/store/orders" || pathname === "/api/store/orders/lookup")) {
     const ip =
       request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ??
       request.headers.get("x-real-ip") ??

@@ -2,8 +2,8 @@ import type { Metadata } from "next";
 import "@/app/globals.css";
 
 export const metadata: Metadata = {
-  title: "Fresher Package 28th",
-  description: "SU STORE. Fresher shirt store for ordering individual shirts and sets.",
+  title: "SU STORE",
+  description: "SU STORE · Official store of the Mae Fah Luang University Student Union.",
   icons: {
     icon: [
       { url: "/images/LOGO-01.png", media: "(prefers-color-scheme: light)" },
