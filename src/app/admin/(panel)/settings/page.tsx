@@ -40,7 +40,7 @@ export default function SettingsPage() {
   function toggleSite() {
     const closing = !settings!.siteClosed;
     const question = closing
-      ? "ปิดหน้าร้าน? ลูกค้าจะเห็นหน้า \"ปิดปรับปรุง\" ทุกหน้า (หลังร้านยังใช้ได้ตามปกติ)"
+      ? "ปิดหน้าร้าน? ลูกค้าจะเห็นหน้า \"ร้านปิดอยู่ตอนนี้\" ทุกหน้า (หลังร้านยังใช้ได้ตามปกติ)"
       : "เปิดหน้าร้านให้ลูกค้าเข้าได้?";
     if (window.confirm(question)) save({ siteClosed: closing }, closing ? "ปิดหน้าร้านแล้ว" : "เปิดหน้าร้านแล้ว");
   }
@@ -63,7 +63,7 @@ export default function SettingsPage() {
             }`}
           >
             <span className={`h-2.5 w-2.5 rounded-full ${settings.siteClosed ? "bg-red-600" : "bg-emerald-600"}`} />
-            {settings.siteClosed ? "ปิดอยู่ — ลูกค้าเห็นหน้าปิดปรับปรุง" : "เปิดอยู่ — ลูกค้าเข้าซื้อได้"}
+            {settings.siteClosed ? "ปิดอยู่ — ลูกค้าเห็นหน้าร้านปิด" : "เปิดอยู่ — ลูกค้าเข้าซื้อได้"}
           </span>
           <Button variant={settings.siteClosed ? "primary" : "danger"} disabled={busy} onClick={toggleSite}>
             {settings.siteClosed ? "เปิดหน้าร้าน" : "ปิดหน้าร้าน"}
