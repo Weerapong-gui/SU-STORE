@@ -6,7 +6,9 @@
 #   ./deploy.sh api      # order-api only
 #
 # Ships `git archive HEAD` (never uncommitted edits) via rsync over SSH key auth.
-# Server-only files (.env, .env.local, data/) are not in git, so they are never touched.
+# Code directories (src/, server/, public/, …) are mirrored exactly, so files deleted in
+# git are deleted on the server too. Server-only files (.env, .env.local, data/, .claude/)
+# live outside those directories and are never touched.
 # Override the target with DEPLOY_HOST=park@192.168.31.242 (LAN) if Tailscale is down.
 set -euo pipefail
 
@@ -35,10 +37,14 @@ trap 'rm -rf "$STAGE"' EXIT
 
 echo "==> Exporting $REV..."
 git archive HEAD | tar -x -C "$STAGE"
-echo "$REV $(date -u +%FT%TZ)" > "$STAGE/REVISION"
 
 echo "==> Syncing to $SERVER:$REMOTE_DIR..."
 rsync -rlcz "$STAGE/" "$SERVER:$REMOTE_DIR/"
+# Mirror each top-level code directory (skipping dot-dirs like .claude/ that also hold
+# server-local state) so deleted files don't linger and break the build.
+for DIR in $(cd "$STAGE" && find . -mindepth 1 -maxdepth 1 -type d ! -name '.*' | sed 's|^\./||'); do
+  rsync -rlcz --delete "$STAGE/$DIR/" "$SERVER:$REMOTE_DIR/$DIR/"
+done
 
 echo "==> Rebuilding: $SERVICES"
 $SSH "cd $REMOTE_DIR && docker compose --env-file .env up -d --build --no-deps $SERVICES"
@@ -49,6 +55,7 @@ for i in $(seq 1 30); do
   STATUS="$($SSH "docker inspect -f '{{.Name}}={{.State.Health.Status}}' su-store su-order-api")"
   if ! echo "$STATUS" | grep -qv '=healthy'; then
     echo "$STATUS"
+    $SSH "echo '$REV $(date -u +%FT%TZ)' > $REMOTE_DIR/REVISION"
     break
   fi
   if [ "$i" = 30 ]; then
