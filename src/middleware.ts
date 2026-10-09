@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { ADMIN_COOKIE } from "@/lib/adminAuth";
 
 // ── Rate limiting ──────────────────────────────────────────────────────────────
 const rateLimitMap = new Map<string, { count: number; resetAt: number }>();
@@ -35,6 +36,14 @@ function isPageRequest(request: NextRequest): boolean {
 
 export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
+
+  // ── Admin pages: require a staff session, never show the store-closed page ──
+  if (pathname === "/admin" || pathname.startsWith("/admin/")) {
+    if (pathname !== "/admin/login" && !request.cookies.get(ADMIN_COOKIE)?.value) {
+      return NextResponse.redirect(new URL("/admin/login", request.url));
+    }
+    return NextResponse.next();
+  }
 
   // ── Rate-limit POST /api/order ──────────────────────────────────────────────
   if (request.method === "POST" && pathname === "/api/order") {

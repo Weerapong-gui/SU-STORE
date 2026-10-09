@@ -56,7 +56,7 @@ def _route(handler: Any, method: str, path: str, query: dict[str, str], core: An
     send = handler._send_json
 
     # ── Public ────────────────────────────────────────────────────────────────
-    if method == "GET" and path == "/v2/meta":
+    if method == "GET" and path in ("/v2/meta", "/v2/admin/meta"):
         return send(HTTPStatus.OK, db.meta())
 
     if method == "GET" and path == "/v2/products":
