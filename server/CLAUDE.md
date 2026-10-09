@@ -69,3 +69,19 @@ Python HTTP server แบบ raw `http.server` (`ThreadingHTTPServer`) ไม่
 
 - เทมเพลตใบเสร็จ serve ที่ `GET /admin/receipt-template` (ค่าคงที่ `RECEIPT_SVG`) ฟอนต์ไทย `SukhumvitSet.ttc` ที่ `/fonts/SukhumvitSet.ttc`
 - admin และ claim station เติมข้อมูลลง SVG ฝั่ง client แล้ว `window.print()`
+
+---
+
+## Store v2 (`server/store/`) — ร้านค้าหลายสินค้า
+
+ระบบขายของใหม่ แยกจาก FP28 แต่อยู่ใน `orders.db` ไฟล์เดียวกัน
+
+- `store/db.py` — schema `store_*` + business logic (ไม่ import `order_api`), `store/api.py` — routes `/v2/*`
+- `order_api.py` แค่ forward ทุก `path.startswith("/v2/")` ไป `store_api.handle(self, METHOD, sys.modules[__name__])` และเรียก `store_db.ensure_store_db()` ท้าย `ensure_db()`
+- **ห้ามให้ v2 เขียนตาราง v1** (`orders`, `products`, `khantok_*`, `display2_*` …) — ข้อมูล FP28 ต้องอยู่เหมือนเดิม test `test_ensure_db_leaves_v1_orders_untouched` คุมไว้
+- ราคาและยอดรวมคำนวณจาก `store_variants` ฝั่ง server เสมอ client ส่งแค่ `variantId` + `quantity`
+- ตัดสต็อกใน `BEGIN IMMEDIATE` เดียวกับการสร้างออเดอร์ (`create_order`) ยกเลิกออเดอร์ = คืนสต็อก และสถานะ `cancelled` เป็นสถานะสุดท้าย
+- รหัสออเดอร์ `SU{YYMM}-{seq:04d}` จากตาราง `store_counters` เริ่มนับใหม่ทุกเดือน (เวลาไทย)
+- Admin auth: `POST /v2/admin/login` (username/password ใน `admin_users`) คืน token ใช้เป็น `Authorization: Claim <token>` หรือใช้ `Bearer ORDER_API_TOKEN`
+- ลบสินค้า/ตัวเลือกที่เคยถูกสั่งแล้ว → ระบบเปลี่ยนเป็น archived / inactive แทนการลบ
+- Tests: `server/tests/test_store_v2.py` (มี HTTP round-trip จริงผ่าน `OrderRequestHandler`)

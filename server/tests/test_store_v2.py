@@ -1,0 +1,307 @@
+"""SU STORE v2 (`server/store/`) — catalog, order codes, server-side pricing, stock,
+and an HTTP round-trip through OrderRequestHandler."""
+import json
+import os
+import sqlite3
+import sys
+import threading
+import urllib.error
+import urllib.request
+from datetime import datetime
+from http.server import ThreadingHTTPServer
+from unittest.mock import MagicMock
+
+import pytest
+
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
+sys.modules.setdefault("ocr", MagicMock())
+
+import order_api  # noqa: E402
+from store import db  # noqa: E402
+
+
+def _conn(path=":memory:") -> sqlite3.Connection:
+    conn = sqlite3.connect(path, check_same_thread=False)
+    conn.row_factory = sqlite3.Row
+    db.ensure_store_db(conn)
+    return conn
+
+
+def _product(conn, *, stock=5, variants=None, buyer_fields=None, status="active"):
+    return db.create_product(
+        conn,
+        {
+            "name": "SU Tote Bag",
+            "variants": variants or [{"size": "", "color": "Black", "price": 150, "stock": stock}],
+            "buyerFields": buyer_fields or [],
+            "status": status,
+        },
+    )
+
+
+CUSTOMER = {"name": "Somchai", "phone": "0812345678", "email": "s@example.com"}
+
+
+class TestOrderCode:
+    def test_sequence_and_monthly_reset(self):
+        conn = _conn()
+        oct_ = datetime(2026, 10, 9, tzinfo=db.TZ_BANGKOK)
+        nov = datetime(2026, 11, 1, tzinfo=db.TZ_BANGKOK)
+        assert db.next_order_code(conn, oct_) == "SU2610-0001"
+        assert db.next_order_code(conn, oct_) == "SU2610-0002"
+        assert db.next_order_code(conn, nov) == "SU2611-0001"
+        assert db.next_order_code(conn, oct_) == "SU2610-0003"
+
+    def test_period_uses_bangkok_time(self):
+        conn = _conn()
+        # 2026-10-31 18:00 UTC is already 1 Nov in Bangkok
+        utc = datetime(2026, 10, 31, 18, 0, tzinfo=db.timezone.utc)
+        assert db.next_order_code(conn, utc) == "SU2611-0001"
+
+
+class TestProducts:
+    def test_create_generates_unique_slug(self):
+        conn = _conn()
+        a, b = _product(conn), _product(conn)
+        assert a["slug"] == "su-tote-bag"
+        assert b["slug"] == "su-tote-bag-2"
+
+    def test_cannot_activate_without_variants(self):
+        conn = _conn()
+        p = db.create_product(conn, {"name": "Draft"})
+        with pytest.raises(db.StoreError):
+            db.update_product(conn, p["id"], {"status": "active"})
+
+    def test_public_list_hides_drafts(self):
+        conn = _conn()
+        _product(conn)
+        _product(conn, status="draft")
+        assert len(db.list_products(conn, public=True)) == 1
+        assert len(db.list_products(conn, public=False)) == 2
+
+    def test_duplicate_variant_rejected(self):
+        conn = _conn()
+        with pytest.raises(db.StoreError):
+            _product(conn, variants=[{"size": "M", "price": 1}, {"size": "M", "price": 2}])
+
+    def test_removed_variant_that_was_ordered_is_deactivated(self):
+        conn = _conn()
+        p = _product(conn)
+        vid = p["variants"][0]["id"]
+        db.create_order(conn, {"items": [{"variantId": vid, "quantity": 1}], "customer": CUSTOMER})
+        db.replace_variants(conn, p["id"], [{"size": "L", "price": 200}])
+        rows = conn.execute("SELECT id, active FROM store_variants WHERE product_id = ?", (p["id"],)).fetchall()
+        assert {(r["id"], r["active"]) for r in rows if r["id"] == vid} == {(vid, 0)}
+
+    def test_delete_ordered_product_archives(self):
+        conn = _conn()
+        p = _product(conn)
+        db.create_order(conn, {"items": [{"variantId": p["variants"][0]["id"], "quantity": 1}], "customer": CUSTOMER})
+        assert db.delete_product(conn, p["id"]) == {"deleted": False, "archived": True}
+
+
+class TestOrders:
+    def test_price_comes_from_server(self):
+        conn = _conn()
+        vid = _product(conn)["variants"][0]["id"]
+        order = db.create_order(
+            conn,
+            {"items": [{"variantId": vid, "quantity": 2, "unitPrice": 1}], "totalAmount": 1, "customer": CUSTOMER},
+        )
+        assert order["totalAmount"] == 300
+        assert order["orderCode"].startswith("SU")
+        assert order["accessToken"]
+
+    def test_stock_decrements_and_blocks_oversell(self):
+        conn = _conn()
+        vid = _product(conn, stock=2)["variants"][0]["id"]
+        db.create_order(conn, {"items": [{"variantId": vid, "quantity": 2}], "customer": CUSTOMER})
+        with pytest.raises(db.StoreError) as err:
+            db.create_order(conn, {"items": [{"variantId": vid, "quantity": 1}], "customer": CUSTOMER})
+        assert err.value.status == 409
+        assert conn.execute("SELECT stock FROM store_variants WHERE id = ?", (vid,)).fetchone()[0] == 0
+
+    def test_failed_order_rolls_back_stock_and_counter(self):
+        conn = _conn()
+        vid = _product(conn, stock=3)["variants"][0]["id"]
+        with pytest.raises(db.StoreError):
+            db.create_order(conn, {"items": [{"variantId": vid, "quantity": 1}], "customer": {"name": "x"}})
+        assert conn.execute("SELECT stock FROM store_variants WHERE id = ?", (vid,)).fetchone()[0] == 3
+        assert conn.execute("SELECT COUNT(*) FROM store_counters").fetchone()[0] == 0
+
+    def test_concurrent_buyers_do_not_oversell(self, tmp_path):
+        path = str(tmp_path / "store.db")
+        setup = _conn(path)
+        vid = _product(setup, stock=3)["variants"][0]["id"]
+        setup.commit()
+        results = []
+
+        def buy():
+            conn = sqlite3.connect(path, timeout=30, check_same_thread=False)
+            conn.row_factory = sqlite3.Row
+            try:
+                db.create_order(conn, {"items": [{"variantId": vid, "quantity": 1}], "customer": CUSTOMER})
+                results.append("ok")
+            except db.StoreError:
+                results.append("sold_out")
+
+        threads = [threading.Thread(target=buy) for _ in range(10)]
+        for t in threads:
+            t.start()
+        for t in threads:
+            t.join()
+        assert results.count("ok") == 3
+        assert setup.execute("SELECT stock FROM store_variants WHERE id = ?", (vid,)).fetchone()[0] == 0
+        codes = [r[0] for r in setup.execute("SELECT order_code FROM store_orders")]
+        assert len(set(codes)) == 3
+
+    def test_unlimited_stock(self):
+        conn = _conn()
+        vid = _product(conn, variants=[{"price": 10, "stock": None}])["variants"][0]["id"]
+        db.create_order(conn, {"items": [{"variantId": vid, "quantity": 50}], "customer": CUSTOMER})
+        assert conn.execute("SELECT stock FROM store_variants WHERE id = ?", (vid,)).fetchone()[0] is None
+
+    def test_product_buyer_fields_are_required(self):
+        conn = _conn()
+        vid = _product(conn, buyer_fields=["studentCode"])["variants"][0]["id"]
+        with pytest.raises(db.StoreError):
+            db.create_order(conn, {"items": [{"variantId": vid, "quantity": 1}], "customer": CUSTOMER})
+        order = db.create_order(
+            conn, {"items": [{"variantId": vid, "quantity": 1}], "customer": {**CUSTOMER, "studentCode": "6831501178"}}
+        )
+        assert order["customer"]["studentCode"] == "6831501178"
+
+    def test_draft_product_cannot_be_ordered(self):
+        conn = _conn()
+        vid = _product(conn, status="draft")["variants"][0]["id"]
+        with pytest.raises(db.StoreError) as err:
+            db.create_order(conn, {"items": [{"variantId": vid, "quantity": 1}], "customer": CUSTOMER})
+        assert err.value.status == 409
+
+    def test_cancel_returns_stock_and_is_final(self):
+        conn = _conn()
+        vid = _product(conn, stock=2)["variants"][0]["id"]
+        order = db.create_order(conn, {"items": [{"variantId": vid, "quantity": 2}], "customer": CUSTOMER})
+        db.update_order(conn, order["orderCode"], {"status": "cancelled"})
+        assert conn.execute("SELECT stock FROM store_variants WHERE id = ?", (vid,)).fetchone()[0] == 2
+        with pytest.raises(db.StoreError):
+            db.update_order(conn, order["orderCode"], {"status": "paid"})
+
+    def test_csv_export_has_one_row_per_item(self):
+        conn = _conn()
+        p = _product(conn, variants=[{"size": "M", "price": 100}, {"size": "L", "price": 120}])
+        db.create_order(
+            conn,
+            {"items": [{"variantId": v["id"], "quantity": 1} for v in p["variants"]], "customer": CUSTOMER},
+        )
+        rows = db.orders_csv_rows(conn)
+        assert len(rows) == 3 and rows[0][0] == "เลขออเดอร์"
+
+
+def test_ensure_db_leaves_v1_orders_untouched(tmp_path, monkeypatch):
+    """Running the v2 migration on a DB with FP28 data must not change v1 rows."""
+    path = tmp_path / "orders.db"
+    monkeypatch.setattr(order_api, "DB_PATH", path)
+    monkeypatch.setattr(order_api, "SLIPS_DIR", tmp_path / "slips")
+    order_api.ensure_db()
+    with sqlite3.connect(path) as conn:
+        conn.execute(
+            "INSERT INTO orders (order_code, round_number, status, payment_status, created_at, updated_at, "
+            "product_slug, product_name, product_short_name, product_tagline, product_price, product_image, "
+            "product_category, size, quantity, total_amount, first_name, last_name, nickname, email, phone, "
+            "school, access_token) VALUES ('FP2800011', 1, 'paid', 'paid', 't', 't', 'single-shirt', 'n', 'n', "
+            "'t', 399, 'i', 'single', 'M', 1, 399, 'a', 'b', 'c', 'e', 'p', 's', 'tok')"
+        )
+    with sqlite3.connect(path) as conn:
+        before = conn.execute("SELECT * FROM orders").fetchall()
+    order_api.ensure_db()
+    with sqlite3.connect(path) as conn:
+        assert conn.execute("SELECT * FROM orders").fetchall() == before
+        assert conn.execute("SELECT COUNT(*) FROM store_products").fetchone()[0] == 0
+
+
+@pytest.fixture
+def server(tmp_path, monkeypatch):
+    monkeypatch.setattr(order_api, "DB_PATH", tmp_path / "orders.db")
+    monkeypatch.setattr(order_api, "SLIPS_DIR", tmp_path / "slips")
+    monkeypatch.setattr(order_api, "ORDER_API_TOKEN", "test-token")
+    monkeypatch.setattr(order_api, "trigger_ocr_async", lambda *a, **k: None)
+    monkeypatch.setattr(order_api, "_CONN_POOL", [])
+    order_api.ensure_db()
+    with sqlite3.connect(tmp_path / "orders.db") as conn:
+        conn.execute(
+            "INSERT INTO admin_users (username, claim_token, is_superadmin, created_at) VALUES (?, ?, 0, 't')",
+            ("staff1", order_api.compute_claim_token("staff1", "pw")),
+        )
+    httpd = ThreadingHTTPServer(("127.0.0.1", 0), order_api.OrderRequestHandler)
+    thread = threading.Thread(target=httpd.serve_forever, daemon=True)
+    thread.start()
+    yield f"http://127.0.0.1:{httpd.server_address[1]}"
+    httpd.shutdown()
+
+
+def _call(base, method, path, body=None, headers=None, raw=None, content_type=None):
+    data = raw if raw is not None else (json.dumps(body).encode() if body is not None else None)
+    req = urllib.request.Request(base + path, data=data, method=method, headers=headers or {})
+    if data is not None:
+        req.add_header("Content-Type", content_type or "application/json")
+    try:
+        with urllib.request.urlopen(req) as res:
+            return res.status, res.read()
+    except urllib.error.HTTPError as error:
+        return error.code, error.read()
+
+
+def test_http_round_trip(server):
+    status, body = _call(server, "POST", "/v2/admin/login", {"username": "staff1", "password": "wrong"})
+    assert status == 401
+    status, body = _call(server, "POST", "/v2/admin/login", {"username": "staff1", "password": "pw"})
+    assert status == 200
+    admin = {"Authorization": "Claim " + json.loads(body)["token"]}
+
+    assert _call(server, "GET", "/v2/admin/products")[0] == 401
+    status, body = _call(
+        server, "POST", "/v2/admin/products",
+        {"name": "Hoodie", "status": "active", "buyerFields": ["studentCode"],
+         "variants": [{"size": "M", "color": "Navy", "price": 590, "stock": 1}]},
+        admin,
+    )
+    assert status == 201, body
+    product = json.loads(body)
+
+    status, body = _call(server, "GET", "/v2/products")
+    assert [p["slug"] for p in json.loads(body)["products"]] == ["hoodie"]
+
+    order_body = {"items": [{"variantId": product["variants"][0]["id"], "quantity": 1}],
+                  "customer": {**CUSTOMER, "studentCode": "6800000001"}}
+    status, body = _call(server, "POST", "/v2/orders", order_body)
+    assert status == 201, body
+    order = json.loads(body)
+    assert order["totalAmount"] == 590
+    code, token = order["orderCode"], order["accessToken"]
+    assert _call(server, "POST", "/v2/orders", order_body)[0] == 409  # sold out
+
+    assert _call(server, "GET", f"/v2/orders/{code}")[0] == 401
+    assert _call(server, "GET", f"/v2/orders/{code}?token={token}")[0] == 200
+
+    boundary = "xxBOUNDARYxx"
+    multipart = (
+        f"--{boundary}\r\nContent-Disposition: form-data; name=\"slip\"; filename=\"s.png\"\r\n"
+        f"Content-Type: image/png\r\n\r\n"
+    ).encode() + b"\x89PNG fake" + f"\r\n--{boundary}--\r\n".encode()
+    status, body = _call(server, "POST", f"/v2/orders/{code}/slip", headers={"X-Order-Token": token},
+                         raw=multipart, content_type=f"multipart/form-data; boundary={boundary}")
+    assert status == 200, body
+    assert json.loads(body)["status"] == "waiting_confirm"
+
+    status, body = _call(server, "PATCH", f"/v2/admin/orders/{code}", {"status": "paid"}, admin)
+    assert status == 200 and json.loads(body)["statusLabel"] == "ชำระแล้ว"
+    status, body = _call(server, "GET", "/v2/admin/orders?status=paid", headers=admin)
+    assert json.loads(body)["total"] == 1
+    status, body = _call(server, "GET", f"/v2/admin/orders/{code}/slip", headers=admin)
+    assert status == 200 and body.startswith(b"\x89PNG")
+    status, body = _call(server, "GET", "/v2/admin/orders.csv", headers=admin)
+    assert status == 200 and "Hoodie" in body.decode("utf-8-sig")
+
+    # v1 endpoints still served
+    assert _call(server, "GET", "/health")[0] == 200

@@ -20,3 +20,6 @@ __pycache__/
 
 # superpowers scratch
 .superpowers/
+
+# python venv (local dev)
+.venv/

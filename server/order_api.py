@@ -22,8 +22,12 @@ from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from typing import Any
+import sys
 import time
 from urllib.parse import urlparse
+
+from store import api as store_api
+from store import db as store_db
 
 HOST = os.environ.get("ORDER_API_HOST", "0.0.0.0")
 PORT = int(os.environ.get("ORDER_API_PORT", os.environ.get("PORT", "3010")))
@@ -711,6 +715,7 @@ def ensure_db() -> None:
                       p["image_path"], p["sort_order"], seed_now, seed_now,
                   ),
               )
+      store_db.ensure_store_db(connection)
 
 
 _CONN_POOL: list[sqlite3.Connection] = []
@@ -2693,6 +2698,9 @@ class OrderRequestHandler(BaseHTTPRequestHandler):
 
     def do_GET(self) -> None:
         path = urlparse(self.path).path
+        if path.startswith("/v2/"):
+            store_api.handle(self, "GET", sys.modules[__name__])
+            return
         if path == "/health":
             self._send_json(HTTPStatus.OK, {"status": "ok"})
             return
@@ -3600,6 +3608,9 @@ class OrderRequestHandler(BaseHTTPRequestHandler):
     def do_POST(self) -> None:
         global _test_warning_until
         path = urlparse(self.path).path
+        if path.startswith("/v2/"):
+            store_api.handle(self, "POST", sys.modules[__name__])
+            return
 
         if path == "/admin/users":
             if not self._has_superadmin_authorization():
@@ -4162,6 +4173,9 @@ class OrderRequestHandler(BaseHTTPRequestHandler):
 
     def do_PUT(self) -> None:
         path = urlparse(self.path).path
+        if path.startswith("/v2/"):
+            store_api.handle(self, "PUT", sys.modules[__name__])
+            return
 
         admin_product_match = re.fullmatch(r"/admin/products/([a-z0-9-]+)", path)
         if admin_product_match:
@@ -4261,6 +4275,9 @@ class OrderRequestHandler(BaseHTTPRequestHandler):
 
     def do_PATCH(self) -> None:
         path = urlparse(self.path).path
+        if path.startswith("/v2/"):
+            store_api.handle(self, "PATCH", sys.modules[__name__])
+            return
 
         claim_received_match = re.fullmatch(r"/claim-station/orders/([A-Z0-9-]+)/received", path)
         if claim_received_match:
@@ -4583,6 +4600,9 @@ class OrderRequestHandler(BaseHTTPRequestHandler):
 
     def do_DELETE(self) -> None:
         path = urlparse(self.path).path
+        if path.startswith("/v2/"):
+            store_api.handle(self, "DELETE", sys.modules[__name__])
+            return
 
         asset_del_match = re.fullmatch(r"/display2/admin/assets/(\d+)", path)
         if asset_del_match:

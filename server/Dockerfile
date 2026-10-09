@@ -19,6 +19,7 @@ RUN pip install --no-cache-dir pytesseract==0.3.13 Pillow==10.4.0 opencv-python-
 
 COPY server/order_api.py ./order_api.py
 COPY server/ocr.py ./ocr.py
+COPY server/store/ ./store/
 COPY server/templates/ ./templates/
 
 RUN mkdir -p /var/data/su-order-api/slips /var/data/easyocr-models
