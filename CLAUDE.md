@@ -3,7 +3,7 @@
 คู่มือนี้เก็บเฉพาะสิ่งที่อ่านจากโค้ดเองไม่ได้ — โครงสร้างไฟล์/schema/รายการ dependency ให้ดูจากโค้ดตรงๆ
 
 รายละเอียดที่โหลดเมื่อจำเป็น:
-- `server/CLAUDE.md` — โครงสร้างภายใน `order_api.py`, กฎการแก้ template, หน้าจอ operator (claim station / display / refund / OCR / receipt)
+- `server/CLAUDE.md` — โครงสร้าง backend (`order_api.py` + `fp28/` + `store/`), กฎการแก้ template, หน้าจอ operator (claim station / display / refund / OCR / receipt)
 - skill `deploy` — ขั้นตอน deploy, SSH เข้าเซิร์ฟเวอร์, คำสั่ง docker ที่ใช้บ่อย
 
 ---
@@ -193,7 +193,7 @@ deploy เฉพาะ commit ที่ commit แล้ว (มี uncommitted 
 
 ### 🐛 JavaScript อยู่ผิดไฟล์ template
 **ปัญหา:** ใส่ JS ของหน้าหนึ่ง (เช่น `initTheme` ของ admin) ไปในไฟล์ template อีกหน้า → ฟีเจอร์ใช้ไม่ได้
-**บทเรียน:** แต่ละหน้าคือไฟล์ `templates/*.html` คนละไฟล์และมี `<script>` ของตัวเอง แก้ JS ให้แก้ในไฟล์ template ของหน้านั้น ไม่ใช่ในไฟล์อื่นหรือใน `order_api.py`
+**บทเรียน:** แต่ละหน้าคือไฟล์ `templates/*.html` คนละไฟล์และมี `<script>` ของตัวเอง แก้ JS ให้แก้ในไฟล์ template ของหน้านั้น ไม่ใช่ในไฟล์อื่นหรือในโค้ด Python
 
 ### 🐛 ไม่ได้ escape ข้อมูลลูกค้าก่อน innerHTML
 **ปัญหา:** ต่อค่าที่มาจากผู้ใช้ (ชื่อ/note) เข้า HTML string ตรงๆ → HTML แตก หรือเสี่ยง XSS
@@ -237,8 +237,7 @@ deploy เฉพาะ commit ที่ commit แล้ว (มี uncommitted 
 
 ## 9. Checklist ก่อน Deploy
 
-- [ ] Python syntax: `python3 -c "import ast; ast.parse(open('server/order_api.py').read())"`
-- [ ] pytest ผ่าน (ดู env vars ที่ต้องตั้งใน `.github/workflows/ci.yml` — import ของ `order_api.py` สร้าง data dir ตอน import)
+- [ ] pytest ผ่าน (ดู env vars ที่ต้องตั้งใน `.github/workflows/ci.yml` — `fp28/config.py` สร้าง data dir ตอน import) และ `ruff check server tests` ผ่าน
 - [ ] ถ้าแก้แค่ `server/` → `./deploy.sh api`
 - [ ] ถ้าแก้ Next.js → `./deploy.sh store` (แจ้งผู้ดูแลก่อนถ้ามีลูกค้ากำลังสั่งซื้อ)
 - [ ] หลัง deploy รอ ~30 วินาที แล้วรีเฟรชหน้า admin เพื่อตรวจสอบ

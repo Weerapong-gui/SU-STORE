@@ -4,31 +4,36 @@
 
 ---
 
-## `order_api.py` — ไฟล์หลักของ backend
+## โครงสร้าง backend
 
-Python HTTP server แบบ raw `http.server` (`ThreadingHTTPServer`) ไม่ใช้ Flask/FastAPI รวม DB layer, business logic, routing และการ serve หน้า HTML ไว้ในไฟล์เดียว
+Python HTTP server แบบ raw `http.server` (`ThreadingHTTPServer`) ไม่ใช้ Flask/FastAPI
 
-> **สำคัญ:** HTML/CSS/JS **ไม่ได้ฝังเป็น `r"""..."""` ใน Python** ทุกหน้าอยู่เป็นไฟล์แยกใน `server/templates/*.html` และถูกโหลดจากดิสก์ตอน import:
->
-> ```python
-> _TEMPLATES_DIR = Path(__file__).parent / "templates"
-> ADMIN_HTML        = (_TEMPLATES_DIR / "admin.html").read_text(...)
-> CLAIM_STATION_HTML= (_TEMPLATES_DIR / "claim_station.html").read_text(...)
-> RECEIPT_SVG       = (_TEMPLATES_DIR / "receipt_template.svg").read_bytes()
-> ```
->
-> ดังนั้น **แก้ HTML/CSS/JS ให้แก้ที่ไฟล์ template ของหน้านั้นๆ** ไม่ใช่ใน `order_api.py`
+| ไฟล์ | หน้าที่ |
+|---|---|
+| `order_api.py` | entrypoint เท่านั้น: `ensure_db()`, fork worker (`ORDER_API_WORKERS`, `SO_REUSEPORT`), thread backup รายวัน |
+| `fp28/config.py` | env และค่าคงที่ (`ORDER_PREFIX`, quota ขันโตก, `ORDER_STATUSES`, `STATION_BY_SLUG`, path ของ slips/slides/assets) |
+| `fp28/database.py` | schema (`ensure_db`), connection pool (`open_db`), read cache สั้นๆ, `log_audit` |
+| `fp28/orders.py` | ออเดอร์ FP28: validate, create, update, serialize, `mark_khantok_station_claimed` |
+| `fp28/khantok.py`, `display.py`, `slips.py`, `sheets.py` | quota ขันโตก · Display 1/2 · ไฟล์สลิป + OCR · sync Google Sheets |
+| `fp28/stats.py`, `products.py`, `site.py`, `backups.py` | summary/analytics/CSV · สินค้า v1 · ตั้งค่าเว็บ + รอบขาย · backup |
+| `fp28/auth.py`, `timeutil.py`, `pages.py` | token ต่างๆ · เวลาไทย · โหลด HTML template |
+| `fp28/web/handler.py` | `OrderRequestHandler`: helper ส่ง/อ่าน request (`send_json`, `read_json`, …), เช็ก auth และ dispatch |
+| `fp28/web/routes.py` | **ตาราง route ทั้งหมด** ไล่จากบนลงล่าง route แรกที่ match ชนะ |
+| `fp28/web/routes_*.py` | ฟังก์ชันต่อ route `handle_<method>_<path>(h, path, match)` แยก public / admin / claim_station / display |
+| `store/` | ร้านค้า v2 (`/v2/*`) ดูหัวข้อด้านล่าง |
 
-### หาโค้ดยังไง
+**เพิ่ม route ใหม่:**
+1. เขียนฟังก์ชัน `handle_…` ใน `routes_*.py` ของหมวดนั้น
+2. เพิ่ม `Route(...)` ใน `routes.py` ระวังลำดับ ถ้า pattern ทับกันให้ตัวที่เฉพาะกว่าอยู่ก่อน
+3. ให้ handler อ่าน request → เรียกฟังก์ชันใน `fp28/*.py` → ส่ง response
 
-ไฟล์ยาว ~4,500 บรรทัดและเลื่อนทุกครั้งที่แก้ — ค้นด้วยชื่อฟังก์ชัน/คลาส อย่าอ้างเลขบรรทัด
+**ค่าที่ test สลับได้** (`DB_PATH`, `SLIPS_DIR`, `ORDER_API_TOKEN`, quota, `trigger_ocr_async`, …) ต้องอ่านผ่านโมดูลเสมอ เช่น `config.DB_PATH` ห้าม `from fp28.config import DB_PATH` (`tests/test_module_layout.py` คุมไว้)
 
-- **Config / constants** — `ORDER_PREFIX`, KHANTOK quotas, `ORDER_STATUSES`, `STATION_BY_SLUG`, `TZ_BANGKOK`, `DEFAULT_PRODUCTS`
-- **DB layer** — `open_db()` (connection pool + WAL), schema init, `log_audit()`
-- **Caching** — `cache_get`/`cache_set` (TTL สั้น), `create_orders_summary_cached()`, `get_stats_snapshot()`
-- **Business logic** — `create_order_code()`, `reserve_khantok_ticket()`, `mark_khantok_station_claimed()`, `enqueue_display2()`, `_run_ocr_for_slip()`, `sync_order_to_google_sheets()`
-- **`class OrderRequestHandler(BaseHTTPRequestHandler)`** (ใกล้ท้ายไฟล์) — dispatcher หลัก แยกตาม HTTP method: `do_GET` / `do_POST` / `do_PUT` / `do_PATCH` / `do_DELETE` (เทียบ `path` + regex)
-- **`_ReusePortHTTPServer` + main** — bootstrap (รองรับหลาย worker ผ่าน `SO_REUSEPORT`, จำนวนจาก `ORDER_API_WORKERS`)
+**`server/tests/test_fp28_routes_snapshot.py`** ยิงทุก route ของ FP28 แล้วเทียบกับ snapshot
+- refactor แล้วต้องผ่านโดยไม่แก้ snapshot
+- ถ้าตั้งใจเปลี่ยนพฤติกรรม รัน `UPDATE_SNAPSHOT=1 pytest …` แล้ว review diff ของ `snapshots/fp28_routes.json` ก่อน commit
+
+> **HTML/CSS/JS อยู่ใน `server/templates/*.html`** (โหลดโดย `fp28/pages.py`) แก้หน้าไหนให้แก้ที่ template ของหน้านั้น
 
 ### ข้อควรระวัง
 
@@ -76,13 +81,13 @@ Python HTTP server แบบ raw `http.server` (`ThreadingHTTPServer`) ไม่
 
 ระบบขายของใหม่ แยกจาก FP28 แต่อยู่ใน `orders.db` ไฟล์เดียวกัน
 
-- ไฟล์ในแพ็กเกจ (ไม่มีไฟล์ไหน import `order_api`)
+- ไฟล์ในแพ็กเกจ (ใช้ DB pool, audit และที่เก็บไฟล์จาก `fp28` ไม่ import `order_api`)
   - `store/db.py`: schema `store_*`, สินค้า, ออเดอร์, settings และ helper กลาง (`StoreError`, `clean_text`, `_as_int`)
   - `store/home.py`: หน้าแรก
   - `store/dashboard.py`: ยอดขาย
   - `store/meta.py`: ข้อมูลที่หน้าร้านและหลังร้านโหลดครั้งเดียว
   - `store/api.py`: routes `/v2/*`
-- `order_api.py` แค่ forward ทุก `path.startswith("/v2/")` ไป `store_api.handle(self, METHOD, sys.modules[__name__])` และเรียก `store_db.ensure_store_db()` ท้าย `ensure_db()`
+- `fp28/web/handler.py` forward ทุก `path.startswith("/v2/")` ไป `store_api.handle(self, METHOD)` และ `fp28/database.ensure_db()` เรียก `store_db.ensure_store_db()` ตอนท้าย
 - **ห้ามให้ v2 เขียนตาราง v1** (`orders`, `products`, `khantok_*`, `display2_*` …) — ข้อมูล FP28 ต้องอยู่เหมือนเดิม test `test_ensure_db_leaves_v1_orders_untouched` คุมไว้
   - ข้อยกเว้นเดียว: `update_settings()` เขียน `site_settings.site_closed` (สวิตช์เปิด/ปิดหน้าร้านที่ middleware ของ Next อ่าน และ admin FP28 ใช้ร่วมกัน) ค่าอื่นของร้าน v2 (บัญชีรับเงิน, ประกาศ) อยู่ใน `store_settings`
 - ราคาและยอดรวมคำนวณจาก `store_variants` ฝั่ง server เสมอ client ส่งแค่ `variantId` + `quantity`

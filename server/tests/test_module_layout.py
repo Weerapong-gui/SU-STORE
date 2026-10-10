@@ -16,7 +16,7 @@ SWAPPABLE = {
 
 
 def _sources() -> list[Path]:
-    return [SERVER / "order_api.py", *sorted((SERVER / "fp28").glob("*.py")), *sorted((SERVER / "store").glob("*.py"))]
+    return [SERVER / "order_api.py", *sorted((SERVER / "fp28").rglob("*.py")), *sorted((SERVER / "store").glob("*.py"))]
 
 
 def test_swappable_settings_are_never_imported_by_name():

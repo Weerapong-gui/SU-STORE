@@ -37,19 +37,19 @@ def handle(handler: Any, method: str) -> None:
     try:
         _route(handler, method, path, query)
     except db.StoreError as error:
-        handler._send_json(error.status, {"message": error.message})
+        handler.send_json(error.status, {"message": error.message})
     except json.JSONDecodeError:
-        handler._send_json(HTTPStatus.BAD_REQUEST, {"message": "invalid json"})
+        handler.send_json(HTTPStatus.BAD_REQUEST, {"message": "invalid json"})
 
 
 def _is_admin(handler: Any) -> bool:
-    if handler._has_global_authorization():
+    if handler.has_global_authorization():
         return True
-    return handler._has_claim_station_authorization()
+    return handler.has_claim_station_authorization()
 
 
 def _admin_user(handler: Any) -> str:
-    return handler._get_claim_station_user() or "token"
+    return handler.get_claim_station_user() or "token"
 
 
 MAX_JSON_BYTES = 512 * 1024
@@ -66,14 +66,14 @@ def _json_body(handler: Any) -> dict[str, Any]:
     # Refuse oversized bodies before _read_json pulls them into memory.
     if _content_length(handler) > MAX_JSON_BYTES:
         raise db.StoreError(HTTPStatus.BAD_REQUEST, "ข้อมูลใหญ่เกินไป")
-    payload = handler._read_json()
+    payload = handler.read_json()
     if not isinstance(payload, dict):
         raise db.StoreError(HTTPStatus.BAD_REQUEST, "ข้อมูลไม่ถูกต้อง")
     return payload
 
 
 def _route(handler: Any, method: str, path: str, query: dict[str, str]) -> None:
-    send = handler._send_json
+    send = handler.send_json
 
     # ── Public ────────────────────────────────────────────────────────────────
     if method == "GET" and path in ("/v2/meta", "/v2/admin/meta"):
@@ -120,7 +120,7 @@ def _route(handler: Any, method: str, path: str, query: dict[str, str]) -> None:
             _require_order_access(handler, row, query)
         if _content_length(handler) > config.MAX_SLIP_SIZE_BYTES + 64 * 1024:
             raise db.StoreError(HTTPStatus.BAD_REQUEST, "ไฟล์สลิปต้องไม่เกิน 5MB")
-        slip, error = handler._read_multipart_slip(code)
+        slip, error = handler.read_multipart_slip(code)
         if error:
             raise db.StoreError(HTTPStatus.BAD_REQUEST, error)
         with open_db() as conn:
@@ -236,7 +236,7 @@ def _route(handler: Any, method: str, path: str, query: dict[str, str]) -> None:
 
     m = re.fullmatch(r"/v2/admin/products/(\d+)/variants", path)
     if m and method == "PUT":
-        payload = handler._read_json()
+        payload = handler.read_json()
         with open_db() as conn:
             db.replace_variants(conn, int(m.group(1)), payload)
             return send(HTTPStatus.OK, db.get_product(conn, int(m.group(1)), public=False))
@@ -312,13 +312,13 @@ def _route(handler: Any, method: str, path: str, query: dict[str, str]) -> None:
         target = resolve_stored_slip_path(row["slip_stored_name"], row["slip_storage_path"])
         if target is None:
             raise db.StoreError(HTTPStatus.NOT_FOUND, "ไม่พบไฟล์สลิป")
-        return handler._send_file(target, row["slip_mime_type"], row["slip_original_name"] or "slip")
+        return handler.send_file(target, row["slip_mime_type"], row["slip_original_name"] or "slip")
 
     raise db.StoreError(HTTPStatus.NOT_FOUND, "not found")
 
 
 def _require_order_access(handler: Any, row: Any, query: dict[str, str]) -> None:
-    if handler._has_global_authorization():
+    if handler.has_global_authorization():
         return
     incoming = handler.headers.get("X-Order-Token") or query.get("token") or ""
     if not incoming or not hmac.compare_digest(incoming, row["access_token"]):

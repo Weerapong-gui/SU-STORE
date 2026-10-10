@@ -46,9 +46,6 @@ jobs:
         # ruff pinned so new upstream rules can't turn CI red on their own.
         run: pip install pytest ruff==0.16.10
 
-      - name: Check Python syntax
-        run: python3 -c "import ast; ast.parse(open('server/order_api.py').read()); print('order_api.py OK')"
-
       - name: Lint (ruff, rules in ruff.toml)
         run: ruff check server tests
 
