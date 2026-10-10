@@ -59,6 +59,18 @@ def _modules() -> list[Any]:
     return [m for name, m in sys.modules.items() if m is not None and (name == "order_api" or name.startswith("fp28"))]
 
 
+def _has(name: str) -> bool:
+    return any(name in vars(m) for m in _modules())
+
+
+def _find(name: str) -> Any:
+    """`name` from wherever it lives now (order_api or an fp28 module)."""
+    for m in _modules():
+        if name in vars(m):
+            return vars(m)[name]
+    raise AttributeError(name)
+
+
 def _patch(monkeypatch: pytest.MonkeyPatch, name: str, value: Any) -> None:
     hits = [m for m in _modules() if name in vars(m)]
     assert hits, f"{name} not found in order_api or fp28.*"
@@ -73,8 +85,8 @@ def base(tmp_path, monkeypatch):
         "DB_PATH": tmp_path / "orders.db",
         "SLIPS_DIR": tmp_path / "slips",
         "PRODUCT_IMAGES_DIR": tmp_path / "product-images",
-        "_slides_dir": tmp_path / "slides",
-        "_assets_dir": tmp_path / "assets",
+        ("SLIDES_DIR" if _has("SLIDES_DIR") else "_slides_dir"): tmp_path / "slides",
+        ("ASSETS_DIR" if _has("ASSETS_DIR") else "_assets_dir"): tmp_path / "assets",
         "ORDER_API_TOKEN": TOKEN,
         "trigger_ocr_async": lambda *a, **k: None,
         "_CONN_POOL": [],
@@ -82,16 +94,16 @@ def base(tmp_path, monkeypatch):
         _patch(monkeypatch, name, value)
     for d in ("slips", "product-images", "slides", "assets"):
         (tmp_path / d).mkdir()
-    order_api.ensure_db()
+    _find("ensure_db")()
     with sqlite3.connect(tmp_path / "orders.db") as conn:
         conn.execute(
             "INSERT INTO admin_users (username, claim_token, super_token, is_superadmin, created_by, created_at) "
             "VALUES ('staff1', ?, NULL, 0, 'test', '2026-01-01T00:00:00+07:00'), "
             "('root', ?, ?, 1, 'test', '2026-01-01T00:00:00+07:00')",
             (
-                order_api.compute_claim_token("staff1", "pw"),
-                order_api.compute_claim_token("root", "pw"),
-                order_api.compute_super_token("root", "pw"),
+                _find("compute_claim_token")("staff1", "pw"),
+                _find("compute_claim_token")("root", "pw"),
+                _find("compute_super_token")("root", "pw"),
             ),
         )
     httpd = ThreadingHTTPServer(("127.0.0.1", 0), order_api.OrderRequestHandler)
@@ -103,8 +115,8 @@ def base(tmp_path, monkeypatch):
 AUTH = {
     "none": {},
     "bearer": {"Authorization": f"Bearer {TOKEN}"},
-    "claim": {"Authorization": "Claim " + order_api.compute_claim_token("staff1", "pw")},
-    "super": {"Authorization": "Superadmin " + order_api.compute_super_token("root", "pw")},
+    "claim": {"Authorization": "Claim " + _find("compute_claim_token")("staff1", "pw")},
+    "super": {"Authorization": "Superadmin " + _find("compute_super_token")("root", "pw")},
 }
 
 
@@ -141,7 +153,7 @@ class Session:
 ORDER_PRODUCT = {"slug": "single-shirt", "name": "FRESHER POLO SHIRT", "shortName": "เสื้อเดี่ยว",
                  "tagline": "t", "price": 399, "image": "/x.png", "category": "single"}
 HEADBAND = {**ORDER_PRODUCT, "slug": "fresh-headband", "name": "HEADBAND", "price": 59, "category": "headband"}
-CUSTOMER = {"studentCode": order_api.KHANTOK_STUDENT_CODE_PREFIX + "1234567", "email": "a@b.c", "fullName": "Somchai",
+CUSTOMER = {"studentCode": _find("KHANTOK_STUDENT_CODE_PREFIX") + "1234567", "email": "a@b.c", "fullName": "Somchai",
             "phone": "0812345678", "school": "IT", "parentPhone": "0899999999"}
 
 GET_PATHS = [
