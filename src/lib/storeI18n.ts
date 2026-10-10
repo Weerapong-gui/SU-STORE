@@ -66,6 +66,7 @@ const text = {
     fp28Link: "Looking for a Fresher Package 28 order?",
     fp28Cta: "Check FP28 orders",
     errorGeneric: "Something went wrong. Please try again.",
+    paymentUnavailable: "Couldn't load the payment account. Please refresh the page.",
     orderNotFound: "Order not found",
     orderNotFoundHint: "Open the link you saved, or look it up with your order number and phone number.",
     status: {
@@ -138,6 +139,7 @@ const text = {
     fp28Link: "ต้องการดูออเดอร์ Fresher Package 28?",
     fp28Cta: "ตรวจสอบออเดอร์ FP28",
     errorGeneric: "เกิดข้อผิดพลาด กรุณาลองใหม่",
+    paymentUnavailable: "โหลดข้อมูลบัญชีรับเงินไม่สำเร็จ กรุณารีเฟรชหน้านี้",
     orderNotFound: "ไม่พบออเดอร์",
     orderNotFoundHint: "เปิดจากลิงก์ที่บันทึกไว้ หรือค้นหาด้วยเลขออเดอร์และเบอร์โทร",
     status: {

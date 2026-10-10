@@ -1,13 +1,13 @@
 import { DEFAULT_ACCENT } from "@/lib/accent";
 import type { HomeLayout, ResolvedHome, StoreMeta, StoreProduct } from "@/types/store";
+import { ORDER_API_BASE } from "@/lib/orderApi";
 
 // Server-side reads of the public /v2 catalog (used by server components).
-const API_BASE = process.env.ORDER_API_BASE_URL?.replace(/\/$/, "") ?? "";
 
 export async function getStoreProducts(): Promise<StoreProduct[]> {
-  if (!API_BASE) return [];
+  if (!ORDER_API_BASE) return [];
   try {
-    const res = await fetch(`${API_BASE}/v2/products`, { cache: "no-store" });
+    const res = await fetch(`${ORDER_API_BASE}/v2/products`, { cache: "no-store" });
     if (!res.ok) return [];
     const data = (await res.json()) as { products: StoreProduct[] };
     return data.products ?? [];
@@ -17,9 +17,9 @@ export async function getStoreProducts(): Promise<StoreProduct[]> {
 }
 
 export async function getStoreProduct(slug: string): Promise<StoreProduct | null> {
-  if (!API_BASE || !/^[a-z0-9-]+$/.test(slug)) return null;
+  if (!ORDER_API_BASE || !/^[a-z0-9-]+$/.test(slug)) return null;
   try {
-    const res = await fetch(`${API_BASE}/v2/products/${slug}`, { cache: "no-store" });
+    const res = await fetch(`${ORDER_API_BASE}/v2/products/${slug}`, { cache: "no-store" });
     return res.ok ? ((await res.json()) as StoreProduct) : null;
   } catch {
     return null;
@@ -27,9 +27,9 @@ export async function getStoreProduct(slug: string): Promise<StoreProduct | null
 }
 
 export async function getStoreMeta(): Promise<StoreMeta | null> {
-  if (!API_BASE) return null;
+  if (!ORDER_API_BASE) return null;
   try {
-    const res = await fetch(`${API_BASE}/v2/meta`, { cache: "no-store" });
+    const res = await fetch(`${ORDER_API_BASE}/v2/meta`, { cache: "no-store" });
     return res.ok ? ((await res.json()) as StoreMeta) : null;
   } catch {
     return null;
@@ -53,9 +53,9 @@ export const DEFAULT_HOME: HomeLayout = {
 };
 
 export async function getStoreHome(): Promise<ResolvedHome> {
-  if (API_BASE) {
+  if (ORDER_API_BASE) {
     try {
-      const res = await fetch(`${API_BASE}/v2/home`, { cache: "no-store" });
+      const res = await fetch(`${ORDER_API_BASE}/v2/home`, { cache: "no-store" });
       if (res.ok) return (await res.json()) as ResolvedHome;
     } catch {
       // fall through to the default layout

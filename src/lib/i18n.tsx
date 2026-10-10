@@ -25,7 +25,6 @@ export const translations = {
       noOrders: "No orders found",
       noOrdersHint: "Please check your Student ID and try again",
       total: "Total",
-      uploadSlip: "Upload Payment Slip",
       errorGeneric: "Something went wrong",
       searching: "Searching...",
       search: "Search",
@@ -33,62 +32,9 @@ export const translations = {
       khantokClaimed: "Already claimed",
       pickupQrHint: "Show this QR at the pickup point",
     },
-    orderAccess: {
-      notFound: (id: string) => `Order ${id} was not found`,
-      hint: "This link can only be opened from the device and browser where the order was placed, or the order may predate the latest system update.",
-    },
-    slip: {
-      fileHint: "Supports JPG, PNG, WEBP or PDF up to 5 MB",
-      errorUpload: "Unable to upload slip at this time",
-      errorConnection: "Unable to connect to the upload service",
-      uploading: "UPLOADING...",
-      replace: "REPLACE SLIP",
-      submit: "SUBMIT SLIP FOR REVIEW",
-      sent: "Your slip has been submitted. Waiting for admin confirmation.",
-    },
-    surcharge: {
-      message: (amount: number) => `An extra ฿${amount} applies for size 2XL and above`,
-    },
     schedule: {
       defaultWarning: "The website is closing soon. Please complete your order before 22:59",
       closingIn: (mins: number, secs: string) => `Closing in ${mins} min ${secs} sec`,
-    },
-    product: {
-      outOfStock: "Out of Stock / Unavailable",
-
-      surchargeNote: (amount: number, size: string) => `+฿${amount} for size ${size}`,
-    },
-    products: {
-      "single-shirt": {
-        shortName: "Individual Shirt",
-        description: "FRESHER PACKAGE 28TH",
-      },
-      "fresh-jacket": {
-        shortName: "Jacket",
-        description: "FRESHER PACKAGE 28TH",
-      },
-      "fresh-headband": {
-        shortName: "Headband",
-        description: "FRESHER PACKAGE 28TH",
-      },
-    } as Record<string, { shortName: string; description: string }>,
-    productsPage: {
-      closed: "Orders Closed",
-      closedThankYou: "Thank you for ordering Fresher Package 28th",
-      closedHint: "If you already have an order, you can check its status below",
-      checkOrderLink: "Check My Order",
-    },
-    configurePage: {
-      productClosed: "Not Available",
-      productClosedMessage: "This product is not currently available for purchase. Please check back later.",
-      viewOtherProducts: "View other products",
-    },
-    paymentPage: {
-      storeClosed: "Store Closed",
-      storeClosedMessage: "Orders are not currently being accepted. Please contact admin if you have questions about this order.",
-    },
-    payment: {
-      bankName: "Bangkok Bank",
     },
     feedback: {
       title: "Feedback",
@@ -123,7 +69,6 @@ export const translations = {
       noOrders: "ไม่พบออเดอร์",
       noOrdersHint: "ลองตรวจสอบรหัสนักศึกษาอีกครั้ง",
       total: "รวม",
-      uploadSlip: "อัปโหลดสลิปการโอนเงิน",
       errorGeneric: "เกิดข้อผิดพลาด",
       searching: "กำลังค้นหา...",
       search: "ค้นหา",
@@ -131,62 +76,9 @@ export const translations = {
       khantokClaimed: "รับไปแล้ว",
       pickupQrHint: "แสดง QR นี้ที่จุดรับสินค้า",
     },
-    orderAccess: {
-      notFound: (id: string) => `ไม่พบข้อมูลคำสั่งซื้อ ${id} ใน browser นี้`,
-      hint: "ลิงก์ออเดอร์จะเปิดได้จากอุปกรณ์และ browser ที่สร้างออเดอร์ไว้เท่านั้น หรืออาจเป็นออเดอร์เก่าก่อนอัปเดตระบบล่าสุด",
-    },
-    slip: {
-      fileHint: "รองรับไฟล์ JPG, PNG, WEBP หรือ PDF ขนาดไม่เกิน 5 MB",
-      errorUpload: "ไม่สามารถอัปโหลดสลิปได้ในขณะนี้",
-      errorConnection: "ไม่สามารถเชื่อมต่อกับระบบอัปโหลดสลิปได้ในขณะนี้",
-      uploading: "UPLOADING...",
-      replace: "REPLACE SLIP",
-      submit: "SUBMIT SLIP FOR REVIEW",
-      sent: "สลิปของคุณถูกส่งแล้ว กำลังรอ admin ยืนยัน",
-    },
-    surcharge: {
-      message: (amount: number) => `สำหรับเสื้อไซส์ 2XL ขึ้นไป มีค่าใช้จ่ายเพิ่ม ${amount} บาท`,
-    },
     schedule: {
       defaultWarning: "เว็บกำลังจะปิด กรุณาทำรายการให้เสร็จก่อนเวลา 22:59",
       closingIn: (mins: number, secs: string) => `ปิดใน ${mins} นาที ${secs} วินาที`,
-    },
-    product: {
-      outOfStock: "หมดแล้ว / ไม่พร้อมจำหน่าย",
-
-      surchargeNote: (amount: number, size: string) => `+${amount} บาท สำหรับไซซ์ ${size}`,
-    },
-    products: {
-      "single-shirt": {
-        shortName: "เสื้อเดี่ยว",
-        description: "FRESHER PACKAGE 28TH",
-      },
-      "fresh-jacket": {
-        shortName: "แจ็คเก็ต",
-        description: "FRESHER PACKAGE 28TH",
-      },
-      "fresh-headband": {
-        shortName: "ผ้าคาดสำนักวิชา",
-        description: "FRESHER PACKAGE 28TH",
-      },
-    } as Record<string, { shortName: string; description: string }>,
-    productsPage: {
-      closed: "ปิดรับออเดอร์แล้ว",
-      closedThankYou: "ขอบคุณทุกคนที่สั่งซื้อสินค้า Fresher Package 28th",
-      closedHint: "หากมีออเดอร์อยู่แล้ว สามารถตรวจสอบสถานะได้ที่",
-      checkOrderLink: "ตรวจสอบออเดอร์",
-    },
-    configurePage: {
-      productClosed: "ปิดรับสั่งซื้อ",
-      productClosedMessage: "ขณะนี้ยังไม่เปิดรับคำสั่งซื้อสินค้านี้ กรุณากลับมาใหม่ในภายหลัง",
-      viewOtherProducts: "ดูสินค้าอื่น",
-    },
-    paymentPage: {
-      storeClosed: "ปิดรับสั่งซื้อ",
-      storeClosedMessage: "ขณะนี้ไม่รับคำสั่งซื้อ กรุณาติดต่อแอดมินหากมีคำถามเกี่ยวกับออเดอร์นี้",
-    },
-    payment: {
-      bankName: "ธนาคารกรุงเทพ",
     },
     feedback: {
       title: "Feedback",

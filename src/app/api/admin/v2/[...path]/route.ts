@@ -1,8 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { cookies } from "next/headers";
 import { ADMIN_COOKIE } from "@/lib/adminAuth";
-
-const API_BASE = process.env.ORDER_API_BASE_URL?.replace(/\/$/, "") ?? "";
+import { ORDER_API_BASE } from "@/lib/orderApi";
 
 export const dynamic = "force-dynamic";
 
@@ -13,7 +12,7 @@ async function forward(request: NextRequest, { params }: { params: { path: strin
   const auth = cookies().get(ADMIN_COOKIE)?.value;
   if (!auth) return NextResponse.json({ message: "กรุณาเข้าสู่ระบบ" }, { status: 401 });
 
-  const target = `${API_BASE}/v2/admin/${params.path.map(encodeURIComponent).join("/")}${request.nextUrl.search}`;
+  const target = `${ORDER_API_BASE}/v2/admin/${params.path.map(encodeURIComponent).join("/")}${request.nextUrl.search}`;
   const headers: Record<string, string> = { Authorization: auth };
   const contentType = request.headers.get("content-type");
   if (contentType) headers["Content-Type"] = contentType;

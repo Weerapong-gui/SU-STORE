@@ -5,16 +5,15 @@ import { StoreShell } from "@/components/store/StoreShell";
 import { ADMIN_COOKIE } from "@/lib/adminAuth";
 import { getStoreMeta } from "@/lib/storeApi";
 import type { ResolvedHome } from "@/types/store";
+import { ORDER_API_BASE } from "@/lib/orderApi";
 
 export const dynamic = "force-dynamic";
-
-const API_BASE = process.env.ORDER_API_BASE_URL?.replace(/\/$/, "") ?? "";
 
 // The draft home page from /admin/home, rendered with the real storefront chrome.
 export default async function HomePreviewPage() {
   const auth = cookies().get(ADMIN_COOKIE)?.value;
   if (!auth) redirect("/admin/login");
-  const res = await fetch(`${API_BASE}/v2/admin/home/preview`, { headers: { Authorization: auth }, cache: "no-store" });
+  const res = await fetch(`${ORDER_API_BASE}/v2/admin/home/preview`, { headers: { Authorization: auth }, cache: "no-store" });
   if (res.status === 401) redirect("/admin/login");
   if (!res.ok) throw new Error("โหลดตัวอย่างไม่สำเร็จ");
   const home = (await res.json()) as ResolvedHome;

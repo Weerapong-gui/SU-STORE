@@ -1,6 +1,5 @@
 import { NextResponse } from "next/server";
-
-const API_BASE = process.env.ORDER_API_BASE_URL?.replace(/\/$/, "") ?? "";
+import { ORDER_API_BASE } from "@/lib/orderApi";
 
 // Product photos uploaded through the admin live on the order-api; serve them from the
 // store's own origin so pages can use the stored "/product-images/<file>" paths as-is.
@@ -9,7 +8,7 @@ export async function GET(_request: Request, { params }: { params: { name: strin
     return NextResponse.json({ message: "invalid filename" }, { status: 400 });
   }
   try {
-    const res = await fetch(`${API_BASE}/product-images/${params.name}`, { cache: "no-store" });
+    const res = await fetch(`${ORDER_API_BASE}/product-images/${params.name}`, { cache: "no-store" });
     if (!res.ok) return new NextResponse(null, { status: res.status });
     return new NextResponse(res.body, {
       headers: {

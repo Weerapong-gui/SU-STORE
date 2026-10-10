@@ -1,18 +1,18 @@
 import { NextRequest, NextResponse } from "next/server";
 import { ADMIN_COOKIE } from "@/lib/adminAuth";
 import { clientIp } from "@/lib/clientIp";
+import { ORDER_API_BASE } from "@/lib/orderApi";
+import { consume, type RateLimitStore } from "@/lib/rateLimitCore";
 
-// ── Rate limiting ──────────────────────────────────────────────────────────────
-const rateLimitMap = new Map<string, { count: number; resetAt: number }>();
-const WINDOW_MS = 60_000;
-const MAX_REQUESTS = 10;
+// ── Rate limiting (order creation / lookup) ───────────────────────────────────
+const orderRateLimits: RateLimitStore = {};
+const MAX_ORDER_REQUESTS = 10;
 
 // ── Site-closed cache ──────────────────────────────────────────────────────────
 // Edge Runtime modules may not be shared between requests so this is best-effort.
 let siteClosedCache = { closed: false, reason: "", beRightBack: false, ts: 0 };
 const SITE_STATUS_TTL = 15_000; // 15 seconds
 
-const API_BASE = (process.env.ORDER_API_BASE_URL ?? "").replace(/\/$/, "");
 const BYPASS_TOKEN = process.env.BYPASS_TOKEN ?? "";
 const ALWAYS_OPEN = process.env.ALWAYS_OPEN === "1";
 const STAGING_HOST = process.env.STAGING_HOST ?? "";
@@ -48,21 +48,11 @@ export async function middleware(request: NextRequest) {
 
   // ── Rate-limit order creation and order lookup ──────────────────────────────
   if (request.method === "POST" && (pathname === "/api/store/orders" || pathname === "/api/store/orders/lookup")) {
-    const ip = clientIp(request);
-
-    const now = Date.now();
-    const entry = rateLimitMap.get(ip);
-
-    if (!entry || now > entry.resetAt) {
-      rateLimitMap.set(ip, { count: 1, resetAt: now + WINDOW_MS });
-    } else {
-      entry.count++;
-      if (entry.count > MAX_REQUESTS) {
-        return NextResponse.json(
-          { success: false, message: "Too many requests. Please try again later." },
-          { status: 429 }
-        );
-      }
+    if (consume(orderRateLimits, clientIp(request), MAX_ORDER_REQUESTS) === "limited") {
+      return NextResponse.json(
+        { success: false, message: "Too many requests. Please try again later." },
+        { status: 429 }
+      );
     }
     return NextResponse.next();
   }
@@ -92,13 +82,13 @@ export async function middleware(request: NextRequest) {
       return NextResponse.next();
     }
 
-    if (API_BASE) {
+    if (ORDER_API_BASE) {
       const now = Date.now();
       if (now - siteClosedCache.ts > SITE_STATUS_TTL) {
         try {
           const ip = clientIp(request);
           const res = await fetch(
-            `${API_BASE}/site-status?ip=${encodeURIComponent(ip === "unknown" ? "" : ip)}`,
+            `${ORDER_API_BASE}/site-status?ip=${encodeURIComponent(ip === "unknown" ? "" : ip)}`,
             { signal: AbortSignal.timeout(2000), cache: "no-store" }
           );
           if (res.ok) {

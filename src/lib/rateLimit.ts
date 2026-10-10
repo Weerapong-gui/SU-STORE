@@ -1,14 +1,12 @@
 import fs from "fs";
 import path from "path";
 import { clientIp } from "./clientIp";
+import { consume, type RateLimitStore } from "./rateLimitCore";
 
-const WINDOW_MS = 60_000;
 const PERSIST_PATH = path.join(process.cwd(), "data", "rate-limit.json");
 
-type Entry = { count: number; resetAt: number };
-type Store = Record<string, Entry>;
-
-const store: Store = {};
+// Persisted so limits survive a container restart.
+const store: RateLimitStore = {};
 let loaded = false;
 
 function load(): void {
@@ -16,7 +14,7 @@ function load(): void {
   loaded = true;
   try {
     const raw = fs.readFileSync(PERSIST_PATH, "utf8");
-    const data = JSON.parse(raw) as Store;
+    const data = JSON.parse(raw) as RateLimitStore;
     const now = Date.now();
     // drop already-expired entries when loading
     for (const [key, entry] of Object.entries(data)) {
@@ -38,20 +36,7 @@ function persist(): void {
 
 export function isRateLimited(key: string, max: number): boolean {
   load();
-  const now = Date.now();
-  const entry = store[key];
-  if (!entry || now > entry.resetAt) {
-    // Opportunistically drop expired entries so `store` (and the persisted file) stay
-    // bounded instead of accumulating one permanent entry per unique IP ever seen.
-    for (const k of Object.keys(store)) {
-      if (store[k].resetAt <= now) delete store[k];
-    }
-    store[key] = { count: 1, resetAt: now + WINDOW_MS };
-    persist();
-    return false;
-  }
-  if (entry.count >= max) return true;
-  entry.count++;
+  if (consume(store, key, max) === "limited") return true;
   persist();
   return false;
 }

@@ -6,14 +6,12 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { BankAccountCopyField } from "@/components/BankAccountCopyField";
 import { formatPrice } from "@/lib/formatPrice";
 import { getOrderToken, orderPageHref, saveOrderToken } from "@/lib/orderTokens";
-import { PAYMENT_ACCOUNT_NUMBER } from "@/lib/paymentDetails";
 import { useStoreText } from "@/lib/storeI18n";
 import { cn } from "@/lib/utils";
 import type { OrderStatus, PaymentAccount, StoreMeta, StoreOrder } from "@/types/store";
 
 const FLOW: OrderStatus[] = ["pending_payment", "waiting_confirm", "paid", "ready", "completed"];
 const MAX_SLIP_BYTES = 5 * 1024 * 1024;
-const FALLBACK_PAYMENT: PaymentAccount = { bankName: "ธนาคารกรุงเทพ", accountNumber: PAYMENT_ACCOUNT_NUMBER, accountName: "" };
 
 export function OrderView({ code }: { code: string }) {
   const t = useStoreText();
@@ -25,7 +23,9 @@ export function OrderView({ code }: { code: string }) {
   const [message, setMessage] = useState<{ tone: "ok" | "error"; text: string } | null>(null);
   const [copied, setCopied] = useState(false);
   // undefined while loading; the built-in account is only a fallback if settings can't load
-  const [payment, setPayment] = useState<PaymentAccount | undefined>(undefined);
+  // undefined = loading, null = couldn't load. Never guess an account number: a stale
+  // fallback would send customers' money to an old account.
+  const [payment, setPayment] = useState<PaymentAccount | null | undefined>(undefined);
   const fileInput = useRef<HTMLInputElement>(null);
 
   const load = useCallback(async (accessToken: string) => {
@@ -54,8 +54,8 @@ export function OrderView({ code }: { code: string }) {
   useEffect(() => {
     fetch("/api/store/meta")
       .then((r) => r.json())
-      .then((m: StoreMeta) => setPayment(m.payment ?? FALLBACK_PAYMENT))
-      .catch(() => setPayment(FALLBACK_PAYMENT));
+      .then((m: StoreMeta) => setPayment(m.payment ?? null))
+      .catch(() => setPayment(null));
   }, []);
 
   useEffect(() => {
@@ -164,6 +164,8 @@ export function OrderView({ code }: { code: string }) {
                   copyValue={payment.accountNumber.replace(/\D/g, "")}
                 />
               </>
+            ) : payment === null ? (
+              <p className="text-sm font-semibold text-red-600">{t.paymentUnavailable}</p>
             ) : (
               <div className="h-16 animate-pulse rounded-xl bg-zinc-100" />
             )}

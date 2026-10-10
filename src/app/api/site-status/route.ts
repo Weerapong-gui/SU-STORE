@@ -1,8 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
+import { clientIp } from "@/lib/clientIp";
+import { ORDER_API_BASE } from "@/lib/orderApi";
 
 export const dynamic = "force-dynamic";
 
-const API_BASE = (process.env.ORDER_API_BASE_URL ?? "").replace(/\/$/, "");
 const ALWAYS_OPEN = process.env.ALWAYS_OPEN === "1";
 const STAGING_HOST = process.env.STAGING_HOST ?? "";
 
@@ -12,14 +13,11 @@ export async function GET(request: NextRequest) {
   if (ALWAYS_OPEN || isStaging) {
     return NextResponse.json({ siteClosed: false, scheduleClosed: false, beRightBack: false, alwaysOpen: true, activeVisitors: 0 });
   }
-  const ip =
-    request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ??
-    request.headers.get("x-real-ip") ??
-    "";
+  const ip = clientIp(request);
 
   try {
-    const url = API_BASE
-      ? `${API_BASE}/site-status?ip=${encodeURIComponent(ip)}`
+    const url = ORDER_API_BASE
+      ? `${ORDER_API_BASE}/site-status?ip=${encodeURIComponent(ip === "unknown" ? "" : ip)}`
       : null;
 
     if (!url) {

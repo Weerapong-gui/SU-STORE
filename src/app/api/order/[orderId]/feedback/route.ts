@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { getRateLimitKey, isRateLimited } from "@/lib/rateLimit";
+import { ORDER_API_BASE } from "@/lib/orderApi";
 
-const REMOTE_ORDER_API_BASE_URL = process.env.ORDER_API_BASE_URL?.replace(/\/$/, "") ?? "";
 const REMOTE_ORDER_API_TOKEN = process.env.ORDER_API_TOKEN ?? "";
 const RATE_LIMIT_MAX = 5;
 
@@ -11,7 +11,7 @@ export async function POST(request: Request, { params }: Props) {
   if (isRateLimited(getRateLimitKey(request, "feedback"), RATE_LIMIT_MAX)) {
     return NextResponse.json({ message: "Too many requests. Please wait a moment." }, { status: 429 });
   }
-  if (!REMOTE_ORDER_API_BASE_URL) {
+  if (!ORDER_API_BASE) {
     return NextResponse.json({ message: "Order API not configured" }, { status: 503 });
   }
 
@@ -39,7 +39,7 @@ export async function POST(request: Request, { params }: Props) {
   try {
     const headers: Record<string, string> = { "Content-Type": "application/json" };
     if (REMOTE_ORDER_API_TOKEN) headers["Authorization"] = `Bearer ${REMOTE_ORDER_API_TOKEN}`;
-    const res = await fetch(`${REMOTE_ORDER_API_BASE_URL}/orders/${encodeURIComponent(orderId)}/feedback`, {
+    const res = await fetch(`${ORDER_API_BASE}/orders/${encodeURIComponent(orderId)}/feedback`, {
       method: "POST",
       headers,
       body: JSON.stringify({ rating, comment }),

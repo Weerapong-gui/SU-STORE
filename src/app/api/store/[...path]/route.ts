@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-
-const API_BASE = process.env.ORDER_API_BASE_URL?.replace(/\/$/, "") ?? "";
+import { ORDER_API_BASE } from "@/lib/orderApi";
 
 export const dynamic = "force-dynamic";
 
@@ -16,7 +15,7 @@ async function forward(request: NextRequest, { params }: { params: { path: strin
   if (Number(request.headers.get("content-length") ?? 0) > MAX_BODY_BYTES) {
     return NextResponse.json({ message: "ไฟล์ใหญ่เกินไป" }, { status: 413 });
   }
-  const target = `${API_BASE}/v2/${params.path.map(encodeURIComponent).join("/")}${request.nextUrl.search}`;
+  const target = `${ORDER_API_BASE}/v2/${params.path.map(encodeURIComponent).join("/")}${request.nextUrl.search}`;
   const headers: Record<string, string> = {};
   for (const name of ["content-type", "x-order-token"]) {
     const value = request.headers.get(name);

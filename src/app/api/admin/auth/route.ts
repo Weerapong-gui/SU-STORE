@@ -1,8 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { ADMIN_COOKIE } from "@/lib/adminAuth";
 import { getRateLimitKey, isRateLimited } from "@/lib/rateLimit";
-
-const API_BASE = process.env.ORDER_API_BASE_URL?.replace(/\/$/, "") ?? "";
+import { ORDER_API_BASE } from "@/lib/orderApi";
 
 // Staff sign in with their admin_users username/password; the order-api returns a
 // per-user token which we keep in an httpOnly cookie as the Authorization header value.
@@ -22,7 +21,7 @@ export async function POST(request: NextRequest) {
   let data: { token?: string; username?: string; message?: string };
   let status: number;
   try {
-    const res = await fetch(`${API_BASE}/v2/admin/login`, {
+    const res = await fetch(`${ORDER_API_BASE}/v2/admin/login`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ username: username.trim(), password }),

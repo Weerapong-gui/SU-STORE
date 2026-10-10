@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getRateLimitKey, isRateLimited } from "@/lib/rateLimit";
+import { ORDER_API_BASE } from "@/lib/orderApi";
 
-const API_BASE = process.env.ORDER_API_BASE_URL?.replace(/\/$/, "") ?? "";
 // This proxy is unauthenticated and returns customer name/school by student code, so
 // throttle it to blunt PII enumeration over sequential/prefixed student codes.
 const RATE_LIMIT_MAX = 20;
@@ -22,7 +22,7 @@ export async function GET(request: NextRequest) {
   const param = code ? `code=${encodeURIComponent(code)}` : `studentCode=${encodeURIComponent(studentCode!)}`;
 
   try {
-    const res = await fetch(`${API_BASE}/check-order?${param}`, { cache: "no-store" });
+    const res = await fetch(`${ORDER_API_BASE}/check-order?${param}`, { cache: "no-store" });
     const data = await res.json();
     return NextResponse.json(data, { status: res.status });
   } catch {
