@@ -267,3 +267,18 @@ def test_fp28_routes_match_snapshot(base):
 def _diff(want: Any, got: Any) -> str:
     dump = lambda v: json.dumps(v, ensure_ascii=False, indent=1, sort_keys=True).splitlines()  # noqa: E731
     return "\n".join(difflib.unified_diff(dump(want), dump(got), "snapshot", "actual", lineterm="", n=1))
+
+
+def test_admin_stats_stream_sends_first_event(base):
+    """The SSE stream never ends, so the snapshot session can't call it; read one event."""
+    import http.client
+
+    url, _ = base
+    host, port = url.removeprefix("http://").split(":")
+    conn = http.client.HTTPConnection(host, int(port), timeout=5)
+    conn.request("GET", "/admin/stats-stream", headers=AUTH["bearer"])
+    res = conn.getresponse()
+    assert res.status == 200 and res.getheader("Content-Type") == "text/event-stream"
+    first = res.fp.readline()
+    conn.close()
+    assert first.startswith(b"data: ") and "visitors" in json.loads(first[6:])

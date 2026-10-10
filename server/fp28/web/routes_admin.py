@@ -96,10 +96,10 @@ def handle_get_admin_stats_stream(h: OrderRequestHandler, path: str, match: re.M
             with state.lock:
                 visitors = sum(1 for t in list(state.visitor_registry.values()) if t >= cutoff)
             payload = {"visitors": visitors, **get_stats_snapshot()}
-            h = hash(json.dumps(payload, sort_keys=True))
-            if h != last_hash:
+            payload_hash = hash(json.dumps(payload, sort_keys=True))
+            if payload_hash != last_hash:
                 h.wfile.write(("data: " + json.dumps(payload) + "\n\n").encode())
-                last_hash = h
+                last_hash = payload_hash
             else:
                 # heartbeat: ต้องเขียนทุก tick แม้ข้อมูลไม่เปลี่ยน ไม่งั้น client
                 # ที่ปิดแท็บไปแล้วจะไม่ถูกตรวจเจอ (รู้ได้ทาง BrokenPipe ตอนเขียน
