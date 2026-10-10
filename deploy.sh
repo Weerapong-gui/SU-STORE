@@ -65,17 +65,5 @@ for i in $(seq 1 30); do
   fi
 done
 
-if [ "$TARGET" != api ]; then
-  echo "==> Warming Next.js image cache..."
-  $SSH '
-    for IMG in STAY_TUNED_horizontal STAY_TUNED_vertical BE_BACK_horizontal BE_BACK_vertical BE_RIGHT_BACK_horizontal BE_RIGHT_BACK_vertical; do
-      for W in 640 750 828 1080 1200 1920 2048; do
-        curl -s -o /dev/null "http://localhost:3000/_next/image?url=%2Fimages%2Fanc%2F${IMG}.png&w=${W}&q=75" &
-      done
-    done
-    wait
-  ' || true
-fi
-
 echo ""
 echo "✓ Deployed $REV → https://sumfu.store"

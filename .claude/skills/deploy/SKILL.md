@@ -24,7 +24,6 @@ description: Deploy SU STORE to the production server (order-api and/or su-store
 3. เขียน REVISION (commit + เวลา) ไว้บน server
 4. docker compose up -d --build --no-deps <services>
 5. รอ healthcheck จน healthy (fail ถ้าเกิน 90 วินาที)
-6. warm Next.js image cache (เฉพาะ store/all)
 ```
 
 ไม่ restart cloudflared — ไม่จำเป็น container restart แล้ว tunnel ต่อเองได้
