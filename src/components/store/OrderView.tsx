@@ -174,7 +174,7 @@ export function OrderView({ code }: { code: string }) {
               type="button"
               disabled={uploading}
               onClick={() => fileInput.current?.click()}
-              className="w-full rounded-full bg-apple-blue py-3.5 text-sm font-semibold text-white shadow-[0_4px_14px_rgba(0,113,227,0.35)] transition hover:bg-apple-blue-dark disabled:opacity-50"
+              className="w-full rounded-full bg-apple-blue py-3.5 text-sm font-semibold text-white shadow-[0_4px_14px_rgb(var(--accent)/0.35)] transition hover:bg-apple-blue-dark disabled:opacity-50"
             >
               {uploading ? t.uploading : order.hasSlip ? t.replaceSlip : t.uploadSlip}
             </button>
@@ -218,7 +218,7 @@ export function OrderView({ code }: { code: string }) {
       <section className="rounded-3xl border border-zinc-200 p-6">
         <h2 className="font-semibold text-ink">{t.saveLink}</h2>
         <p className="mt-1 text-sm text-ink-soft">{t.saveLinkHint}</p>
-        <button type="button" onClick={copyLink} className="mt-3 rounded-full bg-apple-blue-soft px-5 py-2 text-sm font-semibold text-apple-blue hover:bg-[#dcecff]">
+        <button type="button" onClick={copyLink} className="mt-3 rounded-full bg-apple-blue-soft px-5 py-2 text-sm font-semibold text-apple-blue hover:bg-apple-blue/15">
           {copied ? t.copied : t.copyLink}
         </button>
       </section>

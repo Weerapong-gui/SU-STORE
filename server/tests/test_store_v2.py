@@ -268,6 +268,61 @@ class TestSettings:
         assert db.meta(conn)["payment"]["bankName"] == "ธนาคารกรุงเทพ"
 
 
+class TestHome:
+    HERO = {"id": "b1", "type": "hero", "slides": [{"title": "Hello", "buttonText": "Shop", "buttonHref": "/products"}]}
+
+    def test_default_until_published(self):
+        conn = _conn()
+        state = db.get_home_admin(conn)
+        assert state["published"] == db.DEFAULT_HOME and not state["dirty"] and state["publishedAt"] is None
+        assert db.meta(conn)["accent"] == db.DEFAULT_ACCENT
+
+    def test_draft_publish_discard(self):
+        conn = _conn()
+        state = db.save_home_draft(conn, {"accent": "#1F7A3A", "blocks": [self.HERO]})
+        assert state["dirty"] and state["published"] == db.DEFAULT_HOME
+        assert db.resolve_home(conn, state["published"])["accent"] == db.DEFAULT_ACCENT
+        state = db.publish_home(conn)
+        assert not state["dirty"] and state["published"]["accent"] == "#1f7a3a"
+        assert db.meta(conn)["accent"] == "#1f7a3a"
+        db.save_home_draft(conn, {"accent": "#1f7a3a", "blocks": []})
+        state = db.discard_home_draft(conn)
+        assert not state["dirty"] and state["draft"]["blocks"][0]["slides"][0]["title"] == "Hello"
+
+    @pytest.mark.parametrize("payload", [
+        {"blocks": [{"id": "x", "type": "marquee"}]},
+        {"blocks": [{**HERO, "slides": [{"buttonText": "Go", "buttonHref": "javascript:alert(1)"}]}]},
+        {"blocks": [{**HERO, "slides": [{"buttonText": "Go", "buttonHref": "//evil.example"}]}]},
+        {"blocks": [{**HERO, "slides": [{"buttonText": "Go"}]}]},
+        {"blocks": [{**HERO, "slides": [{"image": "https://evil.example/a.png"}]}]},
+        {"blocks": [{**HERO, "slides": []}]},
+        {"blocks": [HERO, HERO]},
+        {"accent": "#ffeb3b", "blocks": []},
+        {"accent": "red", "blocks": []},
+        {"blocks": [{"id": "f", "type": "featured", "productIds": list(range(13))}]},
+    ])
+    def test_rejects_bad_layouts(self, payload):
+        with pytest.raises(db.StoreError):
+            db.validate_home(payload)
+
+    def test_resolve_skips_hidden_empty_and_unavailable(self):
+        conn = _conn()
+        live = _product(conn)
+        archived = _product(conn)
+        db.update_product(conn, archived["id"], {"status": "archived"})
+        layout = db.validate_home({"blocks": [
+            {"id": "a", "type": "featured", "productIds": [archived["id"], live["id"], 999]},
+            {"id": "b", "type": "featured", "productIds": [archived["id"]]},
+            {"id": "c", "type": "text", "title": "", "body": ""},
+            {"id": "d", "type": "text", "title": "Pickup", "hidden": True},
+            {"id": "e", "type": "allProducts"},
+        ]})
+        resolved = db.resolve_home(conn, layout)
+        assert [b["id"] for b in resolved["blocks"]] == ["a", "e"]
+        assert [p["id"] for p in resolved["blocks"][0]["products"]] == [live["id"]]
+        assert [p["id"] for p in resolved["products"]] == [live["id"]]
+
+
 class TestDashboard:
     def test_totals_and_breakdown(self):
         conn = _conn()
@@ -396,3 +451,19 @@ def test_http_round_trip(server):
 
     # v1 endpoints still served
     assert _call(server, "GET", "/health")[0] == 200
+
+
+def test_home_http(server):
+    _, body = _call(server, "POST", "/v2/admin/login", {"username": "staff1", "password": "pw"})
+    admin = {"Authorization": "Claim " + json.loads(body)["token"]}
+    assert _call(server, "GET", "/v2/admin/home")[0] == 401
+    assert _call(server, "POST", "/v2/admin/home/publish")[0] == 401
+    layout = {"accent": "#7b1fa2", "blocks": [{"id": "t", "type": "text", "title": "Hi"}]}
+    status, _ = _call(server, "PUT", "/v2/admin/home", layout, admin)
+    assert status == 200
+    status, body = _call(server, "GET", "/v2/admin/home/preview", headers=admin)
+    assert json.loads(body)["blocks"][0]["title"] == "Hi"
+    assert json.loads(_call(server, "GET", "/v2/home")[1])["accent"] == db.DEFAULT_ACCENT
+    assert _call(server, "POST", "/v2/admin/home/publish", headers=admin)[0] == 200
+    home = json.loads(_call(server, "GET", "/v2/home")[1])
+    assert home["accent"] == "#7b1fa2" and home["blocks"][0]["title"] == "Hi"

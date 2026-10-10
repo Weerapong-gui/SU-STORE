@@ -6,6 +6,11 @@
 
 :root {
   color-scheme: light;
+  /* Default store accent (#0071e3); overridden by the published home layout. */
+  --accent: 0 113 227;
+  --accent-dark: 0 88 176;
+  --accent-light: 41 151 255;
+  --accent-soft: 232 243 255;
 }
 
 * {
@@ -30,7 +35,7 @@ body {
 }
 
 ::selection {
-  background: rgba(0, 113, 227, 0.15);
+  background: rgb(var(--accent) / 0.15);
 }
 
 .font-sf-pro {
@@ -42,4 +47,14 @@ body {
 @keyframes toast-progress {
   from { transform: scaleX(1); }
   to   { transform: scaleX(0); }
+}
+
+/* Home hero entrance (first slide only). */
+@keyframes hero-in {
+  from { opacity: 0; transform: translateY(14px); }
+  to { opacity: 1; transform: none; }
+}
+.hero-in { animation: hero-in 0.6s ease-out both; }
+@media (prefers-reduced-motion: reduce) {
+  .hero-in { animation: none; }
 }

@@ -11,10 +11,11 @@ const config: Config = {
         paper: "#ffffff",
         mist: "#f5f5f7",
         "surface-dark": "#1d1d1f",
-        "apple-blue": "#0071e3",
-        "apple-blue-dark": "#0058b0",
-        "apple-blue-light": "#2997ff",
-        "apple-blue-soft": "#e8f3ff"
+        // Store accent colour, set per-site from /admin/home (see src/lib/accent.ts).
+        "apple-blue": "rgb(var(--accent) / <alpha-value>)",
+        "apple-blue-dark": "rgb(var(--accent-dark) / <alpha-value>)",
+        "apple-blue-light": "rgb(var(--accent-light) / <alpha-value>)",
+        "apple-blue-soft": "rgb(var(--accent-soft) / <alpha-value>)"
       },
       boxShadow: {
         soft: "0 4px 24px rgba(0, 0, 0, 0.06)",

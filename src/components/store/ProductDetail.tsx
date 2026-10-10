@@ -180,7 +180,7 @@ export function ProductDetail({ product }: { product: StoreProduct }) {
             type="button"
             onClick={() => add(true)}
             disabled={!saleOpen || variant?.soldOut || product.soldOut}
-            className="rounded-full bg-apple-blue px-7 py-3 text-sm font-semibold text-white shadow-[0_4px_14px_rgba(0,113,227,0.35)] transition hover:bg-apple-blue-dark disabled:cursor-not-allowed disabled:opacity-40"
+            className="rounded-full bg-apple-blue px-7 py-3 text-sm font-semibold text-white shadow-[0_4px_14px_rgb(var(--accent)/0.35)] transition hover:bg-apple-blue-dark disabled:cursor-not-allowed disabled:opacity-40"
           >
             {t.buyNow}
           </button>
@@ -188,7 +188,7 @@ export function ProductDetail({ product }: { product: StoreProduct }) {
             type="button"
             onClick={() => add(false)}
             disabled={!saleOpen || variant?.soldOut || product.soldOut}
-            className="rounded-full bg-apple-blue-soft px-7 py-3 text-sm font-semibold text-apple-blue transition hover:bg-[#dcecff] disabled:cursor-not-allowed disabled:opacity-40"
+            className="rounded-full bg-apple-blue-soft px-7 py-3 text-sm font-semibold text-apple-blue transition hover:bg-apple-blue/15 disabled:cursor-not-allowed disabled:opacity-40"
           >
             {t.addToCart}
           </button>

@@ -69,6 +69,7 @@ export type StoreMeta = {
   productStatuses: { key: ProductStatus; label: string }[];
   payment?: PaymentAccount;
   announcement?: string;
+  accent?: string;
 };
 
 export type PaymentAccount = { bankName: string; accountNumber: string; accountName: string };
@@ -82,4 +83,43 @@ export type Dashboard = {
   statusCounts: Record<OrderStatus, number>;
   byDay: { date: string; paidAmount: number; orders: number }[];
   byVariant: { productName: string; variantLabel: string; paidQuantity: number; unpaidQuantity: number; paidAmount: number }[];
+};
+
+export type HeroSlide = {
+  image: string;
+  eyebrow: string;
+  title: string;
+  subtitle: string;
+  buttonText: string;
+  buttonHref: string;
+};
+
+type BlockBase = { id: string; hidden: boolean };
+export type HomeBlock =
+  | (BlockBase & { type: "hero"; autoplay: boolean; slides: HeroSlide[] })
+  | (BlockBase & { type: "featured"; title: string; productIds: number[]; products?: StoreProduct[] })
+  | (BlockBase & { type: "text"; title: string; body: string; align: "left" | "center" })
+  | (BlockBase & {
+      type: "imageText";
+      image: string;
+      title: string;
+      body: string;
+      buttonText: string;
+      buttonHref: string;
+      imageSide: "left" | "right";
+    })
+  | (BlockBase & { type: "allProducts"; title: string });
+
+export type HomeBlockType = HomeBlock["type"];
+
+export type HomeLayout = { accent: string; blocks: HomeBlock[] };
+
+// What the storefront renders: hidden/empty blocks dropped, featured products filled in.
+export type ResolvedHome = HomeLayout & { products: StoreProduct[] };
+
+export type HomeAdminState = {
+  draft: HomeLayout;
+  published: HomeLayout;
+  dirty: boolean;
+  publishedAt: string | null;
 };

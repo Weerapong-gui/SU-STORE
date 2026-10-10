@@ -232,7 +232,7 @@ export function CheckoutView() {
         <button
           type="submit"
           disabled={submitting || blocked}
-          className="w-full rounded-full bg-apple-blue py-3.5 text-sm font-semibold text-white shadow-[0_4px_14px_rgba(0,113,227,0.35)] transition hover:bg-apple-blue-dark disabled:cursor-not-allowed disabled:opacity-40"
+          className="w-full rounded-full bg-apple-blue py-3.5 text-sm font-semibold text-white shadow-[0_4px_14px_rgb(var(--accent)/0.35)] transition hover:bg-apple-blue-dark disabled:cursor-not-allowed disabled:opacity-40"
         >
           {submitting ? t.placing : t.placeOrder}
         </button>

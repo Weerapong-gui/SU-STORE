@@ -12,6 +12,7 @@ import hmac
 import io
 import json
 import re
+import secrets
 from email.parser import BytesParser
 from email.policy import default
 from http import HTTPStatus
@@ -68,6 +69,10 @@ def _route(handler: Any, method: str, path: str, query: dict[str, str], core: An
     if method == "GET" and m:
         with core.open_db() as conn:
             return send(HTTPStatus.OK, db.get_product(conn, m.group(1), public=True))
+
+    if method == "GET" and path == "/v2/home":
+        with core.open_db() as conn:
+            return send(HTTPStatus.OK, db.resolve_home(conn, db.get_home_admin(conn)["published"]))
 
     if method == "POST" and path == "/v2/orders":
         payload = _json_body(handler)
@@ -145,6 +150,38 @@ def _route(handler: Any, method: str, path: str, query: dict[str, str], core: An
                                    f"by {_admin_user(handler)}")
             return send(HTTPStatus.OK, settings)
 
+    if path == "/v2/admin/home":
+        if method == "GET":
+            with core.open_db() as conn:
+                return send(HTTPStatus.OK, db.get_home_admin(conn))
+        if method == "PUT":
+            payload = _json_body(handler)
+            with core.open_db() as conn:
+                return send(HTTPStatus.OK, db.save_home_draft(conn, payload))
+
+    if method == "GET" and path == "/v2/admin/home/preview":
+        with core.open_db() as conn:
+            return send(HTTPStatus.OK, db.resolve_home(conn, db.get_home_admin(conn)["draft"]))
+
+    if method == "POST" and path == "/v2/admin/home/publish":
+        with core.open_db() as conn:
+            state = db.publish_home(conn)
+            core.log_audit(conn, "-", "v2_home_published", f"by {_admin_user(handler)}")
+        return send(HTTPStatus.OK, state)
+
+    if method == "POST" and path == "/v2/admin/home/discard":
+        with core.open_db() as conn:
+            return send(HTTPStatus.OK, db.discard_home_draft(conn))
+
+    if method == "POST" and path == "/v2/admin/home/images":
+        content, mime = _read_multipart_file(handler, "image", core.MAX_PRODUCT_IMAGE_SIZE_BYTES)
+        if mime not in _IMAGE_EXT:
+            raise db.StoreError(HTTPStatus.BAD_REQUEST, "รองรับเฉพาะรูป JPG, PNG หรือ WebP")
+        filename, error = core.save_product_image_file(f"home-{secrets.token_hex(4)}", f"image{_IMAGE_EXT[mime]}", mime, content)
+        if error:
+            raise db.StoreError(HTTPStatus.BAD_REQUEST, error)
+        return send(HTTPStatus.OK, {"url": f"/product-images/{filename}"})
+
     if path == "/v2/admin/products":
         if method == "GET":
             with core.open_db() as conn:
@@ -184,7 +221,7 @@ def _route(handler: Any, method: str, path: str, query: dict[str, str], core: An
         if mime not in _IMAGE_EXT:
             raise db.StoreError(HTTPStatus.BAD_REQUEST, "รองรับเฉพาะรูป JPG, PNG หรือ WebP")
         filename, error = core.save_product_image_file(
-            f"v2-{product['slug']}", f"image{_IMAGE_EXT[mime]}", mime, content
+            f"v2-{product['slug']}-{secrets.token_hex(4)}", f"image{_IMAGE_EXT[mime]}", mime, content
         )
         if error:
             raise db.StoreError(HTTPStatus.BAD_REQUEST, error)
