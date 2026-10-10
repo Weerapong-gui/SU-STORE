@@ -87,4 +87,8 @@ Python HTTP server แบบ raw `http.server` (`ThreadingHTTPServer`) ไม่
 - ลบสินค้า/ตัวเลือกที่เคยถูกสั่งแล้ว → ระบบเปลี่ยนเป็น archived / inactive แทนการลบ
 - รอบขายต่อสินค้า: `sale_starts_at` / `sale_ends_at` (+07:00 ISO, ว่าง = ไม่จำกัด) → `saleState` = `upcoming` / `open` / `ended` และ `create_order` ปฏิเสธ (409) ถ้าไม่ใช่ `open`
 - `dashboard()` นับยอดขายเฉพาะสถานะ `paid` / `ready` / `completed` ใช้ `substr(created_at,1,10)` เป็นวันไทย (เพราะ `now_iso()` เขียน offset +07:00)
+- หน้าแรก: `store_settings` key `home_draft` / `home_published` (JSON `{accent, blocks}`)
+  - `validate_home()` คุมชนิดบล็อก, ลิงก์ปุ่ม (`/…` หรือ `https://` เท่านั้น), รูป (`/product-images/…` เท่านั้น) และสีที่ต้อง contrast กับตัวหนังสือขาว ≥ 4.5
+  - ยังไม่เคยเผยแพร่ = `DEFAULT_HOME` (หน้าแรกแบบเดิม)
+  - `GET /v2/home` คืนเฉพาะที่เผยแพร่แล้ว ผ่าน `resolve_home()` ซึ่งตัดบล็อกที่ซ่อน/ว่าง และสินค้าที่ไม่ได้เปิดขายออก
 - Tests: `server/tests/test_store_v2.py` (มี HTTP round-trip จริงผ่าน `OrderRequestHandler`)

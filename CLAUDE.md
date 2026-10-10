@@ -19,7 +19,9 @@ SU STORE เป็นระบบสั่งซื้อเสื้อรั�
 
 **หลังร้านใหม่ (store v2):** `https://sumfu.store/admin` — Next.js ภาษาไทย สำหรับ staff ที่ไม่ใช่ dev (เพิ่มสินค้า/ตัวเลือก/สต็อก, จัดการออเดอร์ `SU…`) login ด้วยบัญชีใน `admin_users` เดียวกับ claim station · ส่วน `admin.sumfu.xyz` คือระบบ FP28 เดิม (ออเดอร์ `FP28…`, claim station, display)
 
-- หน้า: `src/app/admin/(panel)/{dashboard,products,orders,settings}` (ภาพรวมยอดขาย, สินค้า+รอบขาย, ออเดอร์, เปิด/ปิดร้าน+บัญชีรับเงิน+ประกาศ) · component กลาง `src/components/admin/{ui,ProductEditor}.tsx`
+- หน้า: `src/app/admin/(panel)/{dashboard,products,orders,home,settings}` (ภาพรวมยอดขาย, สินค้า+รอบขาย, ออเดอร์, ตกแต่งหน้าแรก, เปิด/ปิดร้าน+บัญชีรับเงิน+ประกาศ) · component กลาง `src/components/admin/{ui,ProductEditor,HomeEditor}.tsx`
+- ตกแต่งหน้าแรก: staff เรียงบล็อก (แบนเนอร์สไลด์ / สินค้าแนะนำ / ข้อความ / รูปคู่ข้อความ / สินค้าทั้งหมด) และเลือกสีหลัก แก้แล้วบันทึกเป็นร่างอัตโนมัติ ดูตัวอย่างที่ `/admin/home/preview` ลูกค้าเห็นเฉพาะหลังกด เผยแพร่ · หน้าร้าน render ด้วย `src/components/store/home/HomeBlocks.tsx`
+- สีหลัก: Tailwind `apple-blue*` อ่านจาก CSS variable `--accent*` (`globals.css` เป็นค่า default, `StoreShell` ใส่ค่าที่เผยแพร่ผ่าน `src/lib/accent.ts`) ห้าม hardcode `#0071e3` ในหน้าร้าน
 - ทุกคำขอจากหน้า admin ผ่าน proxy `src/app/api/admin/v2/[...path]/route.ts` → order-api `/v2/admin/*` โดยแนบ cookie `su-admin-auth` (`Claim <token>`)
 - รูปสินค้าที่อัปโหลดเสิร์ฟผ่าน `src/app/product-images/[name]/route.ts`
 - `middleware.ts` บังคับ login สำหรับ `/admin/*` และไม่ให้หน้า "ปิดร้าน" บังหน้า admin
