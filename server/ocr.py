@@ -1,7 +1,9 @@
 from __future__ import annotations
+
+import gc
 import re
 import unicodedata
-import gc
+
 import cv2
 import numpy as np
 import pytesseract
@@ -59,7 +61,7 @@ def _ocr_all_passes(image_path: str) -> list[list[str]]:
     for arr in _preprocess_passes(image_path):
         raw = pytesseract.image_to_string(Image.fromarray(arr),
                                           lang="tha+eng", config="--psm 4")
-        candidates.append([l for l in raw.splitlines() if l.strip()])
+        candidates.append([line for line in raw.splitlines() if line.strip()])
         gc.collect()
     return candidates
 
@@ -170,11 +172,8 @@ def _looks_like_ref(s: str) -> bool:
     if re.match(r'^[a-z]+$', s):
         return False
     digit_ratio = sum(1 for c in s if c.isdigit()) / len(s)
-    if digit_ratio < 0.3:
-        # Accept pure hex OR near-hex (l→1, O→0 are common OCR errors on KTB teal bg)
-        if not re.match(r'^[A-Fa-f0-9]+$', _hex_normalize(s)):
-            return False
-    return True
+    # Mostly letters: accept only pure hex or near-hex (l→1, O→0 are common OCR errors on KTB teal bg)
+    return digit_ratio >= 0.3 or bool(re.match(r'^[A-Fa-f0-9]+$', _hex_normalize(s)))
 
 
 def _ref_quality(s: str) -> int:
@@ -312,7 +311,7 @@ def _nfc(s: str) -> str:
 
 
 def _extract_amount(lines: list[str], full_text: str) -> float | None:
-    nlines = [_nfc(l) for l in lines]
+    nlines = [_nfc(line) for line in lines]
     ntext = _nfc(full_text)
 
     # P1: จำนวน keyword with decimal amount (X.XX)
@@ -392,9 +391,8 @@ def _extract_sender(lines: list[str]) -> str | None:
             if prefix in line:
                 return line.strip()
     for i, line in enumerate(lines):
-        if "จาก" in line or "from" in line.lower():
-            if i + 1 < len(lines) and len(lines[i + 1].strip()) > 3:
-                return lines[i + 1].strip()
+        if ("จาก" in line or "from" in line.lower()) and i + 1 < len(lines) and len(lines[i + 1].strip()) > 3:
+            return lines[i + 1].strip()
     return None
 
 

@@ -3,6 +3,7 @@ import sqlite3
 import sys
 import unittest
 from pathlib import Path
+from typing import ClassVar
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "server"))
 
@@ -182,7 +183,7 @@ class ReceivedHookEnqueuesTest(unittest.TestCase):
 
 
 class KhantokEnqueueTest(unittest.TestCase):
-    ITEMS = [{"slug": "single", "size": "M", "quantity": 1}]
+    ITEMS: ClassVar[list[dict]] = [{"slug": "single", "size": "M", "quantity": 1}]
 
     def test_phase4_receive_skips_khantok_row(self):
         conn = _make_conn()

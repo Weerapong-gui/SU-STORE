@@ -20,7 +20,7 @@ _tmp_for_import = TemporaryDirectory()
 os.environ.setdefault("ORDER_API_SLIDES_DIR", str(Path(_tmp_for_import.name) / "slides"))
 os.environ.setdefault("ORDER_API_ASSETS_DIR", str(Path(_tmp_for_import.name) / "assets"))
 
-import order_api
+import order_api  # noqa: E402  (needs the env vars set above)
 
 
 @pytest.fixture()

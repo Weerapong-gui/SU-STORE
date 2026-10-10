@@ -43,15 +43,14 @@ jobs:
           python-version: "3.13"
 
       - name: Install test tooling
-        run: pip install pytest ruff
+        # ruff pinned so new upstream rules can't turn CI red on their own.
+        run: pip install pytest ruff==0.16.10
 
       - name: Check Python syntax
         run: python3 -c "import ast; ast.parse(open('server/order_api.py').read()); print('order_api.py OK')"
 
-      - name: Lint (ruff — critical errors only)
-        # E9=syntax, F63=comparison/assert bugs, F7=misplaced statements, F82=undefined names.
-        # Intentionally excludes style rules so this only fails on real bugs.
-        run: ruff check --select E9,F63,F7,F82 server/
+      - name: Lint (ruff, rules in ruff.toml)
+        run: ruff check server tests
 
       - name: Run pytest
         # order_api.py creates its data dirs at import time; point them at a writable

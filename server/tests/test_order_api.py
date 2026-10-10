@@ -1,7 +1,8 @@
 """Unit tests for order_api.py — pure logic functions only (no DB, no HTTP)."""
-import sys
 import os
+import sys
 from datetime import datetime
+
 import pytest
 
 # Add server directory to path so we can import order_api
@@ -9,9 +10,10 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
 # Stub out OCR module so order_api imports cleanly even without Tesseract
 from unittest.mock import MagicMock
+
 sys.modules["ocr"] = MagicMock()
 
-import order_api
+import order_api  # noqa: E402  (must come after the ocr stub above)
 
 
 class TestGetScheduleStatus:
@@ -251,7 +253,7 @@ class TestKhantokClaimWarning:
         assert order_api.khantok_claim_warning("not a date", now=self._now()) is False
 
     def test_naive_now_is_assumed_bangkok(self):
-        naive_now = datetime(2026, 7, 27, 9, 0)
+        naive_now = datetime(2026, 7, 27, 9, 0)  # noqa: DTZ001  (naive on purpose)
         assert order_api.khantok_claim_warning("2026-07-26T18:00:00+07:00", now=naive_now) is True
 
     # --- status-aware rules (Finding 2) ---

@@ -9,6 +9,7 @@ import urllib.error
 import urllib.request
 from datetime import datetime
 from http.server import ThreadingHTTPServer
+from typing import Any, ClassVar
 from unittest.mock import MagicMock
 
 import pytest
@@ -17,7 +18,8 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 sys.modules.setdefault("ocr", MagicMock())
 
 import order_api  # noqa: E402
-from store import db  # noqa: E402
+from store import dashboard, db, home  # noqa: E402
+from store import meta as store_meta  # noqa: E402
 
 
 def _conn(path=":memory:") -> sqlite3.Connection:
@@ -328,28 +330,28 @@ class TestSettings:
 
     def test_meta_includes_payment(self):
         conn = _conn()
-        assert db.meta(conn)["payment"]["bankName"] == "ธนาคารกรุงเทพ"
+        assert store_meta.meta(conn)["payment"]["bankName"] == "ธนาคารกรุงเทพ"
 
 
 class TestHome:
-    HERO = {"id": "b1", "type": "hero", "slides": [{"title": "Hello", "buttonText": "Shop", "buttonHref": "/products"}]}
+    HERO: ClassVar[dict[str, Any]] = {"id": "b1", "type": "hero", "slides": [{"title": "Hello", "buttonText": "Shop", "buttonHref": "/products"}]}
 
     def test_default_until_published(self):
         conn = _conn()
-        state = db.get_home_admin(conn)
-        assert state["published"] == db.DEFAULT_HOME and not state["dirty"] and state["publishedAt"] is None
-        assert db.meta(conn)["accent"] == db.DEFAULT_ACCENT
+        state = home.get_home_admin(conn)
+        assert state["published"] == home.DEFAULT_HOME and not state["dirty"] and state["publishedAt"] is None
+        assert store_meta.meta(conn)["accent"] == home.DEFAULT_ACCENT
 
     def test_draft_publish_discard(self):
         conn = _conn()
-        state = db.save_home_draft(conn, {"accent": "#1F7A3A", "blocks": [self.HERO]})
-        assert state["dirty"] and state["published"] == db.DEFAULT_HOME
-        assert db.resolve_home(conn, state["published"])["accent"] == db.DEFAULT_ACCENT
-        state = db.publish_home(conn)
+        state = home.save_home_draft(conn, {"accent": "#1F7A3A", "blocks": [self.HERO]})
+        assert state["dirty"] and state["published"] == home.DEFAULT_HOME
+        assert home.resolve_home(conn, state["published"])["accent"] == home.DEFAULT_ACCENT
+        state = home.publish_home(conn)
         assert not state["dirty"] and state["published"]["accent"] == "#1f7a3a"
-        assert db.meta(conn)["accent"] == "#1f7a3a"
-        db.save_home_draft(conn, {"accent": "#1f7a3a", "blocks": []})
-        state = db.discard_home_draft(conn)
+        assert store_meta.meta(conn)["accent"] == "#1f7a3a"
+        home.save_home_draft(conn, {"accent": "#1f7a3a", "blocks": []})
+        state = home.discard_home_draft(conn)
         assert not state["dirty"] and state["draft"]["blocks"][0]["slides"][0]["title"] == "Hello"
 
     @pytest.mark.parametrize("payload", [
@@ -366,21 +368,21 @@ class TestHome:
     ])
     def test_rejects_bad_layouts(self, payload):
         with pytest.raises(db.StoreError):
-            db.validate_home(payload)
+            home.validate_home(payload)
 
     def test_resolve_skips_hidden_empty_and_unavailable(self):
         conn = _conn()
         live = _product(conn)
         archived = _product(conn)
         db.update_product(conn, archived["id"], {"status": "archived"})
-        layout = db.validate_home({"blocks": [
+        layout = home.validate_home({"blocks": [
             {"id": "a", "type": "featured", "productIds": [archived["id"], live["id"], 999]},
             {"id": "b", "type": "featured", "productIds": [archived["id"]]},
             {"id": "c", "type": "text", "title": "", "body": ""},
             {"id": "d", "type": "text", "title": "Pickup", "hidden": True},
             {"id": "e", "type": "allProducts"},
         ]})
-        resolved = db.resolve_home(conn, layout)
+        resolved = home.resolve_home(conn, layout)
         assert [b["id"] for b in resolved["blocks"]] == ["a", "e"]
         assert [p["id"] for p in resolved["blocks"][0]["products"]] == [live["id"]]
         assert [p["id"] for p in resolved["products"]] == [live["id"]]
@@ -390,15 +392,18 @@ class TestDashboard:
     def test_totals_and_breakdown(self):
         conn = _conn()
         p = _product(conn, variants=[{"size": "M", "price": 100, "stock": None}, {"size": "L", "price": 150, "stock": None}])
-        m, l = (v["id"] for v in p["variants"])
-        buy = lambda items: db.create_order(conn, {"items": items, "customer": CUSTOMER})["orderCode"]
-        paid = buy([{"variantId": m, "quantity": 2}, {"variantId": l, "quantity": 1}])  # 350
+        m, large = (v["id"] for v in p["variants"])
+
+        def buy(items):
+            return db.create_order(conn, {"items": items, "customer": CUSTOMER})["orderCode"]
+
+        paid = buy([{"variantId": m, "quantity": 2}, {"variantId": large, "quantity": 1}])  # 350
         db.update_order(conn, paid, {"status": "completed"})
         buy([{"variantId": m, "quantity": 1}])  # 100 pending
-        cancelled = buy([{"variantId": l, "quantity": 3}])
+        cancelled = buy([{"variantId": large, "quantity": 3}])
         db.update_order(conn, cancelled, {"status": "cancelled"})
 
-        d = db.dashboard(conn, days=7)
+        d = dashboard.dashboard(conn, days=7)
         assert d["paidAmount"] == 350 and d["awaitingAmount"] == 100 and d["orderCount"] == 2
         assert d["statusCounts"]["cancelled"] == 1
         assert len(d["byDay"]) == 7 and d["byDay"][-1]["paidAmount"] == 350 and d["byDay"][-1]["orders"] == 2
@@ -526,10 +531,10 @@ def test_home_http(server):
     assert status == 200
     status, body = _call(server, "GET", "/v2/admin/home/preview", headers=admin)
     assert json.loads(body)["blocks"][0]["title"] == "Hi"
-    assert json.loads(_call(server, "GET", "/v2/home")[1])["accent"] == db.DEFAULT_ACCENT
+    assert json.loads(_call(server, "GET", "/v2/home")[1])["accent"] == home.DEFAULT_ACCENT
     assert _call(server, "POST", "/v2/admin/home/publish", headers=admin)[0] == 200
-    home = json.loads(_call(server, "GET", "/v2/home")[1])
-    assert home["accent"] == "#7b1fa2" and home["blocks"][0]["title"] == "Hi"
+    published = json.loads(_call(server, "GET", "/v2/home")[1])
+    assert published["accent"] == "#7b1fa2" and published["blocks"][0]["title"] == "Hi"
 
 
 def test_settings_changes_are_audited(server):

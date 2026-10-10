@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import base64
 import binascii
+import contextlib
 import csv
 import hmac
 import html
@@ -12,18 +13,18 @@ import os
 import re
 import secrets
 import sqlite3
+import sys
 import threading
+import time
 import urllib.error
 import urllib.request
-from datetime import datetime, timezone, timedelta, date
+from datetime import UTC, date, datetime, timedelta, timezone
 from email.parser import BytesParser
 from email.policy import default
 from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from typing import Any
-import sys
-import time
 from urllib.parse import urlparse
 
 from store import api as store_api
@@ -207,7 +208,7 @@ def _parse_stored_datetime(value: str | None) -> datetime | None:
     except ValueError:
         return None
     if parsed.tzinfo is None:
-        parsed = parsed.replace(tzinfo=timezone.utc)
+        parsed = parsed.replace(tzinfo=UTC)
     return parsed
 
 
@@ -691,13 +692,14 @@ def ensure_db() -> None:
           )
           """
       )
-      if not connection.execute("SELECT 1 FROM admin_users WHERE username=?", (PICKUP_USERNAME,)).fetchone():
-          if PICKUP_PASSWORD:
-              seed_now = now_iso()
-              connection.execute(
-                  "INSERT OR IGNORE INTO admin_users (username,claim_token,super_token,is_superadmin,created_by,created_at) VALUES (?,?,?,1,'system',?)",
-                  (PICKUP_USERNAME, CLAIM_STATION_TOKEN, SUPER_TOKEN, seed_now),
-              )
+      if PICKUP_PASSWORD and not connection.execute(
+          "SELECT 1 FROM admin_users WHERE username=?", (PICKUP_USERNAME,)
+      ).fetchone():
+          seed_now = now_iso()
+          connection.execute(
+              "INSERT OR IGNORE INTO admin_users (username,claim_token,super_token,is_superadmin,created_by,created_at) VALUES (?,?,?,1,'system',?)",
+              (PICKUP_USERNAME, CLAIM_STATION_TOKEN, SUPER_TOKEN, seed_now),
+          )
       product_count_row = connection.execute("SELECT COUNT(*) FROM products").fetchone()
       if product_count_row[0] == 0:
           seed_now = now_iso()
@@ -750,16 +752,14 @@ class _PooledConnection:
             self._broken = True
         with _CONN_POOL_LOCK:
             if self._broken or len(_CONN_POOL) >= _CONN_POOL_MAX:
-                try:
+                with contextlib.suppress(Exception):
                     self._connection.close()
-                except Exception:
-                    pass
             else:
                 _CONN_POOL.append(self._connection)
         return False
 
 
-def open_db() -> "_PooledConnection":
+def open_db() -> _PooledConnection:
     with _CONN_POOL_LOCK:
         connection = _CONN_POOL.pop() if _CONN_POOL else None
     if connection is None:
@@ -847,7 +847,7 @@ def compute_qr_token(order_code: str) -> str:
         return ""
     return hmac.new(
         key=ORDER_API_TOKEN.encode("utf-8"),
-        msg=f"qr-v1:{order_code}".encode("utf-8"),
+        msg=f"qr-v1:{order_code}".encode(),
         digestmod="sha256",
     ).hexdigest()[:16]
 
@@ -885,9 +885,12 @@ def get_current_phase(connection: sqlite3.Connection | None = None) -> int:
                 pass
     now = datetime.now(TZ_BANGKOK)
     m, d = now.month, now.day
-    if m == 5 and 18 <= d <= 23: return 1
-    if m == 5 and 25 <= d <= 30: return 2
-    if m == 6 and  1 <= d <= 7:  return 3
+    if m == 5 and 18 <= d <= 23:
+        return 1
+    if m == 5 and 25 <= d <= 30:
+        return 2
+    if m == 6 and 1 <= d <= 7:
+        return 3
     return 0
 
 
@@ -962,7 +965,7 @@ def persist_slip_file(
 
     safe_name = sanitize_file_name(Path(original_name).stem)
     extension = resolve_slip_extension(original_name, mime_type)
-    stored_name = f"{order_code}-{int(datetime.now(timezone.utc).timestamp())}-{safe_name}{extension}"
+    stored_name = f"{order_code}-{int(datetime.now(UTC).timestamp())}-{safe_name}{extension}"
     stored_path = SLIPS_DIR / stored_name
     stored_path.write_bytes(file_content)
 
@@ -1377,7 +1380,7 @@ def list_orders(
     offset = (page - 1) * per_page
     rows = connection.execute(
         f"SELECT * FROM orders {where} ORDER BY internal_id DESC LIMIT ? OFFSET ?",
-        params + [per_page, offset],
+        [*params, per_page, offset],
     ).fetchall()
     return [serialize_order(row) for row in rows], total
 
@@ -1627,12 +1630,12 @@ def update_order_fields(
     order_code: str,
     fields: dict[str, Any],
     expected_updated_at: str | None = None,
-) -> dict[str, Any] | None | bool:
+) -> dict[str, Any] | bool | None:
     existing = fetch_order_by_code(connection, order_code)
     if existing is None:
         return None
     if expected_updated_at:
-        existing_updated = existing["updated_at"] if "updated_at" in existing.keys() else ""
+        existing_updated = existing["updated_at"] if "updated_at" in existing.keys() else ""  # noqa: SIM118 (sqlite3.Row: `in` checks values)
         if str(existing_updated or "") != str(expected_updated_at):
             return False  # conflict — order was modified by someone else
 
@@ -1708,7 +1711,7 @@ def update_order_fields(
     if "khantokStationClaimed" in fields and isinstance(fields["khantokStationClaimed"], bool):
         existing_station_claimed = (
             existing["khantok_station_claimed_at"]
-            if "khantok_station_claimed_at" in existing.keys() else None
+            if "khantok_station_claimed_at" in existing.keys() else None  # noqa: SIM118 (sqlite3.Row)
         )
         if fields["khantokStationClaimed"]:
             station_claim_action = "enqueue"
@@ -1786,7 +1789,7 @@ def update_order_fields(
 
     allowed["updated_at"] = now_iso()
     set_clause = ", ".join(f"{col} = ?" for col in allowed)
-    values = list(allowed.values()) + [order_code]
+    values = [*allowed.values(), order_code]
     connection.execute(f"UPDATE orders SET {set_clause} WHERE order_code = ?", values)
 
     changed = ", ".join(f"{k}={v!r}" for k, v in fields.items())
@@ -1910,13 +1913,12 @@ def create_order(connection: sqlite3.Connection, payload: dict[str, Any]) -> dic
             "UPDATE orders SET status = 'refund', payment_status = 'refund_pending', updated_at = ? WHERE internal_id = ?",
             (now, sequence_number),
         )
-        try:
+        # The audit row is best-effort: never fail the order because logging failed.
+        with contextlib.suppress(sqlite3.Error):
             connection.execute(
                 "INSERT INTO order_audit_log(order_code, event, detail, created_at) VALUES (?,?,?,?)",
                 (order_code, "auto_refund_headband", "headband-only order auto-refunded on creation", now),
             )
-        except sqlite3.Error:
-            pass
     row = fetch_order_by_code(connection, order_code)
     assert row is not None
     return serialize_order(row, include_access_token=True)
@@ -2112,7 +2114,8 @@ def _run_ocr_for_slip(order_code: str, slip_path: str, expected_amount: float | 
 
 
 def trigger_ocr_async(order_code: str, slip_path: str | None, expected_amount: float | None = None) -> None:
-    import os, sys
+    import os
+    import sys
     if not slip_path:
         return
     if not os.path.exists(slip_path):
@@ -2212,7 +2215,7 @@ def save_product_image_file(slug: str, original_name: str, mime_type: str, conte
     suffix = Path(original_name).suffix.lower()
     if not suffix:
         suffix = ".jpg" if "jpeg" in mime_type else ".png"
-    filename = f"{slug}-{int(datetime.now(timezone.utc).timestamp())}{suffix}"
+    filename = f"{slug}-{int(datetime.now(UTC).timestamp())}{suffix}"
     (PRODUCT_IMAGES_DIR / filename).write_bytes(content)
     return filename, None
 
@@ -2235,7 +2238,7 @@ def get_site_settings(connection: sqlite3.Connection) -> dict[str, Any]:
             "2": {"start": "2026-05-25", "end": "2026-05-30"},
             "3": {"start": "2026-06-01", "end": "2026-06-07"},
         }
-    max_phases = max((int(k) for k in phase_configs.keys()), default=3)
+    max_phases = max((int(k) for k in phase_configs), default=3)
     return {
         "announcementBanner": settings.get("announcement_banner", ""),
         "announcementBannerEnabled": settings.get("announcement_banner_enabled", "0") == "1",
@@ -2301,19 +2304,23 @@ def export_orders_csv(orders: list[dict[str, Any]], ocr_map: dict[str, dict] | N
         items = order.get("items") or []
         if not items:
             p = order.get("product") or {}
-            writer.writerow(common + [
+            writer.writerow([
+                *common,
                 p.get("name", ""), p.get("category", ""),
                 order.get("size", ""), order.get("quantity", ""),
                 "", order.get("totalAmount", ""),
-            ] + common_tail)
+                *common_tail,
+            ])
         else:
             for item in items:
                 ip = item.get("product") or {}
-                writer.writerow(common + [
+                writer.writerow([
+                    *common,
                     ip.get("name", ""), ip.get("category", ""),
                     item.get("size", ""), item.get("quantity", ""),
                     item.get("unitPrice", ""), item.get("totalAmount", ""),
-                ] + common_tail)
+                    *common_tail,
+                ])
     return output.getvalue()
 
 
@@ -2421,7 +2428,7 @@ def get_product_breakdown(connection: sqlite3.Connection, category: str, round_f
 
     # single / headband — flat rows
     counts: dict[str, int] = {}
-    for row in connection.execute(f"SELECT items_json, product_category, size, quantity FROM orders {rw}", rp).fetchall():  # noqa: E501
+    for row in connection.execute(f"SELECT items_json, product_category, size, quantity FROM orders {rw}", rp).fetchall():
         items_processed = False
         if row["items_json"]:
             try:
@@ -2596,7 +2603,7 @@ class OrderRequestHandler(BaseHTTPRequestHandler):
                 f"Content-Type: {content_type}\r\n"
                 "MIME-Version: 1.0\r\n"
                 "\r\n"
-            ).encode("utf-8")
+            ).encode()
             + raw_body
         )
 
@@ -2800,10 +2807,7 @@ class OrderRequestHandler(BaseHTTPRequestHandler):
         _asset_match = re.fullmatch(r"/assets/(slides/[a-zA-Z0-9_.\-]+|[a-zA-Z0-9_.\-]+)", path)
         if _asset_match:
             _rel = _asset_match.group(1)
-            if _rel.startswith("slides/"):
-                _asset_file = _slides_dir / _rel[7:]
-            else:
-                _asset_file = _TEMPLATES_DIR / "assets" / _rel
+            _asset_file = _slides_dir / _rel[7:] if _rel.startswith("slides/") else _TEMPLATES_DIR / "assets" / _rel
             if _asset_file.exists():
                 _ext = _asset_file.suffix.lower()
                 _mime = {"png": "image/png", "jpg": "image/jpeg", "jpeg": "image/jpeg", "webp": "image/webp", "svg": "image/svg+xml"}.get(_ext.lstrip("."), "application/octet-stream")
@@ -2886,10 +2890,7 @@ class OrderRequestHandler(BaseHTTPRequestHandler):
                             qty = int(item.get("quantity", 1) or 1)
                             unit_price = int(item.get("unitPrice") or product.get("price") or 35)
                             raw_total = item.get("totalAmount")
-                            if raw_total:
-                                line_total = int(raw_total)
-                            else:
-                                line_total = unit_price * qty
+                            line_total = int(raw_total) if raw_total else unit_price * qty
                     except (TypeError, json.JSONDecodeError, ValueError):
                         pass
                 items.append({
@@ -3091,7 +3092,7 @@ class OrderRequestHandler(BaseHTTPRequestHandler):
             if row is None:
                 self._send_json(HTTPStatus.NOT_FOUND, {"message": "ไม่พบออเดอร์"})
                 return
-            slip_path = resolve_stored_slip_path(row["slip_stored_name"], row["slip_storage_path"] if "slip_storage_path" in row.keys() else None)
+            slip_path = resolve_stored_slip_path(row["slip_stored_name"], row["slip_storage_path"] if "slip_storage_path" in row.keys() else None)  # noqa: SIM118 (sqlite3.Row)
             if slip_path is None or not slip_path.exists():
                 self._send_json(HTTPStatus.NOT_FOUND, {"message": "ไม่พบสลิป"})
                 return
@@ -3415,8 +3416,7 @@ class OrderRequestHandler(BaseHTTPRequestHandler):
                 ).fetchall()
             ocr_map = {r["order_code"]: {"status": r["status"], "ref_number": r["ref_number"]} for r in ocr_rows}
             csv_content = export_orders_csv(orders, ocr_map)
-            from datetime import date
-            filename = f"orders-{date.today().isoformat()}.csv"
+            filename = f"orders-{datetime.now(TZ_BANGKOK).date().isoformat()}.csv"
             response_body = ("﻿" + csv_content).encode("utf-8")
             self.send_response(HTTPStatus.OK)
             self.send_header("Content-Type", "text/csv; charset=utf-8")
@@ -4036,7 +4036,7 @@ class OrderRequestHandler(BaseHTTPRequestHandler):
                 return
             raw_body = self.rfile.read(content_length)
             message = BytesParser(policy=default).parsebytes(
-                (f"Content-Type: {content_type}\r\nMIME-Version: 1.0\r\n\r\n").encode("utf-8") + raw_body
+                (f"Content-Type: {content_type}\r\nMIME-Version: 1.0\r\n\r\n").encode() + raw_body
             )
             if not message.is_multipart():
                 self._send_json(HTTPStatus.BAD_REQUEST, {"message": "invalid multipart data"})
@@ -4087,7 +4087,7 @@ class OrderRequestHandler(BaseHTTPRequestHandler):
                 return
             raw_body = self.rfile.read(content_length)
             message = BytesParser(policy=default).parsebytes(
-                (f"Content-Type: {content_type}\r\nMIME-Version: 1.0\r\n\r\n").encode("utf-8") + raw_body
+                (f"Content-Type: {content_type}\r\nMIME-Version: 1.0\r\n\r\n").encode() + raw_body
             )
             if not message.is_multipart():
                 self._send_json(HTTPStatus.BAD_REQUEST, {"message": "invalid multipart"})
@@ -4466,8 +4466,6 @@ class OrderRequestHandler(BaseHTTPRequestHandler):
                     else:
                         failed.append(oid)
                 connection.commit()
-            for oid in updated:
-                pass  # could sync sheets here if needed
             self._send_json(HTTPStatus.OK, {"updated": updated, "failed": failed})
             return
 
@@ -4619,7 +4617,8 @@ class OrderRequestHandler(BaseHTTPRequestHandler):
                 connection.commit()
             try:
                 fp = _assets_dir / row["filename"]
-                if fp.exists(): fp.unlink()
+                if fp.exists():
+                    fp.unlink()
             except Exception:
                 pass
             self._send_json(HTTPStatus.OK, {"ok": True})
@@ -4714,7 +4713,7 @@ class OrderRequestHandler(BaseHTTPRequestHandler):
 
 def _run_scheduled_backup() -> None:
     """Daemon thread: create one automatic backup per day at midnight Bangkok time, keep last 30."""
-    import time, sys
+    import time
     last_backup_date: str | None = None
     while True:
         try:

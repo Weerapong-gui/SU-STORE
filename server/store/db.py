@@ -154,7 +154,7 @@ def ensure_store_db(connection: sqlite3.Connection) -> None:
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
 
-def _clean_text(value: Any, field: str, *, required: bool = False, max_len: int = MAX_FIELD_LENGTH) -> str:
+def clean_text(value: Any, field: str, *, required: bool = False, max_len: int = MAX_FIELD_LENGTH) -> str:
     if value is None:
         value = ""
     if not isinstance(value, str):
@@ -299,9 +299,9 @@ def get_product(connection: sqlite3.Connection, key: int | str, *, public: bool)
 def _product_fields(payload: dict[str, Any]) -> dict[str, Any]:
     fields: dict[str, Any] = {}
     if "name" in payload:
-        fields["name"] = _clean_text(payload["name"], "ชื่อสินค้า", required=True, max_len=120)
+        fields["name"] = clean_text(payload["name"], "ชื่อสินค้า", required=True, max_len=120)
     if "description" in payload:
-        fields["description"] = _clean_text(payload["description"], "คำอธิบาย", max_len=5000)
+        fields["description"] = clean_text(payload["description"], "คำอธิบาย", max_len=5000)
     if "images" in payload:
         images = payload["images"]
         if not isinstance(images, list) or not all(isinstance(i, str) and i for i in images):
@@ -339,7 +339,7 @@ def create_product(connection: sqlite3.Connection, payload: dict[str, Any]) -> d
     fields = _product_fields(payload)
     status = fields.pop("status", "draft")
     now = now_iso()
-    slug = _unique_slug(connection, slugify(_clean_text(payload.get("slug") or fields["name"], "slug")))
+    slug = _unique_slug(connection, slugify(clean_text(payload.get("slug") or fields["name"], "slug")))
     cursor = connection.execute(
         "INSERT INTO store_products (slug, name, status, created_at, updated_at) VALUES (?, ?, 'draft', ?, ?)",
         (slug, fields.pop("name"), now, now),
@@ -409,11 +409,11 @@ def replace_variants(connection: sqlite3.Connection, product_id: int, variants: 
     for index, raw in enumerate(variants):
         if not isinstance(raw, dict):
             raise StoreError(400, "variants ต้องเป็น object")
-        size = _clean_text(raw.get("size"), "ไซซ์", max_len=40)
-        color = _clean_text(raw.get("color"), "สี/แบบ", max_len=40)
+        size = clean_text(raw.get("size"), "ไซซ์", max_len=40)
+        color = clean_text(raw.get("color"), "สี/แบบ", max_len=40)
         price = _as_int(raw.get("price"), f"ราคา ({variant_label(size, color)})")
         stock = _as_int(raw.get("stock"), f"สต็อก ({variant_label(size, color)})", allow_none=True)
-        sku = _clean_text(raw.get("sku"), "SKU", max_len=60)
+        sku = clean_text(raw.get("sku"), "SKU", max_len=60)
         active = 1 if raw.get("active", True) else 0
         if active:
             if (size, color) in seen_labels:
@@ -578,7 +578,7 @@ def create_order(connection: sqlite3.Connection, payload: Any) -> dict[str, Any]
         customer = {}
         for field in required_fields:
             optional = field == "note"
-            customer[field] = _clean_text(raw_customer.get(field), BUYER_FIELDS[field], required=not optional)
+            customer[field] = clean_text(raw_customer.get(field), BUYER_FIELDS[field], required=not optional)
         if "@" not in customer["email"]:
             raise StoreError(400, "อีเมลไม่ถูกต้อง")
         if not re.fullmatch(r"[0-9+\- ]{9,15}", customer["phone"]):
@@ -645,7 +645,7 @@ def update_order(connection: sqlite3.Connection, order_code: str, payload: Any) 
     row = _fetch_order_row(connection, order_code)
     changed_from = None
     if "adminNote" in payload:
-        note = _clean_text(payload["adminNote"], "หมายเหตุ", max_len=2000)
+        note = clean_text(payload["adminNote"], "หมายเหตุ", max_len=2000)
         connection.execute("UPDATE store_orders SET admin_note=?, updated_at=? WHERE id=?", (note, now_iso(), row["id"]))
     status = payload.get("status")
     if status is not None and status != row["status"]:
@@ -774,16 +774,16 @@ def update_settings(connection: sqlite3.Connection, payload: dict[str, Any]) -> 
     payment = payload.get("payment")
     if isinstance(payment, dict):
         if "bankName" in payment:
-            updates["payment_bank_name"] = _clean_text(payment["bankName"], "ชื่อธนาคาร", required=True, max_len=80)
+            updates["payment_bank_name"] = clean_text(payment["bankName"], "ชื่อธนาคาร", required=True, max_len=80)
         if "accountNumber" in payment:
-            number = _clean_text(payment["accountNumber"], "เลขบัญชี", required=True, max_len=30)
+            number = clean_text(payment["accountNumber"], "เลขบัญชี", required=True, max_len=30)
             if not re.fullmatch(r"[0-9\- ]{6,30}", number):
                 raise StoreError(400, "เลขบัญชีต้องเป็นตัวเลข (ใส่ขีดได้)")
             updates["payment_account_number"] = number
         if "accountName" in payment:
-            updates["payment_account_name"] = _clean_text(payment["accountName"], "ชื่อบัญชี", max_len=120)
+            updates["payment_account_name"] = clean_text(payment["accountName"], "ชื่อบัญชี", max_len=120)
     if "announcement" in payload:
-        updates["announcement"] = _clean_text(payload["announcement"], "ข้อความประกาศ", max_len=300)
+        updates["announcement"] = clean_text(payload["announcement"], "ข้อความประกาศ", max_len=300)
     for key, value in updates.items():
         connection.execute(
             "INSERT INTO store_settings (key, value, updated_at) VALUES (?, ?, ?) "
@@ -797,289 +797,3 @@ def update_settings(connection: sqlite3.Connection, payload: dict[str, Any]) -> 
             ("1" if payload["siteClosed"] else "0", now),
         )
     return get_settings(connection)
-
-
-# ── Home page layout ──────────────────────────────────────────────────────────
-# Staff build the home page from a fixed set of block types in /admin/home. The draft
-# and the published layout are JSON in store_settings; customers only ever see
-# home_published. Until someone publishes, DEFAULT_HOME renders the original page.
-
-HOME_BLOCK_TYPES = ("hero", "featured", "text", "imageText", "allProducts")
-DEFAULT_ACCENT = "#0071e3"
-MAX_HOME_BLOCKS = 20
-MAX_HERO_SLIDES = 6
-MAX_FEATURED = 12
-
-# A hero slide with no image and no text renders the built-in bilingual store intro.
-DEFAULT_HOME: dict[str, Any] = {
-    "accent": DEFAULT_ACCENT,
-    "blocks": [
-        {"id": "hero", "type": "hero", "hidden": False, "autoplay": True,
-         "slides": [{"image": "", "eyebrow": "", "title": "", "subtitle": "", "buttonText": "", "buttonHref": ""}]},
-        {"id": "all-products", "type": "allProducts", "hidden": False, "title": ""},
-    ],
-}
-
-_BLOCK_ID_RE = re.compile(r"[A-Za-z0-9_-]{1,40}")
-_HOME_IMAGE_RE = re.compile(r"/product-images/[A-Za-z0-9._-]+")
-_HEX_RE = re.compile(r"#[0-9a-fA-F]{6}")
-
-
-def _relative_luminance(hex_color: str) -> float:
-    def channel(c: int) -> float:
-        s = c / 255
-        return s / 12.92 if s <= 0.03928 else ((s + 0.055) / 1.055) ** 2.4
-
-    r, g, b = (int(hex_color[i:i + 2], 16) for i in (1, 3, 5))
-    return 0.2126 * channel(r) + 0.7152 * channel(g) + 0.0722 * channel(b)
-
-
-def contrast_with_white(hex_color: str) -> float:
-    return 1.05 / (_relative_luminance(hex_color) + 0.05)
-
-
-def _clean_image(value: Any, field: str) -> str:
-    value = _clean_text(value, field, max_len=200)
-    if value and not _HOME_IMAGE_RE.fullmatch(value):
-        raise StoreError(400, f"{field}ต้องเป็นรูปที่อัปโหลดผ่านหลังร้าน")
-    return value
-
-
-def _clean_link(text: Any, href: Any, where: str) -> tuple[str, str]:
-    text = _clean_text(text, f"ข้อความปุ่ม ({where})", max_len=30)
-    href = _clean_text(href, f"ลิงก์ปุ่ม ({where})", max_len=300)
-    if text and not href:
-        raise StoreError(400, f"กรุณาใส่ลิงก์ของปุ่ม ({where})")
-    if href and not (re.fullmatch(r"/(?!/)\S*", href) or re.fullmatch(r"https://\S+", href)):
-        raise StoreError(400, f"ลิงก์ปุ่ม ({where}) ต้องขึ้นต้นด้วย / หรือ https://")
-    return text, href
-
-
-def validate_home(payload: Any) -> dict[str, Any]:
-    if not isinstance(payload, dict):
-        raise StoreError(400, "ข้อมูลหน้าแรกไม่ถูกต้อง")
-    accent = payload.get("accent") or DEFAULT_ACCENT
-    if not isinstance(accent, str) or not _HEX_RE.fullmatch(accent):
-        raise StoreError(400, "สีหลักต้องเป็นรหัสสีแบบ #RRGGBB")
-    accent = accent.lower()
-    if contrast_with_white(accent) < 4.5:
-        raise StoreError(400, "สีหลักอ่อนเกินไป ตัวหนังสือสีขาวบนปุ่มจะอ่านยาก กรุณาเลือกสีที่เข้มขึ้น")
-
-    blocks = payload.get("blocks")
-    if not isinstance(blocks, list):
-        raise StoreError(400, "ข้อมูลบล็อกไม่ถูกต้อง")
-    if len(blocks) > MAX_HOME_BLOCKS:
-        raise StoreError(400, f"ใส่ได้ไม่เกิน {MAX_HOME_BLOCKS} บล็อก")
-
-    seen: set[str] = set()
-    out: list[dict[str, Any]] = []
-    for n, block in enumerate(blocks, start=1):
-        where = f"บล็อกที่ {n}"
-        if not isinstance(block, dict) or block.get("type") not in HOME_BLOCK_TYPES:
-            raise StoreError(400, f"{where}: ไม่รู้จักชนิดบล็อกนี้")
-        block_id = block.get("id")
-        if not isinstance(block_id, str) or not _BLOCK_ID_RE.fullmatch(block_id) or block_id in seen:
-            raise StoreError(400, f"{where}: รหัสบล็อกไม่ถูกต้อง")
-        seen.add(block_id)
-        kind = block["type"]
-        clean: dict[str, Any] = {"id": block_id, "type": kind, "hidden": bool(block.get("hidden"))}
-
-        if kind == "hero":
-            slides = block.get("slides")
-            if not isinstance(slides, list) or not 1 <= len(slides) <= MAX_HERO_SLIDES:
-                raise StoreError(400, f"{where}: แบนเนอร์ต้องมี 1–{MAX_HERO_SLIDES} สไลด์")
-            clean["autoplay"] = bool(block.get("autoplay", True))
-            clean["slides"] = []
-            for i, slide in enumerate(slides, start=1):
-                if not isinstance(slide, dict):
-                    raise StoreError(400, f"{where}: สไลด์ที่ {i} ไม่ถูกต้อง")
-                label = f"{where} สไลด์ที่ {i}"
-                button_text, button_href = _clean_link(slide.get("buttonText"), slide.get("buttonHref"), label)
-                clean["slides"].append({
-                    "image": _clean_image(slide.get("image"), f"รูป ({label})"),
-                    "eyebrow": _clean_text(slide.get("eyebrow"), f"ข้อความเล็ก ({label})", max_len=60),
-                    "title": _clean_text(slide.get("title"), f"หัวข้อ ({label})", max_len=80),
-                    "subtitle": _clean_text(slide.get("subtitle"), f"คำโปรย ({label})", max_len=200),
-                    "buttonText": button_text,
-                    "buttonHref": button_href,
-                })
-        elif kind == "featured":
-            ids = block.get("productIds") or []
-            if not isinstance(ids, list) or len(ids) > MAX_FEATURED:
-                raise StoreError(400, f"{where}: เลือกสินค้าแนะนำได้ไม่เกิน {MAX_FEATURED} ชิ้น")
-            if any(isinstance(i, bool) or not isinstance(i, int) for i in ids):
-                raise StoreError(400, f"{where}: รายการสินค้าไม่ถูกต้อง")
-            clean["title"] = _clean_text(block.get("title"), f"หัวข้อ ({where})", max_len=80)
-            clean["productIds"] = list(dict.fromkeys(ids))
-        elif kind == "text":
-            align = block.get("align") or "center"
-            if align not in ("left", "center"):
-                raise StoreError(400, f"{where}: การจัดข้อความไม่ถูกต้อง")
-            clean["title"] = _clean_text(block.get("title"), f"หัวข้อ ({where})", max_len=80)
-            clean["body"] = _clean_text(block.get("body"), f"เนื้อความ ({where})", max_len=2000)
-            clean["align"] = align
-        elif kind == "imageText":
-            side = block.get("imageSide") or "left"
-            if side not in ("left", "right"):
-                raise StoreError(400, f"{where}: ตำแหน่งรูปไม่ถูกต้อง")
-            button_text, button_href = _clean_link(block.get("buttonText"), block.get("buttonHref"), where)
-            clean.update({
-                "image": _clean_image(block.get("image"), f"รูป ({where})"),
-                "title": _clean_text(block.get("title"), f"หัวข้อ ({where})", max_len=80),
-                "body": _clean_text(block.get("body"), f"เนื้อความ ({where})", max_len=2000),
-                "buttonText": button_text,
-                "buttonHref": button_href,
-                "imageSide": side,
-            })
-        else:  # allProducts
-            clean["title"] = _clean_text(block.get("title"), f"หัวข้อ ({where})", max_len=80)
-        out.append(clean)
-    return {"accent": accent, "blocks": out}
-
-
-def _load_home(connection: sqlite3.Connection, key: str) -> tuple[dict[str, Any], str | None]:
-    row = connection.execute("SELECT value, updated_at FROM store_settings WHERE key = ?", (key,)).fetchone()
-    if row is None:
-        return json.loads(json.dumps(DEFAULT_HOME)), None
-    return json.loads(row[0]), row[1]
-
-
-def _store_home(connection: sqlite3.Connection, key: str, layout: dict[str, Any]) -> None:
-    connection.execute(
-        "INSERT INTO store_settings (key, value, updated_at) VALUES (?, ?, ?) "
-        "ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_at = excluded.updated_at",
-        (key, json.dumps(layout, ensure_ascii=False), now_iso()),
-    )
-
-
-def get_home_admin(connection: sqlite3.Connection) -> dict[str, Any]:
-    published, published_at = _load_home(connection, "home_published")
-    draft_row = connection.execute("SELECT 1 FROM store_settings WHERE key = 'home_draft'").fetchone()
-    draft = _load_home(connection, "home_draft")[0] if draft_row else published
-    return {"draft": draft, "published": published, "dirty": draft != published, "publishedAt": published_at}
-
-
-def save_home_draft(connection: sqlite3.Connection, payload: Any) -> dict[str, Any]:
-    _store_home(connection, "home_draft", validate_home(payload))
-    return get_home_admin(connection)
-
-
-def publish_home(connection: sqlite3.Connection) -> dict[str, Any]:
-    state = get_home_admin(connection)
-    # Re-validate: the draft may reference rules that changed since it was saved.
-    _store_home(connection, "home_published", validate_home(state["draft"]))
-    _store_home(connection, "home_draft", validate_home(state["draft"]))
-    return get_home_admin(connection)
-
-
-def discard_home_draft(connection: sqlite3.Connection) -> dict[str, Any]:
-    connection.execute("DELETE FROM store_settings WHERE key = 'home_draft'")
-    return get_home_admin(connection)
-
-
-def resolve_home(connection: sqlite3.Connection, layout: dict[str, Any]) -> dict[str, Any]:
-    """What the storefront renders: hidden and empty blocks dropped, featured product ids
-    replaced by the live public products (drafts/archived silently skipped)."""
-    products = list_products(connection, public=True)
-    by_id = {p["id"]: p for p in products}
-    blocks: list[dict[str, Any]] = []
-    for block in layout.get("blocks", []):
-        if block.get("hidden"):
-            continue
-        kind = block["type"]
-        if kind == "featured":
-            items = [by_id[i] for i in block.get("productIds", []) if i in by_id]
-            if not items:
-                continue
-            block = {**block, "products": items}
-        elif kind == "text" and not (block.get("title") or block.get("body")):
-            continue
-        elif kind == "imageText" and not (block.get("image") or block.get("title") or block.get("body")):
-            continue
-        blocks.append(block)
-    return {"accent": layout.get("accent") or DEFAULT_ACCENT, "blocks": blocks, "products": products}
-
-
-# ── Dashboard ─────────────────────────────────────────────────────────────────
-
-PAID_STATUSES = ("paid", "ready", "completed")
-UNPAID_STATUSES = ("pending_payment", "waiting_confirm")
-
-
-def dashboard(connection: sqlite3.Connection, days: int = 30, now: datetime | None = None) -> dict[str, Any]:
-    """Sales summary. created_at is written with a +07:00 offset, so its first 10 chars
-    are already the Bangkok calendar date."""
-    days = min(max(days, 7), 366)
-    today = (now or datetime.now(TZ_BANGKOK)).astimezone(TZ_BANGKOK).date()
-    paid = ",".join("?" * len(PAID_STATUSES))
-    unpaid = ",".join("?" * len(UNPAID_STATUSES))
-
-    counts = {r[0]: r[1] for r in connection.execute("SELECT status, COUNT(*) FROM store_orders GROUP BY status")}
-    revenue = connection.execute(
-        f"SELECT COALESCE(SUM(total_amount), 0) FROM store_orders WHERE status IN ({paid})", PAID_STATUSES
-    ).fetchone()[0]
-    awaiting = connection.execute(
-        f"SELECT COALESCE(SUM(total_amount), 0) FROM store_orders WHERE status IN ({unpaid})", UNPAID_STATUSES
-    ).fetchone()[0]
-
-    first_day = today - timedelta(days=days - 1)
-    per_day = {
-        r[0]: (r[1], r[2])
-        for r in connection.execute(
-            f"SELECT substr(created_at, 1, 10) AS day, "
-            f"COALESCE(SUM(CASE WHEN status IN ({paid}) THEN total_amount END), 0), "
-            f"SUM(CASE WHEN status != 'cancelled' THEN 1 ELSE 0 END) "
-            f"FROM store_orders WHERE substr(created_at, 1, 10) >= ? GROUP BY day",
-            (*PAID_STATUSES, first_day.isoformat()),
-        )
-    }
-    by_day = []
-    for offset in range(days):
-        day = (first_day + timedelta(days=offset)).isoformat()
-        amount, orders = per_day.get(day, (0, 0))
-        by_day.append({"date": day, "paidAmount": amount, "orders": orders})
-
-    by_variant = [
-        {
-            "productName": r["product_name"],
-            "variantLabel": r["variant_label"],
-            "paidQuantity": r["paid_qty"],
-            "unpaidQuantity": r["unpaid_qty"],
-            "paidAmount": r["paid_amount"],
-        }
-        for r in connection.execute(
-            f"SELECT i.product_name, i.variant_label, "
-            f"SUM(CASE WHEN o.status IN ({paid}) THEN i.quantity ELSE 0 END) AS paid_qty, "
-            f"SUM(CASE WHEN o.status IN ({unpaid}) THEN i.quantity ELSE 0 END) AS unpaid_qty, "
-            f"SUM(CASE WHEN o.status IN ({paid}) THEN i.quantity * i.unit_price ELSE 0 END) AS paid_amount "
-            f"FROM store_order_items i JOIN store_orders o ON o.id = i.order_id "
-            f"WHERE o.status != 'cancelled' "
-            f"GROUP BY i.product_id, i.product_name, i.variant_id, i.variant_label "
-            f"ORDER BY i.product_name, MIN(i.variant_id)",
-            (*PAID_STATUSES, *UNPAID_STATUSES, *PAID_STATUSES),
-        )
-    ]
-    return {
-        "paidAmount": revenue,
-        "awaitingAmount": awaiting,
-        "orderCount": sum(v for k, v in counts.items() if k != "cancelled"),
-        "statusCounts": {s: counts.get(s, 0) for s in ORDER_STATUSES},
-        "byDay": by_day,
-        "byVariant": by_variant,
-    }
-
-
-def meta(connection: sqlite3.Connection | None = None) -> dict[str, Any]:
-    result: dict[str, Any] = {
-        "buyerFields": [
-            {"key": k, "label": v, "alwaysRequired": k in ALWAYS_REQUIRED_FIELDS} for k, v in BUYER_FIELDS.items()
-        ],
-        "orderStatuses": [{"key": k, "label": v} for k, v in ORDER_STATUSES.items()],
-        "productStatuses": [{"key": k, "label": v} for k, v in PRODUCT_STATUSES.items()],
-    }
-    if connection is not None:
-        settings = get_settings(connection)
-        result["payment"] = settings["payment"]
-        result["announcement"] = settings["announcement"]
-        result["accent"] = _load_home(connection, "home_published")[0].get("accent") or DEFAULT_ACCENT
-    return result

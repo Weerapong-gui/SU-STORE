@@ -87,7 +87,7 @@ SU STORE เป็นระบบสั่งซื้อเสื้อรั�
 เขียนโค้ดใหม่หรือแก้โค้ดเดิมต้องผ่านข้อพวกนี้ ถ้าไปเจอโค้ดเก่าที่ผิดกฎในไฟล์ที่กำลังแก้ ให้เก็บกวาดส่วนที่เกี่ยวข้องไปด้วย
 
 1. **ใช้ของที่มีอยู่ก่อน** — หา helper เดิมก่อนเขียนใหม่
-   - store v2: `StoreError`, `_clean_text`, `_as_int` (`server/store/db.py`)
+   - store v2: `StoreError`, `clean_text`, `_as_int` (`server/store/db.py`)
    - DB / audit: `open_db()`, `log_audit()`
    - admin: `adminFetch` (`src/lib/adminApi.ts`) + `Card` / `Field` / `Button` / `useToast` (`src/components/admin/ui.tsx`)
    - หน้าร้าน: ข้อความผ่าน `useStoreText()` (`src/lib/storeI18n.ts`), `cn`, `formatPrice`, URL ของ order-api ผ่าน `src/lib/orderApi.ts`

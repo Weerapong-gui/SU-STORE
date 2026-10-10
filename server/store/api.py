@@ -19,7 +19,8 @@ from http import HTTPStatus
 from typing import Any
 from urllib.parse import parse_qs, urlparse
 
-from . import db
+from . import dashboard, db, home
+from . import meta as store_meta
 
 _IMAGE_EXT = {"image/jpeg": ".jpg", "image/png": ".png", "image/webp": ".webp"}
 
@@ -72,7 +73,7 @@ def _route(handler: Any, method: str, path: str, query: dict[str, str], core: An
     # ── Public ────────────────────────────────────────────────────────────────
     if method == "GET" and path in ("/v2/meta", "/v2/admin/meta"):
         with core.open_db() as conn:
-            return send(HTTPStatus.OK, db.meta(conn))
+            return send(HTTPStatus.OK, store_meta.meta(conn))
 
     if method == "GET" and path == "/v2/products":
         with core.open_db() as conn:
@@ -85,7 +86,7 @@ def _route(handler: Any, method: str, path: str, query: dict[str, str], core: An
 
     if method == "GET" and path == "/v2/home":
         with core.open_db() as conn:
-            return send(HTTPStatus.OK, db.resolve_home(conn, db.get_home_admin(conn)["published"]))
+            return send(HTTPStatus.OK, home.resolve_home(conn, home.get_home_admin(conn)["published"]))
 
     if method == "POST" and path == "/v2/orders":
         payload = _json_body(handler)
@@ -150,7 +151,7 @@ def _route(handler: Any, method: str, path: str, query: dict[str, str], core: An
 
     if method == "GET" and path == "/v2/admin/dashboard":
         with core.open_db() as conn:
-            return send(HTTPStatus.OK, db.dashboard(conn, _int(query.get("days"), 30)))
+            return send(HTTPStatus.OK, dashboard.dashboard(conn, _int(query.get("days"), 30)))
 
     if path == "/v2/admin/settings":
         if method == "GET":
@@ -176,25 +177,25 @@ def _route(handler: Any, method: str, path: str, query: dict[str, str], core: An
     if path == "/v2/admin/home":
         if method == "GET":
             with core.open_db() as conn:
-                return send(HTTPStatus.OK, db.get_home_admin(conn))
+                return send(HTTPStatus.OK, home.get_home_admin(conn))
         if method == "PUT":
             payload = _json_body(handler)
             with core.open_db() as conn:
-                return send(HTTPStatus.OK, db.save_home_draft(conn, payload))
+                return send(HTTPStatus.OK, home.save_home_draft(conn, payload))
 
     if method == "GET" and path == "/v2/admin/home/preview":
         with core.open_db() as conn:
-            return send(HTTPStatus.OK, db.resolve_home(conn, db.get_home_admin(conn)["draft"]))
+            return send(HTTPStatus.OK, home.resolve_home(conn, home.get_home_admin(conn)["draft"]))
 
     if method == "POST" and path == "/v2/admin/home/publish":
         with core.open_db() as conn:
-            state = db.publish_home(conn)
+            state = home.publish_home(conn)
             core.log_audit(conn, "-", "v2_home_published", f"by {_admin_user(handler)}")
         return send(HTTPStatus.OK, state)
 
     if method == "POST" and path == "/v2/admin/home/discard":
         with core.open_db() as conn:
-            return send(HTTPStatus.OK, db.discard_home_draft(conn))
+            return send(HTTPStatus.OK, home.discard_home_draft(conn))
 
     if method == "POST" and path == "/v2/admin/home/images":
         content, mime = _read_multipart_file(handler, "image", core.MAX_PRODUCT_IMAGE_SIZE_BYTES)
@@ -340,7 +341,7 @@ def _read_multipart_file(handler: Any, field: str, max_bytes: int) -> tuple[byte
         raise db.StoreError(HTTPStatus.BAD_REQUEST, "ไฟล์ใหญ่เกินไป")
     raw = handler.rfile.read(length)
     message = BytesParser(policy=default).parsebytes(
-        f"Content-Type: {content_type}\r\nMIME-Version: 1.0\r\n\r\n".encode("utf-8") + raw
+        f"Content-Type: {content_type}\r\nMIME-Version: 1.0\r\n\r\n".encode() + raw
     )
     if message.is_multipart():
         for part in message.iter_parts():

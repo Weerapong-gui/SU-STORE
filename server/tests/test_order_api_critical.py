@@ -12,8 +12,6 @@ import sqlite3
 import sys
 from unittest.mock import MagicMock
 
-import pytest
-
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 # Stub OCR so order_api imports without cv2/Tesseract present.
 sys.modules["ocr"] = MagicMock()
@@ -50,13 +48,13 @@ class TestReserveKhantokTicket:
     def test_non_prefix_gets_nothing(self):
         conn = _mem_db()
         _add_order(conn, 1, INELIGIBLE)
-        ok, claimed, already, value = order_api.reserve_khantok_ticket(conn, 1, INELIGIBLE)
+        ok, _claimed, already, value = order_api.reserve_khantok_ticket(conn, 1, INELIGIBLE)
         assert (ok, already, value) == (False, False, None)
 
     def test_eligible_prefix_gets_100_and_records_claim(self):
         conn = _mem_db()
         _add_order(conn, 1, ELIGIBLE)
-        ok, claimed, already, value = order_api.reserve_khantok_ticket(conn, 1, ELIGIBLE)
+        ok, _claimed, already, value = order_api.reserve_khantok_ticket(conn, 1, ELIGIBLE)
         assert ok is True and already is False and value == 100
         assert conn.execute("SELECT COUNT(*) AS c FROM khantok_ticket_claims").fetchone()["c"] == 1
 
@@ -64,14 +62,13 @@ class TestReserveKhantokTicket:
         conn = _mem_db()
         _add_order(conn, 1, ELIGIBLE, khantok_ticket=1, status="paid")   # already has a live ticket
         _add_order(conn, 2, ELIGIBLE, status="pending_payment")
-        ok, claimed, already, value = order_api.reserve_khantok_ticket(conn, 2, ELIGIBLE)
+        ok, _claimed, already, value = order_api.reserve_khantok_ticket(conn, 2, ELIGIBLE)
         assert (ok, already, value) == (False, True, None)
 
     def test_cancelled_prior_order_does_not_block_reclaim(self):
         """Regression guard: a ticketed order that was cancelled/rejected/refunded must not
         permanently deny the student a ticket on a brand-new order."""
-        conn = _mem_db()
-        for i, dead in enumerate(("cancelled", "rejected", "refund", "refunded"), start=1):
+        for dead in ("cancelled", "rejected", "refund", "refunded"):
             conn2 = _mem_db()
             _add_order(conn2, 1, ELIGIBLE, khantok_ticket=1, status=dead)
             _add_order(conn2, 2, ELIGIBLE, status="pending_payment")
@@ -83,7 +80,7 @@ class TestReserveKhantokTicket:
         monkeypatch.setattr(order_api, "KHANTOK_QUOTA_100", 0)
         monkeypatch.setattr(order_api, "KHANTOK_QUOTA_50", 5)
         _add_order(conn, 1, ELIGIBLE)
-        ok, claimed, already, value = order_api.reserve_khantok_ticket(conn, 1, ELIGIBLE)
+        ok, _claimed, _already, value = order_api.reserve_khantok_ticket(conn, 1, ELIGIBLE)
         assert ok is True and value == 50
 
     def test_both_quotas_full_denies(self, monkeypatch):
@@ -91,7 +88,7 @@ class TestReserveKhantokTicket:
         monkeypatch.setattr(order_api, "KHANTOK_QUOTA_100", 0)
         monkeypatch.setattr(order_api, "KHANTOK_QUOTA_50", 0)
         _add_order(conn, 1, ELIGIBLE)
-        ok, claimed, already, value = order_api.reserve_khantok_ticket(conn, 1, ELIGIBLE)
+        ok, _claimed, already, value = order_api.reserve_khantok_ticket(conn, 1, ELIGIBLE)
         assert (ok, already, value) == (False, False, None)
 
     def test_existing_claim_is_idempotent(self):
@@ -140,7 +137,7 @@ class TestValidateOrderPayload:
             "product": _product(), "customer": _customer(),
             "size": "M", "quantity": 0, "totalAmount": 158,
         }
-        data, err = order_api.validate_order_payload(payload)
+        data, _err = order_api.validate_order_payload(payload)
         assert data is None
 
     def test_total_is_recomputed_from_single_item(self):

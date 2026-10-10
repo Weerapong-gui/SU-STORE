@@ -76,7 +76,12 @@ Python HTTP server แบบ raw `http.server` (`ThreadingHTTPServer`) ไม่
 
 ระบบขายของใหม่ แยกจาก FP28 แต่อยู่ใน `orders.db` ไฟล์เดียวกัน
 
-- `store/db.py` — schema `store_*` + business logic (ไม่ import `order_api`), `store/api.py` — routes `/v2/*`
+- ไฟล์ในแพ็กเกจ (ไม่มีไฟล์ไหน import `order_api`)
+  - `store/db.py`: schema `store_*`, สินค้า, ออเดอร์, settings และ helper กลาง (`StoreError`, `clean_text`, `_as_int`)
+  - `store/home.py`: หน้าแรก
+  - `store/dashboard.py`: ยอดขาย
+  - `store/meta.py`: ข้อมูลที่หน้าร้านและหลังร้านโหลดครั้งเดียว
+  - `store/api.py`: routes `/v2/*`
 - `order_api.py` แค่ forward ทุก `path.startswith("/v2/")` ไป `store_api.handle(self, METHOD, sys.modules[__name__])` และเรียก `store_db.ensure_store_db()` ท้าย `ensure_db()`
 - **ห้ามให้ v2 เขียนตาราง v1** (`orders`, `products`, `khantok_*`, `display2_*` …) — ข้อมูล FP28 ต้องอยู่เหมือนเดิม test `test_ensure_db_leaves_v1_orders_untouched` คุมไว้
   - ข้อยกเว้นเดียว: `update_settings()` เขียน `site_settings.site_closed` (สวิตช์เปิด/ปิดหน้าร้านที่ middleware ของ Next อ่าน และ admin FP28 ใช้ร่วมกัน) ค่าอื่นของร้าน v2 (บัญชีรับเงิน, ประกาศ) อยู่ใน `store_settings`
@@ -93,9 +98,19 @@ Python HTTP server แบบ raw `http.server` (`ThreadingHTTPServer`) ไม่
 - Admin auth: `POST /v2/admin/login` (username/password ใน `admin_users`) คืน token ใช้เป็น `Authorization: Claim <token>` หรือใช้ `Bearer ORDER_API_TOKEN`
 - ลบสินค้า/ตัวเลือกที่เคยถูกสั่งแล้ว → ระบบเปลี่ยนเป็น archived / inactive แทนการลบ
 - รอบขายต่อสินค้า: `sale_starts_at` / `sale_ends_at` (+07:00 ISO, ว่าง = ไม่จำกัด) → `saleState` = `upcoming` / `open` / `ended` และ `create_order` ปฏิเสธ (409) ถ้าไม่ใช่ `open`
-- `dashboard()` นับยอดขายเฉพาะสถานะ `paid` / `ready` / `completed` ใช้ `substr(created_at,1,10)` เป็นวันไทย (เพราะ `now_iso()` เขียน offset +07:00)
-- หน้าแรก: `store_settings` key `home_draft` / `home_published` (JSON `{accent, blocks}`)
+- `dashboard()` (`store/dashboard.py`) นับยอดขายเฉพาะสถานะ `paid` / `ready` / `completed` ใช้ `substr(created_at,1,10)` เป็นวันไทย (เพราะ `now_iso()` เขียน offset +07:00)
+- หน้าแรก (`store/home.py`): `store_settings` key `home_draft` / `home_published` (JSON `{accent, blocks}`)
   - `validate_home()` คุมชนิดบล็อก, ลิงก์ปุ่ม (`/…` หรือ `https://` เท่านั้น), รูป (`/product-images/…` เท่านั้น) และสีที่ต้อง contrast กับตัวหนังสือขาว ≥ 4.5
   - ยังไม่เคยเผยแพร่ = `DEFAULT_HOME` (หน้าแรกแบบเดิม)
   - `GET /v2/home` คืนเฉพาะที่เผยแพร่แล้ว ผ่าน `resolve_home()` ซึ่งตัดบล็อกที่ซ่อน/ว่าง และสินค้าที่ไม่ได้เปิดขายออก
 - Tests: `server/tests/test_store_v2.py` (มี HTTP round-trip จริงผ่าน `OrderRequestHandler`)
+
+---
+
+## Clean code ฝั่ง server
+
+กฎเต็มอยู่ใน `CLAUDE.md` หมวด 3.5 ส่วนนี้คือสิ่งที่ต้องระวังเฉพาะ Python
+- `ruff check server tests` ต้องผ่าน กฎอยู่ใน `ruff.toml` ที่ราก repo และ CI ใช้ไฟล์เดียวกัน
+- **`sqlite3.Row` ใช้ `"col" in row.keys()`** ห้ามแก้เป็น `"col" in row` เพราะ `in` บน Row จะเช็กค่า ไม่ใช่ชื่อคอลัมน์ บรรทัดพวกนี้มี `# noqa: SIM118` กำกับไว้
+- `noqa` ทุกตัวต้องมีเหตุผลต่อท้ายในวงเล็บ
+- handler อ่าน request → เรียกฟังก์ชันใน `store/*.py` → ส่ง response เท่านั้น ห้ามเขียน SQL ใน handler (ยกเว้นโค้ด FP28 เดิมที่ยังไม่ได้ย้าย)
