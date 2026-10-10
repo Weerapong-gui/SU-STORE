@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { ADMIN_COOKIE } from "@/lib/adminAuth";
+import { getRateLimitKey, isRateLimited } from "@/lib/rateLimit";
 
 const API_BASE = process.env.ORDER_API_BASE_URL?.replace(/\/$/, "") ?? "";
 
@@ -9,6 +10,13 @@ export async function POST(request: NextRequest) {
   const { username, password } = (await request.json()) as { username?: string; password?: string };
   if (!username?.trim() || !password) {
     return NextResponse.json({ message: "กรุณากรอกชื่อผู้ใช้และรหัสผ่าน" }, { status: 400 });
+  }
+  // Slow down password guessing: per IP, and per username across IPs.
+  if (
+    isRateLimited(getRateLimitKey(request, "admin-login"), 5) ||
+    isRateLimited(`user:${username.trim().toLowerCase()}:admin-login`, 10)
+  ) {
+    return NextResponse.json({ message: "ลองเข้าสู่ระบบบ่อยเกินไป รอสักครู่แล้วลองใหม่" }, { status: 429 });
   }
 
   let data: { token?: string; username?: string; message?: string };

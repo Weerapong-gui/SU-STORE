@@ -54,6 +54,7 @@ PRODUCT_STATUSES: dict[str, str] = {
 MAX_ITEMS_PER_ORDER = 20
 MAX_QTY_PER_ITEM = 50
 MAX_FIELD_LENGTH = 500
+_CHECKOUT_ID_RE = re.compile(r"[A-Za-z0-9-]{16,64}")
 
 
 class StoreError(Exception):
@@ -142,6 +143,13 @@ def ensure_store_db(connection: sqlite3.Connection) -> None:
     for column in ("sale_starts_at", "sale_ends_at"):
         if column not in columns:
             connection.execute(f"ALTER TABLE store_products ADD COLUMN {column} TEXT")
+    order_columns = {r[1] for r in connection.execute("PRAGMA table_info(store_orders)")}
+    if "checkout_id" not in order_columns:
+        connection.execute("ALTER TABLE store_orders ADD COLUMN checkout_id TEXT")
+    connection.execute(
+        "CREATE UNIQUE INDEX IF NOT EXISTS idx_store_orders_checkout ON store_orders(checkout_id) "
+        "WHERE checkout_id IS NOT NULL"
+    )
 
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
@@ -519,10 +527,26 @@ def create_order(connection: sqlite3.Connection, payload: Any) -> dict[str, Any]
     raw_customer = payload.get("customer")
     if not isinstance(raw_customer, dict):
         raise StoreError(400, "กรุณากรอกข้อมูลผู้ซื้อ")
+    # Random id the browser keeps for one cart. A retry after a lost response, or the same
+    # cart submitted from a second tab, gets the order it already made instead of a new one.
+    checkout_id = payload.get("checkoutId")
+    if checkout_id is not None and not (isinstance(checkout_id, str) and _CHECKOUT_ID_RE.fullmatch(checkout_id)):
+        raise StoreError(400, "checkoutId ไม่ถูกต้อง")
+    # Total the buyer saw. If a price changed since, refuse rather than charge a different amount.
+    expected_total = payload.get("expectedTotal")
+    if expected_total is not None:
+        expected_total = _as_int(expected_total, "expectedTotal")
 
     connection.commit()  # make sure no implicit transaction is open before BEGIN
     connection.execute("BEGIN IMMEDIATE")
     try:
+        if checkout_id:
+            existing = connection.execute(
+                "SELECT order_code FROM store_orders WHERE checkout_id = ?", (checkout_id,)
+            ).fetchone()
+            if existing:
+                connection.rollback()
+                return get_order(connection, existing[0], include_token=True)
         lines = []
         required_fields: list[str] = list(ALWAYS_REQUIRED_FIELDS)
         for variant_id, qty in quantities.items():
@@ -561,12 +585,14 @@ def create_order(connection: sqlite3.Connection, payload: Any) -> dict[str, Any]
             raise StoreError(400, "เบอร์โทรศัพท์ไม่ถูกต้อง")
 
         total = sum(row["price"] * qty for row, _, qty in lines)
+        if expected_total is not None and expected_total != total:
+            raise StoreError(409, "ราคาสินค้ามีการเปลี่ยนแปลง กรุณาตรวจสอบยอดรวมแล้วกดสั่งซื้ออีกครั้ง")
         now = now_iso()
         order_code = next_order_code(connection)
         cursor = connection.execute(
-            "INSERT INTO store_orders (order_code, status, customer_json, total_amount, access_token, created_at, updated_at) "
-            "VALUES (?, 'pending_payment', ?, ?, ?, ?, ?)",
-            (order_code, json.dumps(customer, ensure_ascii=False), total, secrets.token_hex(24), now, now),
+            "INSERT INTO store_orders (order_code, status, customer_json, total_amount, access_token, checkout_id, "
+            "created_at, updated_at) VALUES (?, 'pending_payment', ?, ?, ?, ?, ?, ?)",
+            (order_code, json.dumps(customer, ensure_ascii=False), total, secrets.token_hex(24), checkout_id, now, now),
         )
         order_id = int(cursor.lastrowid)
         for row, label, qty in lines:
@@ -627,6 +653,15 @@ def update_order(connection: sqlite3.Connection, order_code: str, payload: Any) 
             raise StoreError(400, "สถานะไม่ถูกต้อง")
         if row["status"] == "cancelled":
             raise StoreError(409, "ออเดอร์ที่ยกเลิกแล้วเปลี่ยนสถานะไม่ได้")
+        changed_from = row["status"]
+        # Conditional on the status we read, so two staff cancelling at once can't both
+        # return the stock.
+        updated = connection.execute(
+            "UPDATE store_orders SET status=?, updated_at=? WHERE id=? AND status=?",
+            (status, now_iso(), row["id"], row["status"]),
+        ).rowcount
+        if updated == 0:
+            raise StoreError(409, "ออเดอร์ถูกแก้ไขไปแล้ว กรุณารีเฟรช")
         if status == "cancelled":
             for item in connection.execute(
                 "SELECT variant_id, quantity FROM store_order_items WHERE order_id = ?", (row["id"],)
@@ -635,8 +670,6 @@ def update_order(connection: sqlite3.Connection, order_code: str, payload: Any) 
                     "UPDATE store_variants SET stock = stock + ? WHERE id = ? AND stock IS NOT NULL",
                     (item["quantity"], item["variant_id"]),
                 )
-        connection.execute("UPDATE store_orders SET status=?, updated_at=? WHERE id=?", (status, now_iso(), row["id"]))
-        changed_from = row["status"]
     return get_order(connection, order_code), changed_from
 
 
@@ -674,6 +707,14 @@ def list_orders(
     }
 
 
+def _csv_safe(value: Any) -> Any:
+    """Customer text starting with = + - @ would run as a formula when staff open the
+    export in Excel; a leading ' makes it plain text."""
+    if isinstance(value, str) and len(value) > 1 and value[:1] in ("=", "+", "-", "@", "\t", "\r"):
+        return "'" + value
+    return value
+
+
 def orders_csv_rows(connection: sqlite3.Connection, status: str | None = None) -> list[list[Any]]:
     """One row per order item, for the admin spreadsheet export."""
     where, params = ("WHERE o.status = ?", (status,)) if status else ("", ())
@@ -690,12 +731,12 @@ def orders_csv_rows(connection: sqlite3.Connection, status: str | None = None) -
     ]
     for r in rows:
         customer = json.loads(r["customer_json"])
-        out.append(
+        out.append([_csv_safe(v) for v in (
             [r["order_code"], r["created_at"], ORDER_STATUSES.get(r["status"], r["status"]), r["product_name"],
              r["variant_label"], r["unit_price"], r["quantity"], r["total_amount"]]
             + [customer.get(f, "") for f in fields]
             + [r["admin_note"]]
-        )
+        )])
     return out
 
 

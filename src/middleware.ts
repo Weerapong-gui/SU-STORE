@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { ADMIN_COOKIE } from "@/lib/adminAuth";
+import { clientIp } from "@/lib/clientIp";
 
 // ── Rate limiting ──────────────────────────────────────────────────────────────
 const rateLimitMap = new Map<string, { count: number; resetAt: number }>();
@@ -47,10 +48,7 @@ export async function middleware(request: NextRequest) {
 
   // ── Rate-limit order creation and order lookup ──────────────────────────────
   if (request.method === "POST" && (pathname === "/api/store/orders" || pathname === "/api/store/orders/lookup")) {
-    const ip =
-      request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ??
-      request.headers.get("x-real-ip") ??
-      "unknown";
+    const ip = clientIp(request);
 
     const now = Date.now();
     const entry = rateLimitMap.get(ip);
@@ -98,12 +96,9 @@ export async function middleware(request: NextRequest) {
       const now = Date.now();
       if (now - siteClosedCache.ts > SITE_STATUS_TTL) {
         try {
-          const ip =
-            request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ??
-            request.headers.get("x-real-ip") ??
-            "";
+          const ip = clientIp(request);
           const res = await fetch(
-            `${API_BASE}/site-status?ip=${encodeURIComponent(ip)}`,
+            `${API_BASE}/site-status?ip=${encodeURIComponent(ip === "unknown" ? "" : ip)}`,
             { signal: AbortSignal.timeout(2000), cache: "no-store" }
           );
           if (res.ok) {

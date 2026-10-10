@@ -210,6 +210,69 @@ class TestOrders:
         rows = db.orders_csv_rows(conn)
         assert len(rows) == 3 and rows[0][0] == "เลขออเดอร์"
 
+    def test_same_checkout_id_returns_the_existing_order(self):
+        conn = _conn()
+        vid = _product(conn, stock=5)["variants"][0]["id"]
+        body = {"items": [{"variantId": vid, "quantity": 2}], "customer": CUSTOMER,
+                "checkoutId": "3f2a9c1e-7b4d-4e8a-9c0f-1a2b3c4d5e6f"}
+        first = db.create_order(conn, body)
+        again = db.create_order(conn, body)  # retry after a lost response / second tab
+        assert again["orderCode"] == first["orderCode"] and again["accessToken"] == first["accessToken"]
+        assert conn.execute("SELECT COUNT(*) FROM store_orders").fetchone()[0] == 1
+        assert conn.execute("SELECT stock FROM store_variants WHERE id = ?", (vid,)).fetchone()[0] == 3
+        other = db.create_order(conn, {**body, "checkoutId": "another-checkout-id-0001"})
+        assert other["orderCode"] != first["orderCode"]
+        with pytest.raises(db.StoreError):
+            db.create_order(conn, {**body, "checkoutId": "short"})
+
+    def test_expected_total_must_match_current_prices(self):
+        conn = _conn()
+        p = _product(conn, variants=[{"size": "M", "price": 100, "stock": 5}])
+        vid = p["variants"][0]["id"]
+        db.replace_variants(conn, p["id"], [{"id": vid, "size": "M", "price": 120, "stock": 5}])
+        with pytest.raises(db.StoreError) as err:
+            db.create_order(conn, {"items": [{"variantId": vid, "quantity": 2}], "customer": CUSTOMER,
+                                   "expectedTotal": 200})
+        assert err.value.status == 409
+        assert conn.execute("SELECT stock FROM store_variants WHERE id = ?", (vid,)).fetchone()[0] == 5
+        order = db.create_order(conn, {"items": [{"variantId": vid, "quantity": 2}], "customer": CUSTOMER,
+                                       "expectedTotal": 240})
+        assert order["totalAmount"] == 240
+
+    def test_mixed_cart_rejects_whole_order_and_keeps_stock(self):
+        conn = _conn()
+        ok = _product(conn, stock=5)["variants"][0]["id"]
+        ended = db.create_product(conn, {"name": "Old Shirt", "status": "active",
+                                         "saleEndsAt": "2020-01-01T00:00:00+07:00",
+                                         "variants": [{"price": 50, "stock": 5}]})["variants"][0]["id"]
+        with pytest.raises(db.StoreError) as err:
+            db.create_order(conn, {"items": [{"variantId": ok, "quantity": 1}, {"variantId": ended, "quantity": 1}],
+                                   "customer": CUSTOMER})
+        assert err.value.status == 409
+        assert conn.execute("SELECT stock FROM store_variants WHERE id = ?", (ok,)).fetchone()[0] == 5
+
+    def test_csv_export_neutralises_formulas(self):
+        conn = _conn()
+        vid = _product(conn)["variants"][0]["id"]
+        db.create_order(conn, {"items": [{"variantId": vid, "quantity": 1}],
+                               "customer": {**CUSTOMER, "name": '=HYPERLINK("http://x","y")'}})
+        row = db.orders_csv_rows(conn)[1]
+        assert '\'=HYPERLINK("http://x","y")' in row
+        assert 150 in row  # numbers stay numbers
+
+    def test_stale_cancel_does_not_return_stock_twice(self, monkeypatch):
+        conn = _conn()
+        vid = _product(conn, stock=2)["variants"][0]["id"]
+        order = db.create_order(conn, {"items": [{"variantId": vid, "quantity": 2}], "customer": CUSTOMER})
+        stale = db.get_order_row(conn, order["orderCode"])
+        db.update_order(conn, order["orderCode"], {"status": "cancelled"})
+        # a second staff member who loaded the order before it was cancelled
+        monkeypatch.setattr(db, "_fetch_order_row", lambda *_: stale)
+        with pytest.raises(db.StoreError) as err:
+            db.update_order(conn, order["orderCode"], {"status": "cancelled"})
+        assert err.value.status == 409
+        assert conn.execute("SELECT stock FROM store_variants WHERE id = ?", (vid,)).fetchone()[0] == 2
+
 
 class TestSaleWindow:
     def test_states(self):
@@ -467,3 +530,42 @@ def test_home_http(server):
     assert _call(server, "POST", "/v2/admin/home/publish", headers=admin)[0] == 200
     home = json.loads(_call(server, "GET", "/v2/home")[1])
     assert home["accent"] == "#7b1fa2" and home["blocks"][0]["title"] == "Hi"
+
+
+def test_settings_changes_are_audited(server):
+    _, body = _call(server, "POST", "/v2/admin/login", {"username": "staff1", "password": "pw"})
+    admin = {"Authorization": "Claim " + json.loads(body)["token"]}
+    status, _ = _call(server, "PUT", "/v2/admin/settings",
+                      {"payment": {"accountNumber": "111-222-333"}, "announcement": "hi"}, admin)
+    assert status == 200
+    status, _ = _call(server, "PUT", "/v2/admin/settings", {"announcement": "hi"}, admin)  # no change
+    with sqlite3.connect(order_api.DB_PATH) as conn:
+        events = conn.execute("SELECT event, detail FROM order_audit_log WHERE event LIKE 'v2_%' ORDER BY id").fetchall()
+    assert [e for e, _ in events] == ["v2_payment_changed", "v2_announcement_changed"]
+    assert "672-3000-615" in events[0][1] and "111-222-333" in events[0][1] and "by staff1" in events[0][1]
+
+
+def test_oversized_bodies_are_refused_before_reading(server):
+    import http.client
+
+    def send(path, content_type, length):
+        host, port = server.removeprefix("http://").split(":")
+        c = http.client.HTTPConnection(host, int(port), timeout=5)
+        c.putrequest("POST", path)
+        c.putheader("Content-Type", content_type)
+        c.putheader("Content-Length", str(length))
+        c.endheaders()  # no body sent: the server must answer without waiting for it
+        status = c.getresponse().status
+        c.close()
+        return status
+
+    assert send("/v2/orders", "application/json", 10 * 1024 * 1024) == 400
+    _, body = _call(server, "POST", "/v2/admin/login", {"username": "staff1", "password": "pw"})
+    admin = {"Authorization": "Claim " + json.loads(body)["token"]}
+    _, body = _call(server, "POST", "/v2/admin/products",
+                    {"name": "Cap", "status": "active", "variants": [{"price": 100, "stock": 5}]}, admin)
+    vid = json.loads(body)["variants"][0]["id"]
+    _, body = _call(server, "POST", "/v2/orders", {"items": [{"variantId": vid, "quantity": 1}], "customer": CUSTOMER})
+    order = json.loads(body)
+    path = f"/v2/orders/{order['orderCode']}/slip?token={order['accessToken']}"
+    assert send(path, "multipart/form-data; boundary=x", 50 * 1024 * 1024) == 400

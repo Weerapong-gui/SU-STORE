@@ -13,8 +13,18 @@ const orderApiHost = process.env.ORDER_API_BASE_URL
   ? new URL(process.env.ORDER_API_BASE_URL).hostname
   : null;
 
+const securityHeaders = [
+  { key: "X-Content-Type-Options", value: "nosniff" },
+  // Order pages carry ?token= in the URL; never send it to other sites.
+  { key: "Referrer-Policy", value: "strict-origin-when-cross-origin" },
+  { key: "X-Frame-Options", value: "SAMEORIGIN" },
+];
+
 const nextConfig = {
   output: "standalone",
+  async headers() {
+    return [{ source: "/:path*", headers: securityHeaders }];
+  },
   images: {
     formats: ["image/avif", "image/webp"],
     remotePatterns: orderApiHost

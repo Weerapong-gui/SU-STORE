@@ -81,6 +81,13 @@ Python HTTP server แบบ raw `http.server` (`ThreadingHTTPServer`) ไม่
 - **ห้ามให้ v2 เขียนตาราง v1** (`orders`, `products`, `khantok_*`, `display2_*` …) — ข้อมูล FP28 ต้องอยู่เหมือนเดิม test `test_ensure_db_leaves_v1_orders_untouched` คุมไว้
   - ข้อยกเว้นเดียว: `update_settings()` เขียน `site_settings.site_closed` (สวิตช์เปิด/ปิดหน้าร้านที่ middleware ของ Next อ่าน และ admin FP28 ใช้ร่วมกัน) ค่าอื่นของร้าน v2 (บัญชีรับเงิน, ประกาศ) อยู่ใน `store_settings`
 - ราคาและยอดรวมคำนวณจาก `store_variants` ฝั่ง server เสมอ client ส่งแค่ `variantId` + `quantity`
+- `create_order` รับ `checkoutId` (สุ่มต่อหนึ่งตะกร้า) ถ้าซ้ำจะคืนออเดอร์เดิมแทนการสร้างใหม่ กันออเดอร์ซ้ำจากเน็ตหลุดหรือเปิดหลายแท็บ (unique index `store_orders.checkout_id`)
+  - `expectedTotal` คือยอดที่ลูกค้าเห็น ถ้าราคาเปลี่ยนจนไม่ตรงจะได้ 409 ไม่ตัดสต็อก
+  - ทั้งสองค่าเป็น optional client เก่าที่ไม่ส่งมายังสั่งได้
+- เปลี่ยนสถานะออเดอร์ใช้ `UPDATE ... WHERE status = <สถานะที่อ่านมา>` ถ้ามีคนแก้ก่อนจะได้ 409 กันการคืนสต็อกซ้ำตอนยกเลิกพร้อมกัน
+- แก้บัญชีรับเงินหรือประกาศ → audit `v2_payment_changed` (เก็บค่าเดิม -> ค่าใหม่ + ชื่อผู้แก้) / `v2_announcement_changed`
+- CSV export ผ่าน `_csv_safe()` ใส่ `'` หน้าข้อความที่ขึ้นต้นด้วย `= + - @` กัน formula injection ใน Excel
+- `_json_body` ปฏิเสธ body > 512KB และ route สลิปเช็ก Content-Length ก่อนอ่าน (raw `http.server` อ่านทั้งก้อนเข้า RAM)
 - ตัดสต็อกใน `BEGIN IMMEDIATE` เดียวกับการสร้างออเดอร์ (`create_order`) ยกเลิกออเดอร์ = คืนสต็อก และสถานะ `cancelled` เป็นสถานะสุดท้าย
 - รหัสออเดอร์ `SU{YYMM}-{seq:04d}` จากตาราง `store_counters` เริ่มนับใหม่ทุกเดือน (เวลาไทย)
 - Admin auth: `POST /v2/admin/login` (username/password ใน `admin_users`) คืน token ใช้เป็น `Authorization: Claim <token>` หรือใช้ `Bearer ORDER_API_TOKEN`

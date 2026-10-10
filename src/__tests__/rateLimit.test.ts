@@ -33,11 +33,11 @@ describe("isRateLimited", () => {
 });
 
 describe("getRateLimitKey", () => {
-  it("extracts IP from x-forwarded-for header", () => {
+  it("takes the proxy-appended (last) x-forwarded-for entry", () => {
     const req = new Request("http://localhost", {
       headers: { "x-forwarded-for": "1.2.3.4, 5.6.7.8" },
     });
-    expect(getRateLimitKey(req)).toBe("1.2.3.4");
+    expect(getRateLimitKey(req)).toBe("5.6.7.8");
   });
 
   it("appends suffix when provided", () => {

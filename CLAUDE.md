@@ -25,9 +25,11 @@ SU STORE เป็นระบบสั่งซื้อเสื้อรั�
 - ทุกคำขอจากหน้า admin ผ่าน proxy `src/app/api/admin/v2/[...path]/route.ts` → order-api `/v2/admin/*` โดยแนบ cookie `su-admin-auth` (`Claim <token>`)
 - รูปสินค้าที่อัปโหลดเสิร์ฟผ่าน `src/app/product-images/[name]/route.ts`
 - `middleware.ts` บังคับ login สำหรับ `/admin/*` และไม่ให้หน้า "ปิดร้าน" บังหน้า admin
+- Rate limit ใช้ IP จาก `src/lib/clientIp.ts` (`cf-connecting-ip` ก่อน) **ห้ามใช้ค่าแรกของ `x-forwarded-for`** เพราะ client ปลอมได้ Cloudflare ต่อ IP จริงไว้ท้ายสุด
+  - login หลังร้าน (`/api/admin/auth`) จำกัด 5 ครั้ง/นาที/IP และ 10 ครั้ง/นาที/username
 
 **หน้าร้าน (store v2):** ดึงสินค้าจาก `/v2/products` (`src/lib/storeApi.ts` ฝั่ง server) · ฝั่ง browser เรียกผ่าน proxy `src/app/api/store/[...path]` (บล็อก `/admin`)
-- flow: `/products/[slug]` เลือกไซซ์/สี → ตะกร้า (`CartProvider`, localStorage `su-store-cart-v2`, ราคาในตะกร้าใช้แสดงผลเท่านั้น) → `/checkout` ฟอร์มผู้ซื้อตาม `buyerFields` ของสินค้า → `/order/[code]?t=<token>` วิธีโอน + อัปสลิป
+- flow: `/products/[slug]` เลือกไซซ์/สี → ตะกร้า (`CartProvider`, localStorage `su-store-cart-v2` + `su-store-checkout-id` ซิงก์ข้ามแท็บด้วย `storage` event, ราคา/ชื่อในตะกร้าใช้แสดงผลเท่านั้น หน้า checkout แสดงค่าล่าสุดจาก catalog) → `/checkout` ฟอร์มผู้ซื้อตาม `buyerFields` ของสินค้า → `/order/[code]?t=<token>` วิธีโอน + อัปสลิป
 - token ของออเดอร์เก็บใน localStorage (`src/lib/orderTokens.ts`) และอยู่ในลิงก์ `?t=` · ลูกค้าค้นออเดอร์ด้วยเลขออเดอร์ + เบอร์โทรที่ `/check-order`
 - ข้อความ 2 ภาษา (EN/TH) ของร้านใหม่อยู่ที่ `src/lib/storeI18n.ts` ใช้ตัวสลับภาษาเดิม `useLang()`
 - FP28 เดิม: เหลือแค่หน้าค้นหาด้วยรหัสนักศึกษา `/check-order/fp28` (+ `/api/check-order`, feedback) flow สั่งซื้อ FP28 ใน Next.js ถูกลบแล้ว

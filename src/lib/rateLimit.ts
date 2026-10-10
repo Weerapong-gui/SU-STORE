@@ -1,5 +1,6 @@
 import fs from "fs";
 import path from "path";
+import { clientIp } from "./clientIp";
 
 const WINDOW_MS = 60_000;
 const PERSIST_PATH = path.join(process.cwd(), "data", "rate-limit.json");
@@ -56,9 +57,6 @@ export function isRateLimited(key: string, max: number): boolean {
 }
 
 export function getRateLimitKey(request: Request, suffix = ""): string {
-  const ip =
-    request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ??
-    request.headers.get("x-real-ip") ??
-    "unknown";
+  const ip = clientIp(request);
   return suffix ? `${ip}:${suffix}` : ip;
 }

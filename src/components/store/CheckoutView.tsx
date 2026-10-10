@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
-import { MAX_ITEM_QUANTITY, useCart } from "@/components/CartProvider";
+import { MAX_CART_LINES, MAX_ITEM_QUANTITY, useCart } from "@/components/CartProvider";
 import { SCHOOL_OPTIONS } from "@/lib/checkoutOptions";
 import { formatPrice } from "@/lib/formatPrice";
 import { useLang } from "@/lib/i18n";
@@ -21,7 +21,7 @@ export function CheckoutView() {
   const t = useStoreText();
   const { lang } = useLang();
   const router = useRouter();
-  const { items, hydrated, setQuantity, removeItem, clearCart } = useCart();
+  const { items, hydrated, checkoutId, setQuantity, removeItem, clearCart } = useCart();
   const [products, setProducts] = useState<StoreProduct[] | null>(null);
   const [meta, setMeta] = useState<StoreMeta | null>(null);
   const [customer, setCustomer] = useState<Record<string, string>>({});
@@ -58,6 +58,10 @@ export function CheckoutView() {
         live,
         unavailable,
         price: live?.variant.price ?? item.unitPrice,
+        // Show what the server will actually record: staff may have renamed the product
+        // or relabelled the variant since it went into the cart.
+        name: live?.product.name ?? item.productName,
+        variantLabel: live ? (live.variant.label === "-" ? "" : live.variant.label) : item.variantLabel,
         tooMany: stockLeft !== null && item.quantity > stockLeft,
         stockLeft,
       };
@@ -72,7 +76,8 @@ export function CheckoutView() {
   }, [lines, meta]);
 
   const total = lines.reduce((sum, l) => sum + l.price * l.item.quantity, 0);
-  const blocked = lines.some((l) => l.unavailable || l.tooMany) || products === null;
+  const tooManyLines = lines.length > MAX_CART_LINES;
+  const blocked = lines.some((l) => l.unavailable || l.tooMany) || products === null || tooManyLines;
 
   const label = (key: string) =>
     lang === "en" ? BUYER_FIELD_LABEL_EN[key] ?? key : meta?.buyerFields.find((f) => f.key === key)?.label ?? key;
@@ -81,13 +86,15 @@ export function CheckoutView() {
     e.preventDefault();
     setError("");
     if (blocked) {
-      setError(t.cartChanged);
+      setError(tooManyLines ? t.tooManyLines(MAX_CART_LINES) : t.cartChanged);
       return;
     }
     setSubmitting(true);
     const payload = {
       items: items.map((i) => ({ variantId: i.variantId, quantity: i.quantity })),
       customer: Object.fromEntries(fields.map((k) => [k, (customer[k] ?? "").trim()])),
+      checkoutId,
+      expectedTotal: total,
     };
     try {
       const res = await fetch("/api/store/orders", {
@@ -136,7 +143,7 @@ export function CheckoutView() {
         <section>
           <h2 className="mb-4 text-xl font-semibold text-ink">{t.cart}</h2>
           <ul className="divide-y divide-zinc-200 rounded-3xl bg-mist px-5">
-            {lines.map(({ item, price, unavailable, tooMany, stockLeft }) => (
+            {lines.map(({ item, price, name, variantLabel, unavailable, tooMany, stockLeft }) => (
               <li key={item.variantId} className="flex gap-4 py-4">
                 <div className="h-20 w-20 shrink-0 overflow-hidden rounded-2xl bg-zinc-200">
                   {item.image && (
@@ -146,9 +153,9 @@ export function CheckoutView() {
                 </div>
                 <div className="min-w-0 flex-1">
                   <Link href={`/products/${item.productSlug}`} className="font-semibold text-ink hover:underline">
-                    {item.productName}
+                    {name}
                   </Link>
-                  {item.variantLabel && <p className="text-sm text-ink-soft">{item.variantLabel}</p>}
+                  {variantLabel && <p className="text-sm text-ink-soft">{variantLabel}</p>}
                   {unavailable && <p className="text-sm font-semibold text-red-600">{t.unavailableItem}</p>}
                   {!unavailable && tooMany && stockLeft !== null && (
                     <p className="text-sm font-semibold text-red-600">{t.left(stockLeft)}</p>
@@ -228,6 +235,9 @@ export function CheckoutView() {
           <span className="text-ink-soft">{t.subtotal}</span>
           <span className="text-2xl font-semibold text-ink">{formatPrice(total)}</span>
         </div>
+        {tooManyLines && !error && (
+          <p className="rounded-2xl bg-red-50 px-4 py-3 text-sm text-red-700">{t.tooManyLines(MAX_CART_LINES)}</p>
+        )}
         {error && <p className="rounded-2xl bg-red-50 px-4 py-3 text-sm text-red-700" role="alert">{error}</p>}
         <button
           type="submit"

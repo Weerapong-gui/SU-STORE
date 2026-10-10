@@ -46,7 +46,20 @@ def _admin_user(handler: Any) -> str:
     return handler._get_claim_station_user() or "token"
 
 
+MAX_JSON_BYTES = 512 * 1024
+
+
+def _content_length(handler: Any) -> int:
+    try:
+        return int(handler.headers.get("Content-Length", "0"))
+    except ValueError:
+        raise db.StoreError(HTTPStatus.BAD_REQUEST, "ข้อมูลไม่ถูกต้อง") from None
+
+
 def _json_body(handler: Any) -> dict[str, Any]:
+    # Refuse oversized bodies before _read_json pulls them into memory.
+    if _content_length(handler) > MAX_JSON_BYTES:
+        raise db.StoreError(HTTPStatus.BAD_REQUEST, "ข้อมูลใหญ่เกินไป")
     payload = handler._read_json()
     if not isinstance(payload, dict):
         raise db.StoreError(HTTPStatus.BAD_REQUEST, "ข้อมูลไม่ถูกต้อง")
@@ -99,6 +112,8 @@ def _route(handler: Any, method: str, path: str, query: dict[str, str], core: An
         with core.open_db() as conn:
             row = db.get_order_row(conn, code)
             _require_order_access(handler, row, query)
+        if _content_length(handler) > core.MAX_SLIP_SIZE_BYTES + 64 * 1024:
+            raise db.StoreError(HTTPStatus.BAD_REQUEST, "ไฟล์สลิปต้องไม่เกิน 5MB")
         slip, error = handler._read_multipart_slip(code)
         if error:
             raise db.StoreError(HTTPStatus.BAD_REQUEST, error)
@@ -143,11 +158,19 @@ def _route(handler: Any, method: str, path: str, query: dict[str, str], core: An
                 return send(HTTPStatus.OK, db.get_settings(conn))
         if method in ("PUT", "PATCH"):
             payload = _json_body(handler)
+            user = _admin_user(handler)
             with core.open_db() as conn:
+                before = db.get_settings(conn)
                 settings = db.update_settings(conn, payload)
                 if "siteClosed" in payload:
                     core.log_audit(conn, "-", "v2_site_closed" if payload["siteClosed"] else "v2_site_opened",
-                                   f"by {_admin_user(handler)}")
+                                   f"by {user}")
+                # Who changed the payee account matters most: it decides where customers' money goes.
+                if settings["payment"] != before["payment"]:
+                    core.log_audit(conn, "-", "v2_payment_changed",
+                                   f"{_payment_text(before)} -> {_payment_text(settings)} by {user}")
+                if settings["announcement"] != before["announcement"]:
+                    core.log_audit(conn, "-", "v2_announcement_changed", f"by {user}")
             return send(HTTPStatus.OK, settings)
 
     if path == "/v2/admin/home":
@@ -294,6 +317,11 @@ def _require_order_access(handler: Any, row: Any, query: dict[str, str]) -> None
     incoming = handler.headers.get("X-Order-Token") or query.get("token") or ""
     if not incoming or not hmac.compare_digest(incoming, row["access_token"]):
         raise db.StoreError(HTTPStatus.UNAUTHORIZED, "unauthorized")
+
+
+def _payment_text(settings: dict[str, Any]) -> str:
+    p = settings["payment"]
+    return f"{p['bankName']} {p['accountNumber']} {p['accountName']}".strip()
 
 
 def _int(value: str | None, fallback: int) -> int:

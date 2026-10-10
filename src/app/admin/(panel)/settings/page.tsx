@@ -74,7 +74,7 @@ export default function SettingsPage() {
         </p>
       </Card>
 
-      <Card title="บัญชีรับเงิน" hint="แสดงในหน้าชำระเงินของลูกค้าทุกออเดอร์ ตรวจให้ถูกต้องก่อนบันทึก">
+      <Card title="บัญชีรับเงิน" hint="แสดงในหน้าชำระเงินของลูกค้าทุกออเดอร์ ตรวจให้ถูกต้องก่อนบันทึก ทุกครั้งที่แก้ ระบบจะบันทึกชื่อผู้แก้และเลขบัญชีเดิมไว้">
         <div className="grid gap-4 sm:grid-cols-3">
           <Field label="ธนาคาร">
             <input className={inputClass} value={form.payment.bankName} onChange={(e) => setPayment({ bankName: e.target.value })} />
