@@ -82,6 +82,30 @@ SU STORE เป็นระบบสั่งซื้อเสื้อรั�
 
 ---
 
+## 3.5 Clean code (บังคับทุกงาน)
+
+เขียนโค้ดใหม่หรือแก้โค้ดเดิมต้องผ่านข้อพวกนี้ ถ้าไปเจอโค้ดเก่าที่ผิดกฎในไฟล์ที่กำลังแก้ ให้เก็บกวาดส่วนที่เกี่ยวข้องไปด้วย
+
+1. **ใช้ของที่มีอยู่ก่อน** — หา helper เดิมก่อนเขียนใหม่
+   - store v2: `StoreError`, `_clean_text`, `_as_int` (`server/store/db.py`)
+   - DB / audit: `open_db()`, `log_audit()`
+   - admin: `adminFetch` (`src/lib/adminApi.ts`) + `Card` / `Field` / `Button` / `useToast` (`src/components/admin/ui.tsx`)
+   - หน้าร้าน: ข้อความผ่าน `useStoreText()` (`src/lib/storeI18n.ts`), `cn`, `formatPrice`, URL ของ order-api ผ่าน `src/lib/orderApi.ts`
+2. **หนึ่งหน่วย ทำหนึ่งเรื่อง** — ฟังก์ชันยาวเกิน ~50 บรรทัด หรือไฟล์ยาวเกิน ~400 บรรทัด = สัญญาณให้แยก
+   - route handler แค่อ่าน request → เรียก business logic → ส่ง response ไม่เขียน SQL ใน handler
+   - React component ใหญ่ให้แยก sub-component ไปไฟล์ของตัวเอง (ดู `src/components/admin/home/`)
+3. **ไม่ทำซ้ำ** — ค่าที่ใช้หลายที่ (env, limit, ข้อความ) มีแหล่งเดียว
+   - ค่าที่ต้องตรงกันข้าม server/client ให้คอมเมนต์ชี้อีกฝั่ง เช่น `MAX_CART_LINES` ↔ `MAX_ITEMS_PER_ORDER`
+4. **ชื่อบอกความหมาย** — ชื่อในโค้ดเป็นภาษาอังกฤษ ข้อความที่ผู้ใช้เห็นเป็นภาษาไทย ไม่มี magic number (ตั้งเป็นค่าคงที่)
+5. **คอมเมนต์บอก "ทำไม" ไม่ใช่ "ทำอะไร"** — ห้ามทิ้งโค้ดที่ comment ปิดไว้
+6. **ไม่มีโค้ดตาย** — แทนที่ฟีเจอร์ไหน ลบของเก่า (ไฟล์, export, key คำแปล, CSS) ในงานเดียวกัน
+7. **Error ต้องชัด** — server ใช้ `StoreError(status, ข้อความไทย)` ห้าม `except: pass` / `catch {}` เงียบๆ เว้นแต่มีคอมเมนต์บอกเหตุผล
+8. **Type ชัด** — TS ห้าม `any` type ของ payload อยู่ใน `src/types/store.ts` ฟังก์ชัน Python ใหม่ต้องมี type hint
+9. **แก้ logic = แก้ test** ในงานเดียวกัน ถ้าเป็น refactor ห้ามแก้ assertion ของ test เดิม
+10. **ก่อนจบงานต้องผ่านครบ:** `ruff check server tests` · `npm run lint` · `npx tsc --noEmit` · `npm test` · pytest ทั้ง `server/tests` และ `tests/`
+
+---
+
 ## 4. Business Logic สำคัญ
 
 ### หมายเลขออเดอร์ (Order ID)
