@@ -18,6 +18,7 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 sys.modules.setdefault("ocr", MagicMock())
 
 import order_api  # noqa: E402
+from fp28 import auth, config, database, slips  # noqa: E402
 from store import dashboard, db, home  # noqa: E402
 from store import meta as store_meta  # noqa: E402
 
@@ -415,9 +416,9 @@ class TestDashboard:
 def test_ensure_db_leaves_v1_orders_untouched(tmp_path, monkeypatch):
     """Running the v2 migration on a DB with FP28 data must not change v1 rows."""
     path = tmp_path / "orders.db"
-    monkeypatch.setattr(order_api, "DB_PATH", path)
-    monkeypatch.setattr(order_api, "SLIPS_DIR", tmp_path / "slips")
-    order_api.ensure_db()
+    monkeypatch.setattr(config, "DB_PATH", path)
+    monkeypatch.setattr(config, "SLIPS_DIR", tmp_path / "slips")
+    database.ensure_db()
     with sqlite3.connect(path) as conn:
         conn.execute(
             "INSERT INTO orders (order_code, round_number, status, payment_status, created_at, updated_at, "
@@ -428,7 +429,7 @@ def test_ensure_db_leaves_v1_orders_untouched(tmp_path, monkeypatch):
         )
     with sqlite3.connect(path) as conn:
         before = conn.execute("SELECT * FROM orders").fetchall()
-    order_api.ensure_db()
+    database.ensure_db()
     with sqlite3.connect(path) as conn:
         assert conn.execute("SELECT * FROM orders").fetchall() == before
         assert conn.execute("SELECT COUNT(*) FROM store_products").fetchone()[0] == 0
@@ -436,16 +437,16 @@ def test_ensure_db_leaves_v1_orders_untouched(tmp_path, monkeypatch):
 
 @pytest.fixture
 def server(tmp_path, monkeypatch):
-    monkeypatch.setattr(order_api, "DB_PATH", tmp_path / "orders.db")
-    monkeypatch.setattr(order_api, "SLIPS_DIR", tmp_path / "slips")
-    monkeypatch.setattr(order_api, "ORDER_API_TOKEN", "test-token")
-    monkeypatch.setattr(order_api, "trigger_ocr_async", lambda *a, **k: None)
-    monkeypatch.setattr(order_api, "_CONN_POOL", [])
-    order_api.ensure_db()
+    monkeypatch.setattr(config, "DB_PATH", tmp_path / "orders.db")
+    monkeypatch.setattr(config, "SLIPS_DIR", tmp_path / "slips")
+    monkeypatch.setattr(config, "ORDER_API_TOKEN", "test-token")
+    monkeypatch.setattr(slips, "trigger_ocr_async", lambda *a, **k: None)
+    monkeypatch.setattr(database, "_CONN_POOL", [])
+    database.ensure_db()
     with sqlite3.connect(tmp_path / "orders.db") as conn:
         conn.execute(
             "INSERT INTO admin_users (username, claim_token, is_superadmin, created_at) VALUES (?, ?, 0, 't')",
-            ("staff1", order_api.compute_claim_token("staff1", "pw")),
+            ("staff1", auth.compute_claim_token("staff1", "pw")),
         )
     httpd = ThreadingHTTPServer(("127.0.0.1", 0), order_api.OrderRequestHandler)
     thread = threading.Thread(target=httpd.serve_forever, daemon=True)
@@ -544,7 +545,7 @@ def test_settings_changes_are_audited(server):
                       {"payment": {"accountNumber": "111-222-333"}, "announcement": "hi"}, admin)
     assert status == 200
     status, _ = _call(server, "PUT", "/v2/admin/settings", {"announcement": "hi"}, admin)  # no change
-    with sqlite3.connect(order_api.DB_PATH) as conn:
+    with sqlite3.connect(config.DB_PATH) as conn:
         events = conn.execute("SELECT event, detail FROM order_audit_log WHERE event LIKE 'v2_%' ORDER BY id").fetchall()
     assert [e for e, _ in events] == ["v2_payment_changed", "v2_announcement_changed"]
     assert "672-3000-615" in events[0][1] and "111-222-333" in events[0][1] and "by staff1" in events[0][1]

@@ -7,7 +7,7 @@ from typing import ClassVar
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "server"))
 
-import order_api  # type: ignore
+from fp28 import config, display
 
 
 def _make_conn() -> sqlite3.Connection:
@@ -82,12 +82,12 @@ def _insert_order(conn, code, items, **extra):
 
 class StationMappingTest(unittest.TestCase):
     def test_known_slugs_map_to_stations(self):
-        self.assertEqual(order_api.STATION_BY_SLUG["single"], "polo")
-        self.assertEqual(order_api.STATION_BY_SLUG["jacket"], "jacket")
-        self.assertEqual(order_api.STATION_BY_SLUG["headband"], "headband")
+        self.assertEqual(config.STATION_BY_SLUG["single"], "polo")
+        self.assertEqual(config.STATION_BY_SLUG["jacket"], "jacket")
+        self.assertEqual(config.STATION_BY_SLUG["headband"], "headband")
 
     def test_unknown_slug_returns_none(self):
-        self.assertIsNone(order_api.STATION_BY_SLUG.get("unknown_product"))
+        self.assertIsNone(config.STATION_BY_SLUG.get("unknown_product"))
 
 
 class EnqueueDisplay2Test(unittest.TestCase):
@@ -100,7 +100,7 @@ class EnqueueDisplay2Test(unittest.TestCase):
         ]
         row = _insert_order(conn, "FP280001", items)
 
-        inserted = order_api.enqueue_display2(conn, row, "park")
+        inserted = display.enqueue_display2(conn, row, "park")
 
         self.assertEqual(inserted, 3)
         picks = conn.execute(
@@ -118,7 +118,7 @@ class EnqueueDisplay2Test(unittest.TestCase):
         ]
         row = _insert_order(conn, "FP280002", items)
 
-        inserted = order_api.enqueue_display2(conn, row, "park")
+        inserted = display.enqueue_display2(conn, row, "park")
 
         self.assertEqual(inserted, 1)
         events = {
@@ -142,7 +142,7 @@ class EnqueueDisplay2Test(unittest.TestCase):
             quantity=2,
         )
 
-        inserted = order_api.enqueue_display2(conn, row, "park2")
+        inserted = display.enqueue_display2(conn, row, "park2")
 
         self.assertEqual(inserted, 1)
         pick = conn.execute("SELECT * FROM display2_picks").fetchone()
@@ -155,8 +155,8 @@ class EnqueueDisplay2Test(unittest.TestCase):
         items = [{"slug": "single", "size": "M", "quantity": 1}]
         row = _insert_order(conn, "FP280004", items)
 
-        first = order_api.enqueue_display2(conn, row, "park")
-        second = order_api.enqueue_display2(conn, row, "park")
+        first = display.enqueue_display2(conn, row, "park")
+        second = display.enqueue_display2(conn, row, "park")
 
         self.assertEqual(first, 1)
         self.assertEqual(second, 0)
@@ -172,7 +172,7 @@ class ReceivedHookEnqueuesTest(unittest.TestCase):
         items = [{"slug": "single", "size": "M", "quantity": 1}]
         row = _insert_order(conn, "FP280010", items)
 
-        count = order_api.enqueue_display2(conn, row, "park2")
+        count = display.enqueue_display2(conn, row, "park2")
 
         self.assertEqual(count, 1)
         queued = conn.execute(
@@ -189,7 +189,7 @@ class KhantokEnqueueTest(unittest.TestCase):
         conn = _make_conn()
         row = _insert_order(conn, "FP280014", self.ITEMS,
                             khantok_ticket=1, khantok_ticket_value=100, round_number=4)
-        order_api.enqueue_display2(conn, row, "staff1")
+        display.enqueue_display2(conn, row, "staff1")
         stations = [r["station"] for r in conn.execute(
             "SELECT station FROM display2_picks WHERE order_code=?", ("FP280014",)
         ).fetchall()]
@@ -203,7 +203,7 @@ class KhantokEnqueueTest(unittest.TestCase):
         conn = _make_conn()
         row = _insert_order(conn, "FP280013", self.ITEMS,
                             khantok_ticket=1, khantok_ticket_value=50, round_number=3)
-        order_api.enqueue_display2(conn, row, "staff1")
+        display.enqueue_display2(conn, row, "staff1")
         stations = sorted(r["station"] for r in conn.execute(
             "SELECT station FROM display2_picks WHERE order_code=?", ("FP280013",)
         ).fetchall())
@@ -213,8 +213,8 @@ class KhantokEnqueueTest(unittest.TestCase):
         conn = _make_conn()
         row = _insert_order(conn, "FP280015", self.ITEMS,
                             khantok_ticket=1, khantok_ticket_value=100, round_number=4)
-        first = order_api.enqueue_display2_khantok(conn, row, "staff1")
-        second = order_api.enqueue_display2_khantok(conn, row, "staff1")
+        first = display.enqueue_display2_khantok(conn, row, "staff1")
+        second = display.enqueue_display2_khantok(conn, row, "staff1")
         self.assertEqual((first, second), (1, 0))
         picked = conn.execute(
             "SELECT station, item_index, size FROM display2_picks WHERE order_code=?",
@@ -229,7 +229,7 @@ class KhantokEnqueueTest(unittest.TestCase):
         conn = _make_conn()
         row = _insert_order(conn, "FP280016", self.ITEMS,
                             khantok_ticket=0, round_number=4)
-        self.assertEqual(order_api.enqueue_display2_khantok(conn, row, "staff1"), 0)
+        self.assertEqual(display.enqueue_display2_khantok(conn, row, "staff1"), 0)
 
 
 if __name__ == "__main__":

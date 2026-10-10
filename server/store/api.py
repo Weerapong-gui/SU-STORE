@@ -1,9 +1,8 @@
 """HTTP routes for SU STORE v2 (`/v2/*`).
 
-`order_api.OrderRequestHandler` forwards every `/v2/` request to `handle()`, passing the
-`order_api` module as `core` so we reuse its DB pool, auth, slip storage and OCR without
-importing it here (it runs as `__main__` in production, so a plain import would load a
-second copy).
+`order_api.OrderRequestHandler` forwards every `/v2/` request to `handle()`. Shared
+infrastructure (DB pool, audit log, staff tokens, slip and image storage) comes from
+the `fp28` package.
 """
 from __future__ import annotations
 
@@ -19,25 +18,31 @@ from http import HTTPStatus
 from typing import Any
 from urllib.parse import parse_qs, urlparse
 
+from fp28 import config, slips
+from fp28.auth import compute_claim_token
+from fp28.database import log_audit, open_db
+from fp28.products import save_product_image_file
+from fp28.slips import delete_local_slip_file, resolve_stored_slip_path
+
 from . import dashboard, db, home
 from . import meta as store_meta
 
 _IMAGE_EXT = {"image/jpeg": ".jpg", "image/png": ".png", "image/webp": ".webp"}
 
 
-def handle(handler: Any, method: str, core: Any) -> None:
+def handle(handler: Any, method: str) -> None:
     parsed = urlparse(handler.path)
     path = parsed.path.rstrip("/") or "/"
     query = {k: v[-1] for k, v in parse_qs(parsed.query).items()}
     try:
-        _route(handler, method, path, query, core)
+        _route(handler, method, path, query)
     except db.StoreError as error:
         handler._send_json(error.status, {"message": error.message})
     except json.JSONDecodeError:
         handler._send_json(HTTPStatus.BAD_REQUEST, {"message": "invalid json"})
 
 
-def _is_admin(handler: Any, core: Any) -> bool:
+def _is_admin(handler: Any) -> bool:
     if handler._has_global_authorization():
         return True
     return handler._has_claim_station_authorization()
@@ -67,42 +72,42 @@ def _json_body(handler: Any) -> dict[str, Any]:
     return payload
 
 
-def _route(handler: Any, method: str, path: str, query: dict[str, str], core: Any) -> None:
+def _route(handler: Any, method: str, path: str, query: dict[str, str]) -> None:
     send = handler._send_json
 
     # ── Public ────────────────────────────────────────────────────────────────
     if method == "GET" and path in ("/v2/meta", "/v2/admin/meta"):
-        with core.open_db() as conn:
+        with open_db() as conn:
             return send(HTTPStatus.OK, store_meta.meta(conn))
 
     if method == "GET" and path == "/v2/products":
-        with core.open_db() as conn:
+        with open_db() as conn:
             return send(HTTPStatus.OK, {"products": db.list_products(conn, public=True)})
 
     m = re.fullmatch(r"/v2/products/([a-z0-9-]+)", path)
     if method == "GET" and m:
-        with core.open_db() as conn:
+        with open_db() as conn:
             return send(HTTPStatus.OK, db.get_product(conn, m.group(1), public=True))
 
     if method == "GET" and path == "/v2/home":
-        with core.open_db() as conn:
+        with open_db() as conn:
             return send(HTTPStatus.OK, home.resolve_home(conn, home.get_home_admin(conn)["published"]))
 
     if method == "POST" and path == "/v2/orders":
         payload = _json_body(handler)
-        with core.open_db() as conn:
+        with open_db() as conn:
             order = db.create_order(conn, payload)
-            core.log_audit(conn, order["orderCode"], "v2_order_created", f"total={order['totalAmount']}")
+            log_audit(conn, order["orderCode"], "v2_order_created", f"total={order['totalAmount']}")
         return send(HTTPStatus.CREATED, order)
 
     if method == "POST" and path == "/v2/orders/lookup":
         payload = _json_body(handler)
-        with core.open_db() as conn:
+        with open_db() as conn:
             return send(HTTPStatus.OK, db.lookup_order(conn, payload.get("orderCode"), payload.get("phone")))
 
     m = re.fullmatch(r"/v2/orders/(SU\d{4}-\d{4,})", path)
     if method == "GET" and m:
-        with core.open_db() as conn:
+        with open_db() as conn:
             row = db.get_order_row(conn, m.group(1))
             _require_order_access(handler, row, query)
             return send(HTTPStatus.OK, db.get_order(conn, m.group(1)))
@@ -110,20 +115,20 @@ def _route(handler: Any, method: str, path: str, query: dict[str, str], core: An
     m = re.fullmatch(r"/v2/orders/(SU\d{4}-\d{4,})/slip", path)
     if method == "POST" and m:
         code = m.group(1)
-        with core.open_db() as conn:
+        with open_db() as conn:
             row = db.get_order_row(conn, code)
             _require_order_access(handler, row, query)
-        if _content_length(handler) > core.MAX_SLIP_SIZE_BYTES + 64 * 1024:
+        if _content_length(handler) > config.MAX_SLIP_SIZE_BYTES + 64 * 1024:
             raise db.StoreError(HTTPStatus.BAD_REQUEST, "ไฟล์สลิปต้องไม่เกิน 5MB")
         slip, error = handler._read_multipart_slip(code)
         if error:
             raise db.StoreError(HTTPStatus.BAD_REQUEST, error)
-        with core.open_db() as conn:
+        with open_db() as conn:
             old_stored, old_path = row["slip_stored_name"], row["slip_storage_path"]
             order = db.attach_slip(conn, code, slip)
-            core.log_audit(conn, code, "v2_slip_uploaded", slip["storedName"])
-        core.delete_local_slip_file(old_stored, old_path)
-        core.trigger_ocr_async(code, slip["storedPath"], float(order["totalAmount"]))
+            log_audit(conn, code, "v2_slip_uploaded", slip["storedName"])
+        delete_local_slip_file(old_stored, old_path)
+        slips.trigger_ocr_async(code, slip["storedPath"], float(order["totalAmount"]))
         return send(HTTPStatus.OK, order)
 
     # ── Admin ─────────────────────────────────────────────────────────────────
@@ -132,8 +137,8 @@ def _route(handler: Any, method: str, path: str, query: dict[str, str], core: An
         username, password = payload.get("username"), payload.get("password")
         if not (isinstance(username, str) and username and isinstance(password, str) and password):
             raise db.StoreError(HTTPStatus.BAD_REQUEST, "กรุณากรอกชื่อผู้ใช้และรหัสผ่าน")
-        token = core.compute_claim_token(username, password)
-        with core.open_db() as conn:
+        token = compute_claim_token(username, password)
+        with open_db() as conn:
             row = conn.execute(
                 "SELECT claim_token, is_superadmin FROM admin_users WHERE username = ?", (username,)
             ).fetchone()
@@ -143,117 +148,117 @@ def _route(handler: Any, method: str, path: str, query: dict[str, str], core: An
 
     if not path.startswith("/v2/admin/"):
         raise db.StoreError(HTTPStatus.NOT_FOUND, "not found")
-    if not _is_admin(handler, core):
+    if not _is_admin(handler):
         raise db.StoreError(HTTPStatus.UNAUTHORIZED, "unauthorized")
 
     if method == "GET" and path == "/v2/admin/me":
         return send(HTTPStatus.OK, {"username": _admin_user(handler)})
 
     if method == "GET" and path == "/v2/admin/dashboard":
-        with core.open_db() as conn:
+        with open_db() as conn:
             return send(HTTPStatus.OK, dashboard.dashboard(conn, _int(query.get("days"), 30)))
 
     if path == "/v2/admin/settings":
         if method == "GET":
-            with core.open_db() as conn:
+            with open_db() as conn:
                 return send(HTTPStatus.OK, db.get_settings(conn))
         if method in ("PUT", "PATCH"):
             payload = _json_body(handler)
             user = _admin_user(handler)
-            with core.open_db() as conn:
+            with open_db() as conn:
                 before = db.get_settings(conn)
                 settings = db.update_settings(conn, payload)
                 if "siteClosed" in payload:
-                    core.log_audit(conn, "-", "v2_site_closed" if payload["siteClosed"] else "v2_site_opened",
+                    log_audit(conn, "-", "v2_site_closed" if payload["siteClosed"] else "v2_site_opened",
                                    f"by {user}")
                 # Who changed the payee account matters most: it decides where customers' money goes.
                 if settings["payment"] != before["payment"]:
-                    core.log_audit(conn, "-", "v2_payment_changed",
+                    log_audit(conn, "-", "v2_payment_changed",
                                    f"{_payment_text(before)} -> {_payment_text(settings)} by {user}")
                 if settings["announcement"] != before["announcement"]:
-                    core.log_audit(conn, "-", "v2_announcement_changed", f"by {user}")
+                    log_audit(conn, "-", "v2_announcement_changed", f"by {user}")
             return send(HTTPStatus.OK, settings)
 
     if path == "/v2/admin/home":
         if method == "GET":
-            with core.open_db() as conn:
+            with open_db() as conn:
                 return send(HTTPStatus.OK, home.get_home_admin(conn))
         if method == "PUT":
             payload = _json_body(handler)
-            with core.open_db() as conn:
+            with open_db() as conn:
                 return send(HTTPStatus.OK, home.save_home_draft(conn, payload))
 
     if method == "GET" and path == "/v2/admin/home/preview":
-        with core.open_db() as conn:
+        with open_db() as conn:
             return send(HTTPStatus.OK, home.resolve_home(conn, home.get_home_admin(conn)["draft"]))
 
     if method == "POST" and path == "/v2/admin/home/publish":
-        with core.open_db() as conn:
+        with open_db() as conn:
             state = home.publish_home(conn)
-            core.log_audit(conn, "-", "v2_home_published", f"by {_admin_user(handler)}")
+            log_audit(conn, "-", "v2_home_published", f"by {_admin_user(handler)}")
         return send(HTTPStatus.OK, state)
 
     if method == "POST" and path == "/v2/admin/home/discard":
-        with core.open_db() as conn:
+        with open_db() as conn:
             return send(HTTPStatus.OK, home.discard_home_draft(conn))
 
     if method == "POST" and path == "/v2/admin/home/images":
-        content, mime = _read_multipart_file(handler, "image", core.MAX_PRODUCT_IMAGE_SIZE_BYTES)
+        content, mime = _read_multipart_file(handler, "image", config.MAX_PRODUCT_IMAGE_SIZE_BYTES)
         if mime not in _IMAGE_EXT:
             raise db.StoreError(HTTPStatus.BAD_REQUEST, "รองรับเฉพาะรูป JPG, PNG หรือ WebP")
-        filename, error = core.save_product_image_file(f"home-{secrets.token_hex(4)}", f"image{_IMAGE_EXT[mime]}", mime, content)
+        filename, error = save_product_image_file(f"home-{secrets.token_hex(4)}", f"image{_IMAGE_EXT[mime]}", mime, content)
         if error:
             raise db.StoreError(HTTPStatus.BAD_REQUEST, error)
         return send(HTTPStatus.OK, {"url": f"/product-images/{filename}"})
 
     if path == "/v2/admin/products":
         if method == "GET":
-            with core.open_db() as conn:
+            with open_db() as conn:
                 return send(HTTPStatus.OK, {"products": db.list_products(conn, public=False)})
         if method == "POST":
             payload = _json_body(handler)
-            with core.open_db() as conn:
+            with open_db() as conn:
                 return send(HTTPStatus.CREATED, db.create_product(conn, payload))
 
     m = re.fullmatch(r"/v2/admin/products/(\d+)", path)
     if m:
         product_id = int(m.group(1))
         if method == "GET":
-            with core.open_db() as conn:
+            with open_db() as conn:
                 return send(HTTPStatus.OK, db.get_product(conn, product_id, public=False))
         if method in ("PUT", "PATCH"):
             payload = _json_body(handler)
-            with core.open_db() as conn:
+            with open_db() as conn:
                 return send(HTTPStatus.OK, db.update_product(conn, product_id, payload))
         if method == "DELETE":
-            with core.open_db() as conn:
+            with open_db() as conn:
                 return send(HTTPStatus.OK, db.delete_product(conn, product_id))
 
     m = re.fullmatch(r"/v2/admin/products/(\d+)/variants", path)
     if m and method == "PUT":
         payload = handler._read_json()
-        with core.open_db() as conn:
+        with open_db() as conn:
             db.replace_variants(conn, int(m.group(1)), payload)
             return send(HTTPStatus.OK, db.get_product(conn, int(m.group(1)), public=False))
 
     m = re.fullmatch(r"/v2/admin/products/(\d+)/images", path)
     if m and method == "POST":
         product_id = int(m.group(1))
-        with core.open_db() as conn:
+        with open_db() as conn:
             product = db.get_product(conn, product_id, public=False)
-        content, mime = _read_multipart_file(handler, "image", core.MAX_PRODUCT_IMAGE_SIZE_BYTES)
+        content, mime = _read_multipart_file(handler, "image", config.MAX_PRODUCT_IMAGE_SIZE_BYTES)
         if mime not in _IMAGE_EXT:
             raise db.StoreError(HTTPStatus.BAD_REQUEST, "รองรับเฉพาะรูป JPG, PNG หรือ WebP")
-        filename, error = core.save_product_image_file(
+        filename, error = save_product_image_file(
             f"v2-{product['slug']}-{secrets.token_hex(4)}", f"image{_IMAGE_EXT[mime]}", mime, content
         )
         if error:
             raise db.StoreError(HTTPStatus.BAD_REQUEST, error)
-        with core.open_db() as conn:
+        with open_db() as conn:
             return send(HTTPStatus.OK, db.add_product_image(conn, product_id, f"/product-images/{filename}"))
 
     if method == "GET" and path == "/v2/admin/orders":
-        with core.open_db() as conn:
+        with open_db() as conn:
             result = db.list_orders(
                 conn,
                 status=query.get("status") or None,
@@ -264,7 +269,7 @@ def _route(handler: Any, method: str, path: str, query: dict[str, str], core: An
         return send(HTTPStatus.OK, result)
 
     if method == "GET" and path == "/v2/admin/orders.csv":
-        with core.open_db() as conn:
+        with open_db() as conn:
             rows = db.orders_csv_rows(conn, query.get("status") or None)
         buffer = io.StringIO()
         csv.writer(buffer).writerows(rows)
@@ -281,7 +286,7 @@ def _route(handler: Any, method: str, path: str, query: dict[str, str], core: An
     if m:
         code = m.group(1)
         if method == "GET":
-            with core.open_db() as conn:
+            with open_db() as conn:
                 order = db.get_order(conn, code)
                 ocr = conn.execute(
                     "SELECT status, amount, raw_reason, duplicate_of FROM slip_ocr_results WHERE order_code = ?",
@@ -291,20 +296,20 @@ def _route(handler: Any, method: str, path: str, query: dict[str, str], core: An
             return send(HTTPStatus.OK, order)
         if method == "PATCH":
             payload = _json_body(handler)
-            with core.open_db() as conn:
+            with open_db() as conn:
                 order, changed_from = db.update_order(conn, code, payload)
                 if changed_from:
-                    core.log_audit(conn, code, "v2_status_changed",
+                    log_audit(conn, code, "v2_status_changed",
                                    f"{changed_from} -> {order['status']} by {_admin_user(handler)}")
             return send(HTTPStatus.OK, order)
 
     m = re.fullmatch(r"/v2/admin/orders/(SU\d{4}-\d{4,})/slip", path)
     if m and method == "GET":
-        with core.open_db() as conn:
+        with open_db() as conn:
             row = db.get_order_row(conn, m.group(1))
         if not row["slip_stored_name"]:
             raise db.StoreError(HTTPStatus.NOT_FOUND, "ยังไม่มีสลิป")
-        target = core.resolve_stored_slip_path(row["slip_stored_name"], row["slip_storage_path"])
+        target = resolve_stored_slip_path(row["slip_stored_name"], row["slip_storage_path"])
         if target is None:
             raise db.StoreError(HTTPStatus.NOT_FOUND, "ไม่พบไฟล์สลิป")
         return handler._send_file(target, row["slip_mime_type"], row["slip_original_name"] or "slip")

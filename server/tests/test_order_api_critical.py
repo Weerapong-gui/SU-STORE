@@ -16,7 +16,7 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 # Stub OCR so order_api imports without cv2/Tesseract present.
 sys.modules["ocr"] = MagicMock()
 
-import order_api  # noqa: E402
+from fp28 import config, khantok, orders  # noqa: E402
 
 
 def _mem_db() -> sqlite3.Connection:
@@ -40,7 +40,7 @@ def _add_order(conn, internal_id, student_code, khantok_ticket=0, status="pendin
     )
 
 
-ELIGIBLE = order_api.KHANTOK_STUDENT_CODE_PREFIX + "1234567"
+ELIGIBLE = config.KHANTOK_STUDENT_CODE_PREFIX + "1234567"
 INELIGIBLE = "641234567"
 
 
@@ -48,13 +48,13 @@ class TestReserveKhantokTicket:
     def test_non_prefix_gets_nothing(self):
         conn = _mem_db()
         _add_order(conn, 1, INELIGIBLE)
-        ok, _claimed, already, value = order_api.reserve_khantok_ticket(conn, 1, INELIGIBLE)
+        ok, _claimed, already, value = khantok.reserve_khantok_ticket(conn, 1, INELIGIBLE)
         assert (ok, already, value) == (False, False, None)
 
     def test_eligible_prefix_gets_100_and_records_claim(self):
         conn = _mem_db()
         _add_order(conn, 1, ELIGIBLE)
-        ok, _claimed, already, value = order_api.reserve_khantok_ticket(conn, 1, ELIGIBLE)
+        ok, _claimed, already, value = khantok.reserve_khantok_ticket(conn, 1, ELIGIBLE)
         assert ok is True and already is False and value == 100
         assert conn.execute("SELECT COUNT(*) AS c FROM khantok_ticket_claims").fetchone()["c"] == 1
 
@@ -62,7 +62,7 @@ class TestReserveKhantokTicket:
         conn = _mem_db()
         _add_order(conn, 1, ELIGIBLE, khantok_ticket=1, status="paid")   # already has a live ticket
         _add_order(conn, 2, ELIGIBLE, status="pending_payment")
-        ok, _claimed, already, value = order_api.reserve_khantok_ticket(conn, 2, ELIGIBLE)
+        ok, _claimed, already, value = khantok.reserve_khantok_ticket(conn, 2, ELIGIBLE)
         assert (ok, already, value) == (False, True, None)
 
     def test_cancelled_prior_order_does_not_block_reclaim(self):
@@ -72,23 +72,23 @@ class TestReserveKhantokTicket:
             conn2 = _mem_db()
             _add_order(conn2, 1, ELIGIBLE, khantok_ticket=1, status=dead)
             _add_order(conn2, 2, ELIGIBLE, status="pending_payment")
-            ok, _claimed, already, value = order_api.reserve_khantok_ticket(conn2, 2, ELIGIBLE)
+            ok, _claimed, already, value = khantok.reserve_khantok_ticket(conn2, 2, ELIGIBLE)
             assert ok is True and already is False and value == 100, f"status {dead} should not block"
 
     def test_quota_rollover_100_to_50(self, monkeypatch):
         conn = _mem_db()
-        monkeypatch.setattr(order_api, "KHANTOK_QUOTA_100", 0)
-        monkeypatch.setattr(order_api, "KHANTOK_QUOTA_50", 5)
+        monkeypatch.setattr(config, "KHANTOK_QUOTA_100", 0)
+        monkeypatch.setattr(config, "KHANTOK_QUOTA_50", 5)
         _add_order(conn, 1, ELIGIBLE)
-        ok, _claimed, _already, value = order_api.reserve_khantok_ticket(conn, 1, ELIGIBLE)
+        ok, _claimed, _already, value = khantok.reserve_khantok_ticket(conn, 1, ELIGIBLE)
         assert ok is True and value == 50
 
     def test_both_quotas_full_denies(self, monkeypatch):
         conn = _mem_db()
-        monkeypatch.setattr(order_api, "KHANTOK_QUOTA_100", 0)
-        monkeypatch.setattr(order_api, "KHANTOK_QUOTA_50", 0)
+        monkeypatch.setattr(config, "KHANTOK_QUOTA_100", 0)
+        monkeypatch.setattr(config, "KHANTOK_QUOTA_50", 0)
         _add_order(conn, 1, ELIGIBLE)
-        ok, _claimed, already, value = order_api.reserve_khantok_ticket(conn, 1, ELIGIBLE)
+        ok, _claimed, already, value = khantok.reserve_khantok_ticket(conn, 1, ELIGIBLE)
         assert (ok, already, value) == (False, False, None)
 
     def test_existing_claim_is_idempotent(self):
@@ -98,7 +98,7 @@ class TestReserveKhantokTicket:
             "INSERT INTO khantok_ticket_claims (order_id, claimed_at, ticket_value) VALUES (1, ?, 50)",
             ("2026-01-01T00:00:00Z",),
         )
-        ok, claimed, already, value = order_api.reserve_khantok_ticket(conn, 1, ELIGIBLE)
+        ok, claimed, already, value = khantok.reserve_khantok_ticket(conn, 1, ELIGIBLE)
         assert ok is True and already is False and value == 50
         assert claimed == "2026-01-01T00:00:00Z"
         # no duplicate claim row created
@@ -121,7 +121,7 @@ def _customer():
 
 class TestValidateOrderPayload:
     def test_rejects_non_dict(self):
-        data, err = order_api.validate_order_payload("nope")
+        data, err = orders.validate_order_payload("nope")
         assert data is None and err
 
     def test_rejects_missing_customer_field(self):
@@ -129,7 +129,7 @@ class TestValidateOrderPayload:
             "product": _product(), "customer": {**_customer(), "studentCode": ""},
             "size": "M", "quantity": 1, "totalAmount": 158,
         }
-        data, err = order_api.validate_order_payload(payload)
+        data, err = orders.validate_order_payload(payload)
         assert data is None and "studentCode" in err
 
     def test_rejects_zero_quantity(self):
@@ -137,7 +137,7 @@ class TestValidateOrderPayload:
             "product": _product(), "customer": _customer(),
             "size": "M", "quantity": 0, "totalAmount": 158,
         }
-        data, _err = order_api.validate_order_payload(payload)
+        data, _err = orders.validate_order_payload(payload)
         assert data is None
 
     def test_total_is_recomputed_from_single_item(self):
@@ -146,7 +146,7 @@ class TestValidateOrderPayload:
             "product": _product(price=158), "customer": _customer(),
             "size": "M", "quantity": 2, "totalAmount": 999,
         }
-        data, err = order_api.validate_order_payload(payload)
+        data, err = orders.validate_order_payload(payload)
         assert err is None
         assert data["total_amount"] == 316  # 158 * 2, not 999
 
@@ -159,7 +159,7 @@ class TestValidateOrderPayload:
             "product": _product(), "customer": _customer(),
             "size": "M", "quantity": 1, "totalAmount": 1, "items": items,
         }
-        data, err = order_api.validate_order_payload(payload)
+        data, err = orders.validate_order_payload(payload)
         assert err is None
         assert data["total_amount"] == 158 + 739 * 2  # 1636, not the client's 1
         assert len(data["items"]) == 2
