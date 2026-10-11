@@ -11,7 +11,7 @@ from http import HTTPStatus
 from typing import TYPE_CHECKING
 from urllib.parse import urlparse
 
-from .. import slips
+from .. import slips, visitors
 from ..auth import compute_claim_token, compute_super_token
 from ..backups import create_backup, delete_backup, get_backup, list_backups
 from ..config import ORDER_STATUSES
@@ -92,10 +92,7 @@ def handle_get_admin_stats_stream(h: OrderRequestHandler, path: str, match: re.M
     started_at = time.monotonic()
     try:
         while (time.monotonic() - started_at) < _STATS_STREAM_MAX_SECONDS:
-            cutoff = time.time() - state.VISITOR_ACTIVE_SECONDS
-            with state.lock:
-                visitors = sum(1 for t in list(state.visitor_registry.values()) if t >= cutoff)
-            payload = {"visitors": visitors, **get_stats_snapshot()}
+            payload = {"visitors": visitors.active_count(), **get_stats_snapshot()}
             payload_hash = hash(json.dumps(payload, sort_keys=True))
             if payload_hash != last_hash:
                 h.wfile.write(("data: " + json.dumps(payload) + "\n\n").encode())

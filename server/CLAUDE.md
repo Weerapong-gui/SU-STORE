@@ -16,6 +16,7 @@ Python HTTP server แบบ raw `http.server` (`ThreadingHTTPServer`) ไม่
 | `fp28/orders.py` | ออเดอร์ FP28: validate, create, update, serialize, `mark_khantok_station_claimed` |
 | `fp28/khantok.py`, `display.py`, `slips.py`, `sheets.py` | quota ขันโตก · Display 1/2 · ไฟล์สลิป + OCR · sync Google Sheets |
 | `fp28/stats.py`, `products.py`, `site.py`, `backups.py` | summary/analytics/CSV · สินค้า v1 · ตั้งค่าเว็บ + รอบขาย · backup |
+| `fp28/visitors.py` | นับคนออนไลน์จาก heartbeat `/site-status` (key = cookie `su_vid` หรือ IP, จำกัด 20k key) |
 | `fp28/auth.py`, `timeutil.py`, `pages.py` | token ต่างๆ · เวลาไทย · โหลด HTML template |
 | `fp28/web/handler.py` | `OrderRequestHandler`: helper ส่ง/อ่าน request (`send_json`, `read_json`, …), เช็ก auth และ dispatch |
 | `fp28/web/routes.py` | **ตาราง route ทั้งหมด** ไล่จากบนลงล่าง route แรกที่ match ชนะ |

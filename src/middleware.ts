@@ -3,6 +3,7 @@ import { ADMIN_COOKIE } from "@/lib/adminAuth";
 import { clientIp } from "@/lib/clientIp";
 import { ORDER_API_BASE } from "@/lib/orderApi";
 import { consume, type RateLimitStore } from "@/lib/rateLimitCore";
+import { setVisitorCookie, siteStatusQuery, visitorId } from "@/lib/visitorId";
 
 // ── Rate limiting (order creation / lookup) ───────────────────────────────────
 const orderRateLimits: RateLimitStore = {};
@@ -74,43 +75,44 @@ export async function middleware(request: NextRequest) {
     }
   }
 
-  // ── Site-closed check for page navigations ──────────────────────────────────
+  // ── Page navigations: visitor cookie + site-closed check ─────────────────────
   const hasBypass = BYPASS_TOKEN && request.cookies.get("bypass_gate")?.value === "1";
-  if (request.method === "GET" && isPageRequest(request) && !hasBypass) {
-    // Allow maintenance page itself through
-    if (pathname === "/maintenance") {
-      return NextResponse.next();
-    }
+  if (request.method === "GET" && isPageRequest(request)) {
+    const existingId = visitorId(request);
+    const id = existingId ?? crypto.randomUUID();
+    const response = hasBypass ? NextResponse.next() : await siteClosedResponse(request, id);
+    return existingId ? response : setVisitorCookie(response, id);
+  }
 
-    if (ORDER_API_BASE) {
-      const now = Date.now();
-      if (now - siteClosedCache.ts > SITE_STATUS_TTL) {
-        try {
-          const ip = clientIp(request);
-          const res = await fetch(
-            `${ORDER_API_BASE}/site-status?ip=${encodeURIComponent(ip === "unknown" ? "" : ip)}`,
-            { signal: AbortSignal.timeout(2000), cache: "no-store" }
-          );
-          if (res.ok) {
-            const data = (await res.json()) as { siteClosed?: boolean; scheduleClosed?: boolean; beRightBack?: boolean };
-            const brb = data.beRightBack === true;
-            const closed = brb || data.siteClosed === true || data.scheduleClosed === true;
-            const reason = brb ? "beRightBack" : data.siteClosed ? "manual" : data.scheduleClosed ? "schedule" : "";
-            siteClosedCache = { closed, reason, beRightBack: brb, ts: now };
-          }
-        } catch {
-          // Fail open — don't block if API unreachable
-        }
-      }
+  return NextResponse.next();
+}
 
-      if (siteClosedCache.closed) {
-        return NextResponse.rewrite(
-          new URL(`/maintenance?reason=${siteClosedCache.reason}`, request.url)
-        );
+// Page navigations: rewrite to /maintenance while the store is closed.
+async function siteClosedResponse(request: NextRequest, visitorIdValue: string): Promise<NextResponse> {
+  if (request.nextUrl.pathname === "/maintenance" || !ORDER_API_BASE) return NextResponse.next();
+
+  const now = Date.now();
+  if (now - siteClosedCache.ts > SITE_STATUS_TTL) {
+    try {
+      const res = await fetch(`${ORDER_API_BASE}/site-status?${siteStatusQuery(request, visitorIdValue)}`, {
+        signal: AbortSignal.timeout(2000),
+        cache: "no-store"
+      });
+      if (res.ok) {
+        const data = (await res.json()) as { siteClosed?: boolean; scheduleClosed?: boolean; beRightBack?: boolean };
+        const brb = data.beRightBack === true;
+        const closed = brb || data.siteClosed === true || data.scheduleClosed === true;
+        const reason = brb ? "beRightBack" : data.siteClosed ? "manual" : data.scheduleClosed ? "schedule" : "";
+        siteClosedCache = { closed, reason, beRightBack: brb, ts: now };
       }
+    } catch {
+      // Fail open — don't block if API unreachable
     }
   }
 
+  if (siteClosedCache.closed) {
+    return NextResponse.rewrite(new URL(`/maintenance?reason=${siteClosedCache.reason}`, request.url));
+  }
   return NextResponse.next();
 }
 

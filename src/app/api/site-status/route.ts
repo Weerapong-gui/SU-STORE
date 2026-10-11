@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
-import { clientIp } from "@/lib/clientIp";
 import { ORDER_API_BASE } from "@/lib/orderApi";
+import { siteStatusQuery } from "@/lib/visitorId";
 
 export const dynamic = "force-dynamic";
 
@@ -13,11 +13,10 @@ export async function GET(request: NextRequest) {
   if (ALWAYS_OPEN || isStaging) {
     return NextResponse.json({ siteClosed: false, scheduleClosed: false, beRightBack: false, alwaysOpen: true, activeVisitors: 0 });
   }
-  const ip = clientIp(request);
 
   try {
     const url = ORDER_API_BASE
-      ? `${ORDER_API_BASE}/site-status?ip=${encodeURIComponent(ip === "unknown" ? "" : ip)}`
+      ? `${ORDER_API_BASE}/site-status?${siteStatusQuery(request)}`
       : null;
 
     if (!url) {

@@ -9,9 +9,9 @@ from datetime import datetime, timedelta, timezone
 from http import HTTPStatus
 from pathlib import Path
 from typing import TYPE_CHECKING
-from urllib.parse import urlparse
+from urllib.parse import parse_qs, urlparse
 
-from .. import config, slips
+from .. import config, slips, visitors
 from ..config import ORDER_ID_PATTERN
 from ..database import log_audit, open_db
 from ..orders import (
@@ -90,7 +90,6 @@ def handle_get_orders(h: OrderRequestHandler, path: str, match: re.Match[str] | 
 
 def handle_get_check_order(h: OrderRequestHandler, path: str, match: re.Match[str] | None) -> None:
     """GET /check-order"""
-    from urllib.parse import parse_qs
     qs = parse_qs(urlparse(h.path).query)
     code = (qs.get("code") or [""])[0].strip().upper()
     student_code = (qs.get("studentCode") or [""])[0].strip()
@@ -162,15 +161,11 @@ def handle_get_site_settings(h: OrderRequestHandler, path: str, match: re.Match[
 
 def handle_get_site_status(h: OrderRequestHandler, path: str, match: re.Match[str] | None) -> None:
     """GET /site-status"""
-    from urllib.parse import parse_qs as _parse_qs_ss
-    qs_ss = _parse_qs_ss(urlparse(h.path).query)
-    visitor_ip = (qs_ss.get("ip") or [""])[0].strip()
-    if visitor_ip:
-        with state.lock:
-            state.visitor_registry[visitor_ip] = time.time()
-    cutoff = time.time() - state.VISITOR_ACTIVE_SECONDS
-    with state.lock:
-        active_count = sum(1 for t in list(state.visitor_registry.values()) if t >= cutoff)
+    query = parse_qs(urlparse(h.path).query)
+    key = visitors.visitor_key((query.get("vid") or [""])[0], (query.get("ip") or [""])[0])
+    if key:
+        visitors.record_visit(key)
+    active_count = visitors.active_count()
     with open_db() as connection:
         rows = connection.execute(
             "SELECT key, value FROM site_settings WHERE key IN ('site_closed','schedule_enabled','schedule_warning_message','be_right_back_dates','be_right_back_active')"

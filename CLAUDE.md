@@ -32,6 +32,11 @@ SU STORE เป็นระบบสั่งซื้อเสื้อรั�
 - flow: `/products/[slug]` เลือกไซซ์/สี → ตะกร้า (`CartProvider`, localStorage `su-store-cart-v2` + `su-store-checkout-id` ซิงก์ข้ามแท็บด้วย `storage` event, ราคา/ชื่อในตะกร้าใช้แสดงผลเท่านั้น หน้า checkout แสดงค่าล่าสุดจาก catalog) → `/checkout` ฟอร์มผู้ซื้อตาม `buyerFields` ของสินค้า → `/order/[code]?t=<token>` วิธีโอน + อัปสลิป
 - token ของออเดอร์เก็บใน localStorage (`src/lib/orderTokens.ts`) และอยู่ในลิงก์ `?t=` · ลูกค้าค้นออเดอร์ด้วยเลขออเดอร์ + เบอร์โทรที่ `/check-order`
 - ข้อความ 2 ภาษา (EN/TH) ของร้านใหม่อยู่ที่ `src/lib/storeI18n.ts` ใช้ตัวสลับภาษาเดิม `useLang()`
+- **Cookie มี 3 ตัว เป็น cookie ที่จำเป็นทั้งหมด จึงไม่ต้องมี cookie banner (PDPA)** ถ้าจะเพิ่ม cookie ติดตามหรือโฆษณา ต้องมี banner ขอความยินยอมก่อน
+  - `su-admin-auth`: session หลังร้าน อายุ 12 ชม.
+  - `bypass_gate`: ให้ทีมเข้าเว็บได้ตอนปิดร้าน อายุ 7 วัน
+  - `su_vid`: id สุ่ม ไม่ระบุตัวตน อายุ 30 วัน (`src/lib/visitorId.ts`) ใช้นับคนออนไลน์อย่างเดียว ถ้าไม่มี cookie จะถอยไปนับตาม IP (`server/fp28/visitors.py`)
+  - ข้อมูลที่ browser ใช้คนเดียว (ตะกร้า, ภาษา, token ออเดอร์) เก็บใน localStorage ไม่ใช่ cookie
 - FP28 เดิม: เหลือแค่หน้าค้นหาด้วยรหัสนักศึกษา `/check-order/fp28` (+ `/api/check-order`, feedback) flow สั่งซื้อ FP28 ใน Next.js ถูกลบแล้ว
 
 > **Hosting:** รันบนเซิร์ฟเวอร์ตัวเอง (Arch Linux) ผ่าน Docker + Cloudflare Tunnel  
