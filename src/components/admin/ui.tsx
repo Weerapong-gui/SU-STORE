@@ -1,6 +1,6 @@
 "use client";
 
-import { createContext, useCallback, useContext, useState } from "react";
+import { createContext, forwardRef, useCallback, useContext, useState } from "react";
 import type { OrderStatus, ProductStatus } from "@/types/store";
 
 export function Card({ title, step, hint, children }: {
@@ -44,7 +44,10 @@ export const inputClass =
 
 type ButtonProps = React.ButtonHTMLAttributes<HTMLButtonElement> & { variant?: "primary" | "secondary" | "danger" | "ghost" };
 
-export function Button({ variant = "primary", className = "", ...props }: ButtonProps) {
+export const Button = forwardRef<HTMLButtonElement, ButtonProps>(function Button(
+  { variant = "primary", className = "", ...props },
+  ref
+) {
   const styles = {
     primary: "bg-zinc-900 text-white hover:bg-zinc-700",
     secondary: "border border-zinc-300 bg-white text-zinc-800 hover:bg-zinc-50",
@@ -53,12 +56,13 @@ export function Button({ variant = "primary", className = "", ...props }: Button
   }[variant];
   return (
     <button
+      ref={ref}
       type="button"
       {...props}
       className={`inline-flex items-center justify-center gap-1.5 rounded-xl px-4 py-2.5 text-sm font-semibold transition disabled:cursor-not-allowed disabled:opacity-50 ${styles} ${className}`}
     />
   );
-}
+});
 
 const PRODUCT_STATUS_STYLE: Record<ProductStatus, string> = {
   draft: "bg-zinc-100 text-zinc-600",

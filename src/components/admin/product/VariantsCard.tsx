@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { useConfirm } from "@/components/admin/ConfirmDialog";
 import { Button, Card, Field, inputClass } from "@/components/admin/ui";
 import { buildRows, droppedRows, rowLabel, splitList, uniqueValues, type VariantRow } from "./variants";
 
@@ -9,11 +10,20 @@ export function VariantsCard({ rows, onChange }: { rows: VariantRow[]; onChange:
   const [sizesText, setSizesText] = useState(() => uniqueValues(rows, "size").join(", "));
   const [colorsText, setColorsText] = useState(() => uniqueValues(rows, "color").join(", "));
   const [defaultPrice, setDefaultPrice] = useState("");
+  const confirm = useConfirm();
 
-  function rebuild() {
+  async function rebuild() {
     const next = buildRows(splitList(sizesText), splitList(colorsText), defaultPrice, rows);
     const dropped = droppedRows(rows, next);
-    if (dropped.length && !window.confirm(`ตัวเลือกเหล่านี้จะถูกลบออก: ${dropped.map(rowLabel).join(", ")}\nต้องการทำต่อไหม?`)) {
+    if (
+      dropped.length &&
+      !(await confirm({
+        title: "ลบตัวเลือกบางรายการ?",
+        message: `ตัวเลือกเหล่านี้จะถูกลบออก: ${dropped.map(rowLabel).join(", ")}`,
+        confirmLabel: "ลบและสร้างตารางใหม่",
+        tone: "danger",
+      }))
+    ) {
       return;
     }
     onChange(next);

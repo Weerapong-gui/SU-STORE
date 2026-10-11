@@ -137,7 +137,7 @@ export function OrderView({ code }: { code: string }) {
         <ol className="grid grid-cols-5 gap-1">
           {FLOW.map((s, i) => (
             <li key={s} className="text-center">
-              <div className={cn("h-1.5 rounded-full", i <= step ? "bg-apple-blue" : "bg-zinc-200")} />
+              <div className={cn("h-1.5 rounded-circle", i <= step ? "bg-apple-blue" : "bg-zinc-200")} />
               <p className={cn("mt-2 text-[11px] leading-tight sm:text-xs", i <= step ? "font-semibold text-ink" : "text-ink-tertiary")}>
                 {t.status[s].label}
               </p>

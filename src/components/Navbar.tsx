@@ -70,7 +70,7 @@ export function Navbar() {
                 <span className="relative inline-flex">
                   <ShoppingBag className="h-4 w-4" strokeWidth={1.8} />
                   {itemCount > 0 ? (
-                    <span className="absolute -right-2.5 -top-2.5 inline-flex min-w-[1.15rem] items-center justify-center rounded-full bg-apple-blue px-1 text-[10px] font-semibold leading-none text-white">
+                    <span className="absolute -right-2.5 -top-2.5 inline-flex min-w-[1.15rem] items-center justify-center rounded-circle bg-apple-blue px-1 text-[10px] font-semibold leading-none text-white">
                       {itemCount > 99 ? "99+" : itemCount}
                     </span>
                   ) : null}
@@ -96,12 +96,12 @@ export function Navbar() {
           </button>
           <Link
             href="/checkout"
-            className="relative flex h-9 w-9 items-center justify-center rounded-full text-zinc-600 transition hover:bg-zinc-100 hover:text-zinc-900"
+            className="relative flex h-9 w-9 items-center justify-center rounded-circle text-zinc-600 transition hover:bg-zinc-100 hover:text-zinc-900"
             aria-label="Checkout"
           >
             <ShoppingBag className="h-5 w-5" strokeWidth={1.8} />
             {itemCount > 0 ? (
-              <span className="absolute right-1 top-1 inline-flex min-w-[1.1rem] items-center justify-center rounded-full bg-apple-blue px-1 text-[9px] font-semibold leading-none text-white">
+              <span className="absolute right-1 top-1 inline-flex min-w-[1.1rem] items-center justify-center rounded-circle bg-apple-blue px-1 text-[9px] font-semibold leading-none text-white">
                 {itemCount > 99 ? "99+" : itemCount}
               </span>
             ) : null}
@@ -111,7 +111,7 @@ export function Navbar() {
             onClick={() => setIsMenuOpen((prev) => !prev)}
             aria-label={isMenuOpen ? "Close menu" : "Open menu"}
             aria-expanded={isMenuOpen}
-            className="flex h-9 w-9 items-center justify-center rounded-full text-zinc-600 transition hover:bg-zinc-100 hover:text-zinc-900"
+            className="flex h-9 w-9 items-center justify-center rounded-circle text-zinc-600 transition hover:bg-zinc-100 hover:text-zinc-900"
           >
             {isMenuOpen ? (
               <X className="h-5 w-5" />

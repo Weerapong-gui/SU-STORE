@@ -88,19 +88,19 @@ export function FeedbackModal({ orderId, open, onClose, onSubmitted }: Props) {
       >
         <div className="flex items-center justify-between border-b border-zinc-100 px-5 py-4">
           <div className="flex items-center gap-2.5">
-            <div className="flex h-9 w-9 items-center justify-center rounded-full bg-zinc-900 text-white">
+            <div className="flex h-9 w-9 items-center justify-center rounded-circle bg-zinc-900 text-white">
               <MessageSquare className="h-4 w-4" />
             </div>
             <span className="text-base font-bold text-zinc-900">{t.feedback.title}</span>
           </div>
-          <button onClick={onClose} className="rounded-full p-1.5 text-zinc-400 transition hover:bg-zinc-100 hover:text-zinc-900" aria-label="Close">
+          <button onClick={onClose} className="rounded-circle p-1.5 text-zinc-400 transition hover:bg-zinc-100 hover:text-zinc-900" aria-label="Close">
             <X className="h-5 w-5" />
           </button>
         </div>
 
         {submitted ? (
           <div className="flex flex-col items-center justify-center gap-3 px-6 py-14 text-center">
-            <div className="flex h-16 w-16 items-center justify-center rounded-full bg-emerald-100 text-emerald-600">
+            <div className="flex h-16 w-16 items-center justify-center rounded-circle bg-emerald-100 text-emerald-600">
               <Check className="h-8 w-8" strokeWidth={3} />
             </div>
             <p className="text-lg font-bold text-zinc-900">{t.feedback.thanks}</p>
@@ -126,7 +126,7 @@ export function FeedbackModal({ orderId, open, onClose, onSubmitted }: Props) {
                     onMouseLeave={() => setHover(null)}
                     onClick={() => setRating(tier.value)}
                     aria-label={t.feedback.ratingLabels[tier.value - 1]}
-                    className={`group flex h-14 w-14 items-center justify-center rounded-full transition-all ${
+                    className={`group flex h-14 w-14 items-center justify-center rounded-circle transition-all ${
                       isSelected ? `${tier.bg} ring-4 ${tier.ring} scale-110` : "bg-zinc-100 hover:scale-105"
                     }`}
                   >

@@ -1,12 +1,12 @@
 """Store metadata the storefront and admin load once: field labels, statuses, and the
-current payment account, announcement and accent colour."""
+current payment account, announcement and theme (accent colour, corner radius)."""
 from __future__ import annotations
 
 import sqlite3
 from typing import Any
 
 from .db import ALWAYS_REQUIRED_FIELDS, BUYER_FIELDS, ORDER_STATUSES, PRODUCT_STATUSES, get_settings
-from .home import published_accent
+from .home import published_theme
 
 
 def meta(connection: sqlite3.Connection | None = None) -> dict[str, Any]:
@@ -21,5 +21,5 @@ def meta(connection: sqlite3.Connection | None = None) -> dict[str, Any]:
         settings = get_settings(connection)
         result["payment"] = settings["payment"]
         result["announcement"] = settings["announcement"]
-        result["accent"] = published_accent(connection)
+        result.update(published_theme(connection))
     return result

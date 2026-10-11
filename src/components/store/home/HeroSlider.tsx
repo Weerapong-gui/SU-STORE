@@ -127,7 +127,7 @@ export function HeroSlider({ slides, autoplay }: { slides: HeroSlide[]; autoplay
               aria-label={t.slideLabel(i + 1)}
               aria-current={i === active}
               className={cn(
-                "h-2 rounded-full transition-all",
+                "h-2 rounded-circle transition-all",
                 i === active ? "w-6" : "w-2",
                 slide.image || slides[active].image
                   ? i === active ? "bg-white" : "bg-white/50 hover:bg-white/80"

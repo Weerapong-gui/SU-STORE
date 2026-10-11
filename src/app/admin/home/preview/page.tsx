@@ -24,7 +24,7 @@ export default async function HomePreviewPage() {
       <div className="sticky top-0 z-[60] bg-amber-300 px-4 py-2 text-center text-sm font-semibold text-amber-950">
         ตัวอย่าง: ลูกค้ายังไม่เห็นหน้านี้ · กลับไปกด &quot;เผยแพร่&quot; ที่หลังร้านเมื่อพร้อม
       </div>
-      <StoreShell accent={home.accent} announcement={meta?.announcement}>
+      <StoreShell accent={home.accent} radius={home.radius} announcement={meta?.announcement}>
         <HomeBlocks home={home} />
       </StoreShell>
     </>

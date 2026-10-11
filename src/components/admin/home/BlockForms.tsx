@@ -1,6 +1,7 @@
 "use client";
 
 import { AlignCenter, AlignLeft, ArrowDown, ArrowUp, Trash2 } from "lucide-react";
+import { useConfirm } from "@/components/admin/ConfirmDialog";
 import { Button, Field, inputClass } from "@/components/admin/ui";
 import type { HeroSlide, HomeBlock, StoreProduct } from "@/types/store";
 import { MAX_FEATURED, MAX_SLIDES, emptySlide, move } from "./blocks";
@@ -32,11 +33,13 @@ export function BlockForm({ block, onChange, products }: { block: HomeBlock; onC
 }
 
 function HeroForm({ block, onChange, products }: FormProps<"hero">) {
+  const confirm = useConfirm();
   const setSlide = (i: number, patch: Partial<HeroSlide>) =>
     onChange({ ...block, slides: block.slides.map((s, j) => (j === i ? { ...s, ...patch } : s)) });
   const moveSlide = (from: number, to: number) => onChange({ ...block, slides: move(block.slides, from, to) });
-  const removeSlide = (i: number) =>
-    window.confirm(`ลบสไลด์ที่ ${i + 1}?`) && onChange({ ...block, slides: block.slides.filter((_, j) => j !== i) });
+  const removeSlide = async (i: number) =>
+    (await confirm({ title: `ลบสไลด์ที่ ${i + 1}?`, confirmLabel: "ลบสไลด์", tone: "danger" })) &&
+    onChange({ ...block, slides: block.slides.filter((_, j) => j !== i) });
 
   return (
     <div className="space-y-4">

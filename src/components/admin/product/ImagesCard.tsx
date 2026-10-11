@@ -2,6 +2,7 @@
 
 import { useRef, useState } from "react";
 import { adminFetch } from "@/lib/adminApi";
+import { useConfirm } from "@/components/admin/ConfirmDialog";
 import { Card, useToast } from "@/components/admin/ui";
 import type { StoreProduct } from "@/types/store";
 
@@ -15,6 +16,7 @@ export function ImagesCard({ productId, images, onChange }: {
   onChange: (images: string[]) => void;
 }) {
   const toast = useToast();
+  const confirm = useConfirm();
   const fileInput = useRef<HTMLInputElement>(null);
   const [uploading, setUploading] = useState(false);
 
@@ -69,7 +71,10 @@ export function ImagesCard({ productId, images, onChange }: {
                 <button
                   type="button"
                   className="px-3 py-1.5 text-red-600 hover:bg-red-50"
-                  onClick={() => window.confirm("ลบรูปนี้?") && save(images.filter((x) => x !== src))}
+                  onClick={async () =>
+                    (await confirm({ title: "ลบรูปนี้?", confirmLabel: "ลบรูป", tone: "danger" })) &&
+                    save(images.filter((x) => x !== src))
+                  }
                 >
                   ลบ
                 </button>

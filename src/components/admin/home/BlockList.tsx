@@ -2,6 +2,7 @@
 
 import { useRef, useState } from "react";
 import { ArrowDown, ArrowUp, ChevronDown, Eye, EyeOff, GripVertical, Trash2 } from "lucide-react";
+import { useConfirm } from "@/components/admin/ConfirmDialog";
 import { Button } from "@/components/admin/ui";
 import type { HomeBlock, HomeBlockType, StoreProduct } from "@/types/store";
 import { BLOCK_INFO, MAX_BLOCKS, move, newBlock, summarize } from "./blocks";
@@ -81,6 +82,7 @@ function BlockCard({ block, open, isFirst, isLast, products, onToggle, onChange,
   onDragStart: () => void;
   onDrop: () => void;
 }) {
+  const confirm = useConfirm();
   const info = BLOCK_INFO[block.type];
   const summary = summarize(block);
   return (
@@ -112,7 +114,7 @@ function BlockCard({ block, open, isFirst, isLast, products, onToggle, onChange,
           icon={block.hidden ? EyeOff : Eye}
           onClick={() => onChange({ ...block, hidden: !block.hidden })}
         />
-        <IconButton label="ลบบล็อก" icon={Trash2} danger onClick={() => window.confirm(`ลบบล็อก "${info.label}"?`) && onRemove()} />
+        <IconButton label="ลบบล็อก" icon={Trash2} danger onClick={async () => (await confirm({ title: `ลบบล็อก "${info.label}"?`, confirmLabel: "ลบบล็อก", tone: "danger" })) && onRemove()} />
         <ChevronDown className={`h-5 w-5 shrink-0 text-zinc-400 transition ${open ? "rotate-180" : ""}`} aria-hidden />
       </div>
       {open && (

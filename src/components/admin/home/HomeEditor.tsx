@@ -3,10 +3,12 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Eye } from "lucide-react";
 import { adminFetch, formatThaiDateTime } from "@/lib/adminApi";
+import { useConfirm } from "@/components/admin/ConfirmDialog";
 import { Button, useToast } from "@/components/admin/ui";
 import type { HomeAdminState, HomeLayout, StoreProduct } from "@/types/store";
 import { AccentPicker } from "./AccentPicker";
 import { BlockList } from "./BlockList";
+import { CornerPicker } from "./CornerPicker";
 
 const AUTOSAVE_MS = 1000;
 
@@ -15,6 +17,7 @@ type SaveStatus = { kind: "idle" | "saving" | "saved" } | { kind: "error"; messa
 // /admin/home: edits autosave as a draft; customers only see it after "เผยแพร่".
 export function HomeEditor() {
   const toast = useToast();
+  const confirm = useConfirm();
   const [state, setState] = useState<HomeAdminState | null>(null);
   const [layout, setLayout] = useState<HomeLayout | null>(null);
   const [products, setProducts] = useState<StoreProduct[]>([]);
@@ -96,7 +99,7 @@ export function HomeEditor() {
       toast("แก้ข้อผิดพลาดด้านบนก่อน แล้วค่อยเผยแพร่", "error");
       return;
     }
-    if (!window.confirm("เผยแพร่หน้าแรกนี้? ลูกค้าจะเห็นทันที")) return;
+    if (!(await confirm({ title: "เผยแพร่หน้าแรกนี้?", message: "ลูกค้าจะเห็นหน้าแรกแบบใหม่ทันที", confirmLabel: "เผยแพร่" }))) return;
     await runAction("home/publish", (saved) => {
       setState(saved);
       toast("เผยแพร่หน้าแรกแล้ว");
@@ -104,7 +107,13 @@ export function HomeEditor() {
   }
 
   async function discard() {
-    if (!window.confirm("ทิ้งการแก้ไขทั้งหมดที่ยังไม่เผยแพร่ แล้วกลับไปเป็นแบบที่ลูกค้าเห็นอยู่ตอนนี้?")) return;
+    const ok = await confirm({
+      title: "ทิ้งการแก้ไขทั้งหมด?",
+      message: "การแก้ไขที่ยังไม่เผยแพร่จะหายไป แล้วกลับไปเป็นแบบที่ลูกค้าเห็นอยู่ตอนนี้",
+      confirmLabel: "ทิ้งการแก้ไข",
+      tone: "danger",
+    });
+    if (!ok) return;
     clearTimeout(timer.current);
     pending.current = null;
     await runAction("home/discard", (saved) => {
@@ -161,6 +170,8 @@ export function HomeEditor() {
       <BlockList blocks={layout.blocks} products={products} onChange={(blocks) => update({ ...layout, blocks })} />
 
       <AccentPicker value={layout.accent} onChange={(accent) => update({ ...layout, accent })} />
+
+      <CornerPicker value={layout.radius} accent={layout.accent} onChange={(radius) => update({ ...layout, radius })} />
     </div>
   );
 }

@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { adminFetch, formatBaht, formatThaiDateTime } from "@/lib/adminApi";
+import { useConfirm } from "@/components/admin/ConfirmDialog";
 import { Badge, Button, Card, inputClass, ORDER_STATUS_LABEL, useToast } from "@/components/admin/ui";
 import type { OrderStatus, StoreMeta, StoreOrder } from "@/types/store";
 
@@ -29,6 +30,7 @@ const SLIP_CHECK_TEXT: Record<string, string> = {
 
 export default function OrderDetailPage({ params }: { params: { code: string } }) {
   const toast = useToast();
+  const confirm = useConfirm();
   const [order, setOrder] = useState<StoreOrder | null>(null);
   const [meta, setMeta] = useState<StoreMeta | null>(null);
   const [note, setNote] = useState("");
@@ -57,8 +59,19 @@ export default function OrderDetailPage({ params }: { params: { code: string } }
     }
   }
 
-  function changeStatus(to: OrderStatus) {
-    if (to === "cancelled" && !window.confirm("ยกเลิกออเดอร์นี้? สต็อกจะถูกคืน และเปลี่ยนกลับไม่ได้")) return;
+  async function changeStatus(to: OrderStatus) {
+    if (
+      to === "cancelled" &&
+      !(await confirm({
+        title: "ยกเลิกออเดอร์นี้?",
+        message: "สต็อกจะถูกคืน และเปลี่ยนกลับไม่ได้",
+        confirmLabel: "ยกเลิกออเดอร์",
+        cancelLabel: "ไม่ยกเลิก",
+        tone: "danger",
+      }))
+    ) {
+      return;
+    }
     patch({ status: to }, `เปลี่ยนเป็น "${ORDER_STATUS_LABEL[to]}" แล้ว`);
   }
 

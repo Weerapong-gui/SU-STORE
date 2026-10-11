@@ -355,6 +355,22 @@ class TestHome:
         state = home.discard_home_draft(conn)
         assert not state["dirty"] and state["draft"]["blocks"][0]["slides"][0]["title"] == "Hello"
 
+    def test_radius_defaults_and_publishes(self):
+        conn = _conn()
+        assert home.validate_home({"blocks": []})["radius"] == home.DEFAULT_RADIUS
+        assert store_meta.meta(conn)["radius"] == home.DEFAULT_RADIUS
+        home.save_home_draft(conn, {"radius": 0, "blocks": [self.HERO]})
+        home.publish_home(conn)
+        assert store_meta.meta(conn)["radius"] == 0
+        assert home.resolve_home(conn, home.get_home_admin(conn)["published"])["radius"] == 0
+
+    def test_layout_saved_before_radius_keeps_original_corners(self):
+        conn = _conn()
+        legacy = json.dumps({"accent": "#1f7a3a", "blocks": []})
+        conn.execute("INSERT INTO store_settings (key, value, updated_at) VALUES ('home_published', ?, 'x')", (legacy,))
+        assert home.get_home_admin(conn)["draft"]["radius"] == home.DEFAULT_RADIUS
+        assert store_meta.meta(conn)["radius"] == home.DEFAULT_RADIUS
+
     @pytest.mark.parametrize("payload", [
         {"blocks": [{"id": "x", "type": "marquee"}]},
         {"blocks": [{**HERO, "slides": [{"buttonText": "Go", "buttonHref": "javascript:alert(1)"}]}]},
@@ -365,6 +381,11 @@ class TestHome:
         {"blocks": [HERO, HERO]},
         {"accent": "#ffeb3b", "blocks": []},
         {"accent": "red", "blocks": []},
+        {"radius": -1, "blocks": []},
+        {"radius": 101, "blocks": []},
+        {"radius": "abc", "blocks": []},
+        {"radius": 50.5, "blocks": []},
+        {"radius": True, "blocks": []},
         {"blocks": [{"id": "f", "type": "featured", "productIds": list(range(13))}]},
     ])
     def test_rejects_bad_layouts(self, payload):

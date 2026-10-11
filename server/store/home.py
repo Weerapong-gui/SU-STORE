@@ -15,6 +15,8 @@ from .db import StoreError, clean_text, list_products, now_iso
 
 HOME_BLOCK_TYPES = ("hero", "featured", "text", "imageText", "allProducts")
 DEFAULT_ACCENT = "#0071e3"
+# Corner roundness in percent of the original design: 0 = square, 100 = as designed.
+DEFAULT_RADIUS = 100
 MAX_HOME_BLOCKS = 20
 MAX_HERO_SLIDES = 6
 MAX_FEATURED = 12
@@ -22,6 +24,7 @@ MAX_FEATURED = 12
 # A hero slide with no image and no text renders the built-in bilingual store intro.
 DEFAULT_HOME: dict[str, Any] = {
     "accent": DEFAULT_ACCENT,
+    "radius": DEFAULT_RADIUS,
     "blocks": [
         {"id": "hero", "type": "hero", "hidden": False, "autoplay": True,
          "slides": [{"image": "", "eyebrow": "", "title": "", "subtitle": "", "buttonText": "", "buttonHref": ""}]},
@@ -73,6 +76,10 @@ def validate_home(payload: Any) -> dict[str, Any]:
     accent = accent.lower()
     if contrast_with_white(accent) < 4.5:
         raise StoreError(400, "สีหลักอ่อนเกินไป ตัวหนังสือสีขาวบนปุ่มจะอ่านยาก กรุณาเลือกสีที่เข้มขึ้น")
+    radius = payload.get("radius", DEFAULT_RADIUS)
+    # bool is an int subclass: reject True/False explicitly
+    if not isinstance(radius, int) or isinstance(radius, bool) or not 0 <= radius <= 100:
+        raise StoreError(400, "ความโค้งของมุมต้องเป็นตัวเลข 0–100")
 
     blocks = payload.get("blocks")
     if not isinstance(blocks, list):
@@ -143,14 +150,17 @@ def validate_home(payload: Any) -> dict[str, Any]:
         else:  # allProducts
             clean["title"] = clean_text(block.get("title"), f"หัวข้อ ({where})", max_len=80)
         out.append(clean)
-    return {"accent": accent, "blocks": out}
+    return {"accent": accent, "radius": radius, "blocks": out}
 
 
 def _load_home(connection: sqlite3.Connection, key: str) -> tuple[dict[str, Any], str | None]:
     row = connection.execute("SELECT value, updated_at FROM store_settings WHERE key = ?", (key,)).fetchone()
     if row is None:
         return json.loads(json.dumps(DEFAULT_HOME)), None
-    return json.loads(row[0]), row[1]
+    layout = json.loads(row[0])
+    # Layouts saved before `radius` existed keep the original look.
+    layout.setdefault("radius", DEFAULT_RADIUS)
+    return layout, row[1]
 
 
 def _store_home(connection: sqlite3.Connection, key: str, layout: dict[str, Any]) -> None:
@@ -204,8 +214,13 @@ def resolve_home(connection: sqlite3.Connection, layout: dict[str, Any]) -> dict
         elif (kind == "text" and not (block.get("title") or block.get("body"))) or (kind == "imageText" and not (block.get("image") or block.get("title") or block.get("body"))):
             continue
         blocks.append(block)
-    return {"accent": layout.get("accent") or DEFAULT_ACCENT, "blocks": blocks, "products": products}
+    return {**_theme(layout), "blocks": blocks, "products": products}
 
 
-def published_accent(connection: sqlite3.Connection) -> str:
-    return _load_home(connection, "home_published")[0].get("accent") or DEFAULT_ACCENT
+def _theme(layout: dict[str, Any]) -> dict[str, Any]:
+    return {"accent": layout.get("accent") or DEFAULT_ACCENT, "radius": layout.get("radius", DEFAULT_RADIUS)}
+
+
+def published_theme(connection: sqlite3.Connection) -> dict[str, Any]:
+    """Accent colour and corner radius of the published layout, for every storefront page."""
+    return _theme(_load_home(connection, "home_published")[0])

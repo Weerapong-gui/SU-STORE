@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { adminFetch } from "@/lib/adminApi";
+import { useConfirm } from "@/components/admin/ConfirmDialog";
 import { Badge, Button, Card, Field, inputClass, PRODUCT_STATUS_LABEL, useToast } from "@/components/admin/ui";
 import type { ProductStatus, StoreMeta, StoreProduct } from "@/types/store";
 import { ImagesCard } from "./ImagesCard";
@@ -85,6 +86,7 @@ function payloadFromForm(form: Form, isNew: boolean) {
 export function ProductEditor({ productId }: { productId?: number }) {
   const router = useRouter();
   const toast = useToast();
+  const confirm = useConfirm();
   const isNew = productId === undefined;
 
   const [meta, setMeta] = useState<StoreMeta | null>(null);
@@ -149,7 +151,13 @@ export function ProductEditor({ productId }: { productId?: number }) {
   }
 
   async function remove() {
-    if (!window.confirm(`ลบ "${form.name}" ใช่ไหม?\n(ถ้าเคยมีคนสั่งแล้ว ระบบจะเปลี่ยนเป็น "ปิดการขาย" แทนการลบ)`)) return;
+    const ok = await confirm({
+      title: `ลบ "${form.name}"?`,
+      message: "ถ้าเคยมีคนสั่งแล้ว ระบบจะเปลี่ยนเป็น \"ปิดการขาย\" แทนการลบ",
+      confirmLabel: "ลบสินค้า",
+      tone: "danger",
+    });
+    if (!ok) return;
     try {
       const result = await adminFetch<{ deleted: boolean; archived: boolean }>(`products/${productId}`, { method: "DELETE" });
       toast(result.deleted ? "ลบสินค้าแล้ว" : "มีออเดอร์อยู่แล้ว จึงเปลี่ยนเป็นปิดการขายแทน");

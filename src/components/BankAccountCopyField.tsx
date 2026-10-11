@@ -69,7 +69,7 @@ export function BankAccountCopyField({
   }
 
   return (
-    <div className="mt-5 rounded-[1.75rem] bg-[#e7e7e7] p-4 sm:p-5">
+    <div className="mt-5 rounded-[calc(1.75rem*var(--radius-scale,1))] bg-[#e7e7e7] p-4 sm:p-5">
       <div className="flex justify-center">
         <div className="inline-flex max-w-full items-center gap-2 sm:gap-3">
           <p className="whitespace-nowrap text-[clamp(1.28rem,4.9vw,3rem)] font-medium leading-none tracking-[0.01em] text-zinc-950 sm:tracking-[0.04em]">

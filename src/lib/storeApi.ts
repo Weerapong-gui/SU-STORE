@@ -1,4 +1,5 @@
 import { DEFAULT_ACCENT } from "@/lib/accent";
+import { DEFAULT_RADIUS } from "@/lib/radius";
 import type { HomeLayout, ResolvedHome, StoreMeta, StoreProduct } from "@/types/store";
 import { ORDER_API_BASE } from "@/lib/orderApi";
 
@@ -40,6 +41,7 @@ export async function getStoreMeta(): Promise<StoreMeta | null> {
 // nothing has been published yet or the API is unreachable.
 export const DEFAULT_HOME: HomeLayout = {
   accent: DEFAULT_ACCENT,
+  radius: DEFAULT_RADIUS,
   blocks: [
     {
       id: "hero",

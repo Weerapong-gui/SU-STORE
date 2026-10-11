@@ -70,6 +70,7 @@ export type StoreMeta = {
   payment?: PaymentAccount;
   announcement?: string;
   accent?: string;
+  radius?: number;
 };
 
 export type PaymentAccount = { bankName: string; accountNumber: string; accountName: string };
@@ -112,7 +113,7 @@ export type HomeBlock =
 
 export type HomeBlockType = HomeBlock["type"];
 
-export type HomeLayout = { accent: string; blocks: HomeBlock[] };
+export type HomeLayout = { accent: string; radius: number; blocks: HomeBlock[] };
 
 // What the storefront renders: hidden/empty blocks dropped, featured products filled in.
 export type ResolvedHome = HomeLayout & { products: StoreProduct[] };

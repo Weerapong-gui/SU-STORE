@@ -2,11 +2,13 @@
 
 import { useEffect, useState } from "react";
 import { adminFetch } from "@/lib/adminApi";
+import { useConfirm } from "@/components/admin/ConfirmDialog";
 import { Button, Card, Field, inputClass, useToast } from "@/components/admin/ui";
 import type { StoreSettings } from "@/types/store";
 
 export default function SettingsPage() {
   const toast = useToast();
+  const confirm = useConfirm();
   const [settings, setSettings] = useState<StoreSettings | null>(null);
   const [form, setForm] = useState<StoreSettings | null>(null);
   const [busy, setBusy] = useState(false);
@@ -37,12 +39,19 @@ export default function SettingsPage() {
 
   if (!settings || !form) return <p className="text-sm text-zinc-500">กำลังโหลด...</p>;
 
-  function toggleSite() {
+  async function toggleSite() {
     const closing = !settings!.siteClosed;
-    const question = closing
-      ? "ปิดหน้าร้าน? ลูกค้าจะเห็นหน้า \"ร้านปิดอยู่ตอนนี้\" ทุกหน้า (หลังร้านยังใช้ได้ตามปกติ)"
-      : "เปิดหน้าร้านให้ลูกค้าเข้าได้?";
-    if (window.confirm(question)) save({ siteClosed: closing }, closing ? "ปิดหน้าร้านแล้ว" : "เปิดหน้าร้านแล้ว");
+    const ok = await confirm(
+      closing
+        ? {
+            title: "ปิดหน้าร้าน?",
+            message: "ลูกค้าจะเห็นหน้า \"ร้านปิดอยู่ตอนนี้\" ทุกหน้า (หลังร้านยังใช้ได้ตามปกติ)",
+            confirmLabel: "ปิดหน้าร้าน",
+            tone: "danger",
+          }
+        : { title: "เปิดหน้าร้าน?", message: "ลูกค้าจะเข้าเว็บและสั่งซื้อได้ทันที", confirmLabel: "เปิดหน้าร้าน" }
+    );
+    if (ok) save({ siteClosed: closing }, closing ? "ปิดหน้าร้านแล้ว" : "เปิดหน้าร้านแล้ว");
   }
 
   const paymentDirty = JSON.stringify(form.payment) !== JSON.stringify(settings.payment);
@@ -89,7 +98,13 @@ export default function SettingsPage() {
         <Button
           className="mt-4"
           disabled={busy || !paymentDirty}
-          onClick={() => window.confirm(`ยืนยันบัญชีรับเงิน\n${form.payment.bankName} ${form.payment.accountNumber}\n${form.payment.accountName}`) && save({ payment: form.payment }, "บันทึกบัญชีรับเงินแล้ว")}
+          onClick={async () =>
+            (await confirm({
+              title: "ยืนยันบัญชีรับเงิน",
+              message: `${form.payment.bankName} ${form.payment.accountNumber}\n${form.payment.accountName}\n\nลูกค้าจะเห็นบัญชีนี้ทันที ตรวจให้ถูกต้องก่อนบันทึก`,
+              confirmLabel: "บันทึกบัญชี",
+            })) && save({ payment: form.payment }, "บันทึกบัญชีรับเงินแล้ว")
+          }
         >
           บันทึกบัญชีรับเงิน
         </Button>
