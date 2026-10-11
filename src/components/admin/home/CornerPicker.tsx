@@ -2,6 +2,7 @@
 
 import { Card } from "@/components/admin/ui";
 import { radiusVars } from "@/lib/radius";
+import { Segmented } from "./controls";
 
 const CORNER_PRESETS = [
   { value: 0, name: "เหลี่ยม" },
@@ -12,13 +13,10 @@ const CORNER_PRESETS = [
 // Corner of the preset swatch at 100%, matching the storefront's product cards (rounded-3xl).
 const SWATCH_MAX_RADIUS_PX = 14;
 
-export function CornerPicker({ value, accent, onChange }: {
-  value: number;
-  accent: string;
-  onChange: (radius: number) => void;
-}) {
+// Presets + slider, shared by the store-wide card and each block's form.
+export function CornerControl({ value, onChange }: { value: number; onChange: (radius: number) => void }) {
   return (
-    <Card title="มุมของปุ่มและการ์ด" hint="ปรับความโค้งของมุมทั้งร้าน ตั้งแต่เหลี่ยมจนถึงโค้งมนแบบเดิม (หลังร้านไม่เปลี่ยน)">
+    <div>
       <div className="flex flex-wrap gap-2">
         {CORNER_PRESETS.map((p) => (
           <button
@@ -37,7 +35,6 @@ export function CornerPicker({ value, accent, onChange }: {
           </button>
         ))}
       </div>
-
       <div className="mt-4 flex items-center gap-3">
         <input
           type="range"
@@ -51,6 +48,21 @@ export function CornerPicker({ value, accent, onChange }: {
         />
         <span className="w-12 text-sm font-semibold tabular-nums text-zinc-700">{value}%</span>
       </div>
+    </div>
+  );
+}
+
+export function CornerPicker({ value, accent, onChange }: {
+  value: number;
+  accent: string;
+  onChange: (radius: number) => void;
+}) {
+  return (
+    <Card
+      title="มุมเริ่มต้นของทั้งร้าน"
+      hint="ใช้กับเมนู หน้าสินค้า หน้าสั่งซื้อ และบล็อกที่ตั้งเป็น &quot;ตามค่าร้าน&quot; ปรับรายบล็อกได้ในแต่ละบล็อกด้านบน (หลังร้านไม่เปลี่ยน)"
+    >
+      <CornerControl value={value} onChange={onChange} />
 
       {/* Same classes as the storefront, scaled by the same CSS variables. */}
       <div className="mt-5 rounded-xl bg-zinc-50 p-4">
@@ -66,5 +78,34 @@ export function CornerPicker({ value, accent, onChange }: {
         </div>
       </div>
     </Card>
+  );
+}
+
+// Per-block override, shown at the bottom of every block's form.
+export function BlockCornerField({ value, storeRadius, onChange }: {
+  value: number | undefined;
+  storeRadius: number;
+  onChange: (radius: number | undefined) => void;
+}) {
+  const custom = value !== undefined;
+  return (
+    <div className="mt-5 border-t border-zinc-100 pt-4">
+      <p className="text-sm font-semibold text-zinc-800">มุมของปุ่มและการ์ดในบล็อกนี้</p>
+      <div className="mt-2">
+        <Segmented
+          value={custom ? "custom" : "store"}
+          options={[
+            { value: "store", label: `ตามค่าร้าน (${storeRadius}%)` },
+            { value: "custom", label: "กำหนดเอง" },
+          ]}
+          onChange={(mode) => onChange(mode === "custom" ? (value ?? storeRadius) : undefined)}
+        />
+      </div>
+      {custom && (
+        <div className="mt-3">
+          <CornerControl value={value} onChange={onChange} />
+        </div>
+      )}
+    </div>
   );
 }

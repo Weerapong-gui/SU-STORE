@@ -71,6 +71,7 @@ export type StoreMeta = {
   announcement?: string;
   accent?: string;
   radius?: number;
+  font?: string;
 };
 
 export type PaymentAccount = { bankName: string; accountNumber: string; accountName: string };
@@ -95,7 +96,8 @@ export type HeroSlide = {
   buttonHref: string;
 };
 
-type BlockBase = { id: string; hidden: boolean };
+// radius: this block's corners (0-100); absent = follow the store-wide setting.
+type BlockBase = { id: string; hidden: boolean; radius?: number };
 export type HomeBlock =
   | (BlockBase & { type: "hero"; autoplay: boolean; slides: HeroSlide[] })
   | (BlockBase & { type: "featured"; title: string; productIds: number[]; products?: StoreProduct[] })
@@ -113,7 +115,7 @@ export type HomeBlock =
 
 export type HomeBlockType = HomeBlock["type"];
 
-export type HomeLayout = { accent: string; radius: number; blocks: HomeBlock[] };
+export type HomeLayout = { accent: string; radius: number; font: string; blocks: HomeBlock[] };
 
 // What the storefront renders: hidden/empty blocks dropped, featured products filled in.
 export type ResolvedHome = HomeLayout & { products: StoreProduct[] };

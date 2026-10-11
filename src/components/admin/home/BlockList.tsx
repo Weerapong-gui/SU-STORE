@@ -7,12 +7,14 @@ import { Button } from "@/components/admin/ui";
 import type { HomeBlock, HomeBlockType, StoreProduct } from "@/types/store";
 import { BLOCK_INFO, MAX_BLOCKS, move, newBlock, summarize } from "./blocks";
 import { BlockForm } from "./BlockForms";
+import { BlockCornerField } from "./CornerPicker";
 import { IconButton } from "./controls";
 
 // The ordered list of home page blocks: reorder (buttons or drag), hide, delete, edit, add.
-export function BlockList({ blocks, products, onChange }: {
+export function BlockList({ blocks, products, storeRadius, onChange }: {
   blocks: HomeBlock[];
   products: StoreProduct[];
+  storeRadius: number;
   onChange: (blocks: HomeBlock[]) => void;
 }) {
   const [openId, setOpenId] = useState<string | null>(null);
@@ -49,6 +51,7 @@ export function BlockList({ blocks, products, onChange }: {
           isFirst={i === 0}
           isLast={i === blocks.length - 1}
           products={products}
+          storeRadius={storeRadius}
           onToggle={() => setOpenId(openId === block.id ? null : block.id)}
           onChange={(b) => setBlock(i, b)}
           onMove={(delta) => onChange(move(blocks, i, i + delta))}
@@ -69,12 +72,13 @@ export function BlockList({ blocks, products, onChange }: {
   );
 }
 
-function BlockCard({ block, open, isFirst, isLast, products, onToggle, onChange, onMove, onRemove, onDragStart, onDrop }: {
+function BlockCard({ block, open, isFirst, isLast, products, storeRadius, onToggle, onChange, onMove, onRemove, onDragStart, onDrop }: {
   block: HomeBlock;
   open: boolean;
   isFirst: boolean;
   isLast: boolean;
   products: StoreProduct[];
+  storeRadius: number;
   onToggle: () => void;
   onChange: (block: HomeBlock) => void;
   onMove: (delta: -1 | 1) => void;
@@ -100,6 +104,9 @@ function BlockCard({ block, open, isFirst, isLast, products, onToggle, onChange,
           <p className="text-sm font-bold text-zinc-900">
             {info.label}
             {block.hidden && <span className="ml-2 rounded-full bg-zinc-200 px-2 py-0.5 text-xs font-semibold text-zinc-600">ซ่อนอยู่</span>}
+            {block.radius !== undefined && (
+              <span className="ml-2 rounded-full bg-zinc-100 px-2 py-0.5 text-xs font-semibold text-zinc-600">มุม {block.radius}%</span>
+            )}
           </p>
           {summary.warning ? (
             <p className="truncate text-xs font-medium text-amber-700">{summary.warning}</p>
@@ -120,6 +127,7 @@ function BlockCard({ block, open, isFirst, isLast, products, onToggle, onChange,
       {open && (
         <div className="border-t border-zinc-100 p-4 sm:p-5">
           <BlockForm block={block} onChange={onChange} products={products} />
+          <BlockCornerField value={block.radius} storeRadius={storeRadius} onChange={(radius) => onChange({ ...block, radius })} />
         </div>
       )}
     </div>

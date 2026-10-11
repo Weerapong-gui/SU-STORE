@@ -9,6 +9,7 @@ import type { HomeAdminState, HomeLayout, StoreProduct } from "@/types/store";
 import { AccentPicker } from "./AccentPicker";
 import { BlockList } from "./BlockList";
 import { CornerPicker } from "./CornerPicker";
+import { FontPicker } from "./FontPicker";
 
 const AUTOSAVE_MS = 1000;
 
@@ -167,11 +168,13 @@ export function HomeEditor() {
         )}
       </div>
 
-      <BlockList blocks={layout.blocks} products={products} onChange={(blocks) => update({ ...layout, blocks })} />
+      <BlockList blocks={layout.blocks} products={products} storeRadius={layout.radius} onChange={(blocks) => update({ ...layout, blocks })} />
 
       <AccentPicker value={layout.accent} onChange={(accent) => update({ ...layout, accent })} />
 
       <CornerPicker value={layout.radius} accent={layout.accent} onChange={(radius) => update({ ...layout, radius })} />
+
+      <FontPicker value={layout.font} onChange={(font) => update({ ...layout, font })} />
     </div>
   );
 }

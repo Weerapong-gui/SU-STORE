@@ -17,6 +17,10 @@ HOME_BLOCK_TYPES = ("hero", "featured", "text", "imageText", "allProducts")
 DEFAULT_ACCENT = "#0071e3"
 # Corner roundness in percent of the original design: 0 = square, 100 = as designed.
 DEFAULT_RADIUS = 100
+# Storefront font ids; the families and Google Fonts URLs live in src/lib/fonts.ts (keep in sync).
+HOME_FONTS = ("sarabun", "prompt", "kanit", "noto-sans-thai", "ibm-plex-sans-thai", "anuphan", "mitr",
+              "chakra-petch", "bai-jamjuree", "pridi")
+DEFAULT_FONT = "sarabun"
 MAX_HOME_BLOCKS = 20
 MAX_HERO_SLIDES = 6
 MAX_FEATURED = 12
@@ -25,6 +29,7 @@ MAX_FEATURED = 12
 DEFAULT_HOME: dict[str, Any] = {
     "accent": DEFAULT_ACCENT,
     "radius": DEFAULT_RADIUS,
+    "font": DEFAULT_FONT,
     "blocks": [
         {"id": "hero", "type": "hero", "hidden": False, "autoplay": True,
          "slides": [{"image": "", "eyebrow": "", "title": "", "subtitle": "", "buttonText": "", "buttonHref": ""}]},
@@ -57,6 +62,13 @@ def _clean_image(value: Any, field: str) -> str:
     return value
 
 
+def _clean_radius(value: Any, where: str) -> int:
+    # bool is an int subclass: reject True/False explicitly
+    if not isinstance(value, int) or isinstance(value, bool) or not 0 <= value <= 100:
+        raise StoreError(400, f"ความโค้งของมุม{where}ต้องเป็นตัวเลข 0–100")
+    return value
+
+
 def _clean_link(text: Any, href: Any, where: str) -> tuple[str, str]:
     text = clean_text(text, f"ข้อความปุ่ม ({where})", max_len=30)
     href = clean_text(href, f"ลิงก์ปุ่ม ({where})", max_len=300)
@@ -76,10 +88,10 @@ def validate_home(payload: Any) -> dict[str, Any]:
     accent = accent.lower()
     if contrast_with_white(accent) < 4.5:
         raise StoreError(400, "สีหลักอ่อนเกินไป ตัวหนังสือสีขาวบนปุ่มจะอ่านยาก กรุณาเลือกสีที่เข้มขึ้น")
-    radius = payload.get("radius", DEFAULT_RADIUS)
-    # bool is an int subclass: reject True/False explicitly
-    if not isinstance(radius, int) or isinstance(radius, bool) or not 0 <= radius <= 100:
-        raise StoreError(400, "ความโค้งของมุมต้องเป็นตัวเลข 0–100")
+    radius = _clean_radius(payload.get("radius", DEFAULT_RADIUS), "")
+    font = payload.get("font", DEFAULT_FONT)
+    if font not in HOME_FONTS:
+        raise StoreError(400, "ไม่รู้จักฟอนต์นี้")
 
     blocks = payload.get("blocks")
     if not isinstance(blocks, list):
@@ -99,6 +111,9 @@ def validate_home(payload: Any) -> dict[str, Any]:
         seen.add(block_id)
         kind = block["type"]
         clean: dict[str, Any] = {"id": block_id, "type": kind, "hidden": bool(block.get("hidden"))}
+        # No radius = follow the store-wide setting.
+        if block.get("radius") is not None:
+            clean["radius"] = _clean_radius(block["radius"], f" ({where})")
 
         if kind == "hero":
             slides = block.get("slides")
@@ -150,7 +165,7 @@ def validate_home(payload: Any) -> dict[str, Any]:
         else:  # allProducts
             clean["title"] = clean_text(block.get("title"), f"หัวข้อ ({where})", max_len=80)
         out.append(clean)
-    return {"accent": accent, "radius": radius, "blocks": out}
+    return {"accent": accent, "radius": radius, "font": font, "blocks": out}
 
 
 def _load_home(connection: sqlite3.Connection, key: str) -> tuple[dict[str, Any], str | None]:
@@ -158,8 +173,9 @@ def _load_home(connection: sqlite3.Connection, key: str) -> tuple[dict[str, Any]
     if row is None:
         return json.loads(json.dumps(DEFAULT_HOME)), None
     layout = json.loads(row[0])
-    # Layouts saved before `radius` existed keep the original look.
+    # Layouts saved before these settings existed keep the original look.
     layout.setdefault("radius", DEFAULT_RADIUS)
+    layout.setdefault("font", DEFAULT_FONT)
     return layout, row[1]
 
 
@@ -218,9 +234,13 @@ def resolve_home(connection: sqlite3.Connection, layout: dict[str, Any]) -> dict
 
 
 def _theme(layout: dict[str, Any]) -> dict[str, Any]:
-    return {"accent": layout.get("accent") or DEFAULT_ACCENT, "radius": layout.get("radius", DEFAULT_RADIUS)}
+    return {
+        "accent": layout.get("accent") or DEFAULT_ACCENT,
+        "radius": layout.get("radius", DEFAULT_RADIUS),
+        "font": layout.get("font", DEFAULT_FONT),
+    }
 
 
 def published_theme(connection: sqlite3.Connection) -> dict[str, Any]:
-    """Accent colour and corner radius of the published layout, for every storefront page."""
+    """Accent colour, corner radius and font of the published layout, for every storefront page."""
     return _theme(_load_home(connection, "home_published")[0])

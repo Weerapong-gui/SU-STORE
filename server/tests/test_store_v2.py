@@ -364,12 +364,26 @@ class TestHome:
         assert store_meta.meta(conn)["radius"] == 0
         assert home.resolve_home(conn, home.get_home_admin(conn)["published"])["radius"] == 0
 
-    def test_layout_saved_before_radius_keeps_original_corners(self):
+    def test_block_radius_is_optional(self):
+        layout = home.validate_home({"blocks": [{**self.HERO, "radius": 0}, {**self.HERO, "id": "b2", "radius": None}]})
+        assert layout["blocks"][0]["radius"] == 0
+        assert "radius" not in layout["blocks"][1]
+
+    def test_font_defaults_and_publishes(self):
+        conn = _conn()
+        assert home.validate_home({"blocks": []})["font"] == home.DEFAULT_FONT
+        home.save_home_draft(conn, {"font": "kanit", "blocks": [self.HERO]})
+        assert store_meta.meta(conn)["font"] == home.DEFAULT_FONT
+        home.publish_home(conn)
+        assert store_meta.meta(conn)["font"] == "kanit"
+
+    def test_layout_saved_before_theme_settings_keeps_original_look(self):
         conn = _conn()
         legacy = json.dumps({"accent": "#1f7a3a", "blocks": []})
         conn.execute("INSERT INTO store_settings (key, value, updated_at) VALUES ('home_published', ?, 'x')", (legacy,))
         assert home.get_home_admin(conn)["draft"]["radius"] == home.DEFAULT_RADIUS
         assert store_meta.meta(conn)["radius"] == home.DEFAULT_RADIUS
+        assert store_meta.meta(conn)["font"] == home.DEFAULT_FONT
 
     @pytest.mark.parametrize("payload", [
         {"blocks": [{"id": "x", "type": "marquee"}]},
@@ -386,6 +400,10 @@ class TestHome:
         {"radius": "abc", "blocks": []},
         {"radius": 50.5, "blocks": []},
         {"radius": True, "blocks": []},
+        {"font": "comic-sans", "blocks": []},
+        {"blocks": [{**HERO, "radius": 150}]},
+        {"blocks": [{**HERO, "radius": "square"}]},
+        {"font": None, "blocks": []},
         {"blocks": [{"id": "f", "type": "featured", "productIds": list(range(13))}]},
     ])
     def test_rejects_bad_layouts(self, payload):

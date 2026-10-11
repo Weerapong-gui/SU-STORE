@@ -8,7 +8,7 @@ export default async function MainLayout({
 }>) {
   const meta = await getStoreMeta();
   return (
-    <StoreShell accent={meta?.accent} radius={meta?.radius} announcement={meta?.announcement}>
+    <StoreShell accent={meta?.accent} radius={meta?.radius} font={meta?.font} announcement={meta?.announcement}>
       {children}
     </StoreShell>
   );

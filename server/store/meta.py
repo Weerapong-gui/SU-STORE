@@ -1,5 +1,5 @@
 """Store metadata the storefront and admin load once: field labels, statuses, and the
-current payment account, announcement and theme (accent colour, corner radius)."""
+current payment account, announcement and theme (accent colour, corner radius, font)."""
 from __future__ import annotations
 
 import sqlite3

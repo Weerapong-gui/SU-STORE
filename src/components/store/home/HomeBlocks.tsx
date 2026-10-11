@@ -3,6 +3,7 @@
 import { BuyButton } from "@/components/BuyButton";
 import { Container } from "@/components/ui/Container";
 import { ProductGrid } from "@/components/store/ProductGrid";
+import { radiusVars } from "@/lib/radius";
 import { useStoreText } from "@/lib/storeI18n";
 import { cn } from "@/lib/utils";
 import type { HomeBlock, ResolvedHome } from "@/types/store";
@@ -69,9 +70,16 @@ function Block({ block, products }: { block: HomeBlock; products: ResolvedHome["
 export function HomeBlocks({ home }: { home: ResolvedHome }) {
   return (
     <>
-      {home.blocks.map((block) => (
-        <Block key={block.id} block={block} products={home.products} />
-      ))}
+      {home.blocks.map((block) =>
+        block.radius === undefined ? (
+          <Block key={block.id} block={block} products={home.products} />
+        ) : (
+          // Overrides the store-wide corner variables for this block only.
+          <div key={block.id} style={radiusVars(block.radius) as React.CSSProperties}>
+            <Block block={block} products={home.products} />
+          </div>
+        )
+      )}
     </>
   );
 }
