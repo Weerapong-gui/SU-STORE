@@ -11,10 +11,12 @@ import re
 import sqlite3
 from typing import Any
 
+from .categories import list_categories
 from .common import StoreError, clean_image_url, clean_text, now_iso
 from .db import list_products
 
-HOME_BLOCK_TYPES = ("hero", "featured", "text", "imageText", "allProducts")
+# Keep block types in sync with src/components/admin/home/blocks.ts.
+HOME_BLOCK_TYPES = ("hero", "featured", "categories", "text", "imageText", "allProducts")
 DEFAULT_ACCENT = "#0071e3"
 # Corner roundness in percent of the original design: 0 = square, 100 = as designed.
 DEFAULT_RADIUS = 100
@@ -25,6 +27,7 @@ DEFAULT_FONT = "sarabun"
 MAX_HOME_BLOCKS = 20
 MAX_HERO_SLIDES = 6
 MAX_FEATURED = 12
+MAX_CATEGORIES = 12
 
 # A hero slide with no image and no text renders the built-in bilingual store intro.
 DEFAULT_HOME: dict[str, Any] = {
@@ -135,6 +138,14 @@ def validate_home(payload: Any) -> dict[str, Any]:
                 raise StoreError(400, f"{where}: รายการสินค้าไม่ถูกต้อง")
             clean["title"] = clean_text(block.get("title"), f"หัวข้อ ({where})", max_len=80)
             clean["productIds"] = list(dict.fromkeys(ids))
+        elif kind == "categories":
+            ids = block.get("categoryIds", [])
+            if not isinstance(ids, list) or len(ids) > MAX_CATEGORIES:
+                raise StoreError(400, f"{where}: เลือกหมวดหมู่ได้ไม่เกิน {MAX_CATEGORIES} หมวดหมู่")
+            if any(isinstance(i, bool) or not isinstance(i, int) for i in ids):
+                raise StoreError(400, f"{where}: รายการหมวดหมู่ไม่ถูกต้อง")
+            clean["title"] = clean_text(block.get("title"), f"หัวข้อ ({where})", max_len=80)
+            clean["categoryIds"] = list(dict.fromkeys(ids))
         elif kind == "text":
             align = block.get("align") or "center"
             if align not in ("left", "center"):
@@ -207,8 +218,10 @@ def discard_home_draft(connection: sqlite3.Connection) -> dict[str, Any]:
 
 def resolve_home(connection: sqlite3.Connection, layout: dict[str, Any]) -> dict[str, Any]:
     """What the storefront renders: hidden and empty blocks dropped, featured product ids
-    replaced by the live public products (drafts/archived silently skipped)."""
+    replaced by the live public products (drafts/archived silently skipped).
+    Category blocks include only visible categories in catalog sort order."""
     products = list_products(connection, public=True)
+    categories = list_categories(connection, public=True)
     by_id = {p["id"]: p for p in products}
     blocks: list[dict[str, Any]] = []
     for block in layout.get("blocks", []):
@@ -220,6 +233,12 @@ def resolve_home(connection: sqlite3.Connection, layout: dict[str, Any]) -> dict
             if not items:
                 continue
             block = {**block, "products": items}
+        elif kind == "categories":
+            ids = set(block.get("categoryIds", []))
+            items = [category for category in categories if not ids or category["id"] in ids]
+            if not items:
+                continue
+            block = {**block, "categories": items}
         elif (kind == "text" and not (block.get("title") or block.get("body"))) or (kind == "imageText" and not (block.get("image") or block.get("title") or block.get("body"))):
             continue
         blocks.append(block)
