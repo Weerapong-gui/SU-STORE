@@ -14,10 +14,16 @@ import json
 import re
 import secrets
 import sqlite3
-from datetime import datetime, timedelta, timezone
+from datetime import datetime
+from datetime import timezone as timezone
 from typing import Any
 
-TZ_BANGKOK = timezone(timedelta(hours=7))
+from .common import TZ_BANGKOK as TZ_BANGKOK
+from .common import StoreError as StoreError
+from .common import as_int, unique_slug
+from .common import clean_text as clean_text
+from .common import now_iso as now_iso
+from .common import slugify as slugify
 
 ORDER_PREFIX = "SU"
 
@@ -53,19 +59,7 @@ PRODUCT_STATUSES: dict[str, str] = {
 
 MAX_ITEMS_PER_ORDER = 20
 MAX_QTY_PER_ITEM = 50
-MAX_FIELD_LENGTH = 500
 _CHECKOUT_ID_RE = re.compile(r"[A-Za-z0-9-]{16,64}")
-
-
-class StoreError(Exception):
-    def __init__(self, status: int, message: str) -> None:
-        super().__init__(message)
-        self.status = status
-        self.message = message
-
-
-def now_iso() -> str:
-    return datetime.now(TZ_BANGKOK).replace(microsecond=0).isoformat()
 
 
 # ── Schema ────────────────────────────────────────────────────────────────────
@@ -153,45 +147,6 @@ def ensure_store_db(connection: sqlite3.Connection) -> None:
 
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
-
-def clean_text(value: Any, field: str, *, required: bool = False, max_len: int = MAX_FIELD_LENGTH) -> str:
-    if value is None:
-        value = ""
-    if not isinstance(value, str):
-        raise StoreError(400, f"{field} ต้องเป็นข้อความ")
-    value = value.strip()
-    if required and not value:
-        raise StoreError(400, f"กรุณากรอก{field}")
-    if len(value) > max_len:
-        raise StoreError(400, f"{field} ยาวเกิน {max_len} ตัวอักษร")
-    return value
-
-
-def _as_int(value: Any, field: str, *, minimum: int = 0, allow_none: bool = False) -> int | None:
-    if value is None or value == "":
-        if allow_none:
-            return None
-        raise StoreError(400, f"กรุณากรอก{field}")
-    if isinstance(value, bool) or not isinstance(value, int):
-        raise StoreError(400, f"{field} ต้องเป็นจำนวนเต็ม")
-    if value < minimum:
-        raise StoreError(400, f"{field} ต้องไม่น้อยกว่า {minimum}")
-    return value
-
-
-def slugify(name: str) -> str:
-    slug = re.sub(r"[^a-z0-9]+", "-", name.lower()).strip("-")
-    return slug[:48] or "product"
-
-
-def _unique_slug(connection: sqlite3.Connection, base: str, exclude_id: int | None = None) -> str:
-    slug, n = base, 2
-    while True:
-        row = connection.execute("SELECT id FROM store_products WHERE slug = ?", (slug,)).fetchone()
-        if row is None or row[0] == exclude_id:
-            return slug
-        slug, n = f"{base}-{n}", n + 1
-
 
 def variant_label(size: str, color: str) -> str:
     return " / ".join(p for p in (size, color) if p) or "-"
@@ -313,7 +268,7 @@ def _product_fields(payload: dict[str, Any]) -> dict[str, Any]:
             raise StoreError(400, f"buyerFields ต้องเลือกจาก {', '.join(OPTIONAL_FIELDS)}")
         fields["buyer_fields_json"] = json.dumps(list(dict.fromkeys(chosen)))
     if "sortOrder" in payload:
-        fields["sort_order"] = _as_int(payload["sortOrder"], "ลำดับ")
+        fields["sort_order"] = as_int(payload["sortOrder"], "ลำดับ")
     if "saleStartsAt" in payload:
         fields["sale_starts_at"] = _parse_when(payload["saleStartsAt"], "วันเริ่มขาย")
     if "saleEndsAt" in payload:
@@ -339,7 +294,7 @@ def create_product(connection: sqlite3.Connection, payload: dict[str, Any]) -> d
     fields = _product_fields(payload)
     status = fields.pop("status", "draft")
     now = now_iso()
-    slug = _unique_slug(connection, slugify(clean_text(payload.get("slug") or fields["name"], "slug")))
+    slug = unique_slug(connection, "store_products", slugify(clean_text(payload.get("slug") or fields["name"], "slug")))
     cursor = connection.execute(
         "INSERT INTO store_products (slug, name, status, created_at, updated_at) VALUES (?, ?, 'draft', ?, ?)",
         (slug, fields.pop("name"), now, now),
@@ -411,8 +366,8 @@ def replace_variants(connection: sqlite3.Connection, product_id: int, variants: 
             raise StoreError(400, "variants ต้องเป็น object")
         size = clean_text(raw.get("size"), "ไซซ์", max_len=40)
         color = clean_text(raw.get("color"), "สี/แบบ", max_len=40)
-        price = _as_int(raw.get("price"), f"ราคา ({variant_label(size, color)})")
-        stock = _as_int(raw.get("stock"), f"สต็อก ({variant_label(size, color)})", allow_none=True)
+        price = as_int(raw.get("price"), f"ราคา ({variant_label(size, color)})")
+        stock = as_int(raw.get("stock"), f"สต็อก ({variant_label(size, color)})", allow_none=True)
         sku = clean_text(raw.get("sku"), "SKU", max_len=60)
         active = 1 if raw.get("active", True) else 0
         if active:
@@ -516,8 +471,8 @@ def create_order(connection: sqlite3.Connection, payload: Any) -> dict[str, Any]
     for raw in raw_items:
         if not isinstance(raw, dict):
             raise StoreError(400, "items ไม่ถูกต้อง")
-        variant_id = _as_int(raw.get("variantId"), "variantId", minimum=1)
-        qty = _as_int(raw.get("quantity"), "จำนวน", minimum=1)
+        variant_id = as_int(raw.get("variantId"), "variantId", minimum=1)
+        qty = as_int(raw.get("quantity"), "จำนวน", minimum=1)
         quantities[variant_id] = quantities.get(variant_id, 0) + qty
     if len(quantities) > MAX_ITEMS_PER_ORDER:
         raise StoreError(400, f"สั่งได้ไม่เกิน {MAX_ITEMS_PER_ORDER} รายการต่อออเดอร์")
@@ -535,7 +490,7 @@ def create_order(connection: sqlite3.Connection, payload: Any) -> dict[str, Any]
     # Total the buyer saw. If a price changed since, refuse rather than charge a different amount.
     expected_total = payload.get("expectedTotal")
     if expected_total is not None:
-        expected_total = _as_int(expected_total, "expectedTotal")
+        expected_total = as_int(expected_total, "expectedTotal")
 
     connection.commit()  # make sure no implicit transaction is open before BEGIN
     connection.execute("BEGIN IMMEDIATE")

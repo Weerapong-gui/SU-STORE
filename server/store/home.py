@@ -11,7 +11,8 @@ import re
 import sqlite3
 from typing import Any
 
-from .db import StoreError, clean_text, list_products, now_iso
+from .common import StoreError, clean_image_url, clean_text, now_iso
+from .db import list_products
 
 HOME_BLOCK_TYPES = ("hero", "featured", "text", "imageText", "allProducts")
 DEFAULT_ACCENT = "#0071e3"
@@ -38,7 +39,6 @@ DEFAULT_HOME: dict[str, Any] = {
 }
 
 _BLOCK_ID_RE = re.compile(r"[A-Za-z0-9_-]{1,40}")
-_HOME_IMAGE_RE = re.compile(r"/product-images/[A-Za-z0-9._-]+")
 _HEX_RE = re.compile(r"#[0-9a-fA-F]{6}")
 
 
@@ -53,13 +53,6 @@ def _relative_luminance(hex_color: str) -> float:
 
 def contrast_with_white(hex_color: str) -> float:
     return 1.05 / (_relative_luminance(hex_color) + 0.05)
-
-
-def _clean_image(value: Any, field: str) -> str:
-    value = clean_text(value, field, max_len=200)
-    if value and not _HOME_IMAGE_RE.fullmatch(value):
-        raise StoreError(400, f"{field}ต้องเป็นรูปที่อัปโหลดผ่านหลังร้าน")
-    return value
 
 
 def _clean_radius(value: Any, where: str) -> int:
@@ -127,7 +120,7 @@ def validate_home(payload: Any) -> dict[str, Any]:
                 label = f"{where} สไลด์ที่ {i}"
                 button_text, button_href = _clean_link(slide.get("buttonText"), slide.get("buttonHref"), label)
                 clean["slides"].append({
-                    "image": _clean_image(slide.get("image"), f"รูป ({label})"),
+                    "image": clean_image_url(slide.get("image"), f"รูป ({label})"),
                     "eyebrow": clean_text(slide.get("eyebrow"), f"ข้อความเล็ก ({label})", max_len=60),
                     "title": clean_text(slide.get("title"), f"หัวข้อ ({label})", max_len=80),
                     "subtitle": clean_text(slide.get("subtitle"), f"คำโปรย ({label})", max_len=200),
@@ -155,7 +148,7 @@ def validate_home(payload: Any) -> dict[str, Any]:
                 raise StoreError(400, f"{where}: ตำแหน่งรูปไม่ถูกต้อง")
             button_text, button_href = _clean_link(block.get("buttonText"), block.get("buttonHref"), where)
             clean.update({
-                "image": _clean_image(block.get("image"), f"รูป ({where})"),
+                "image": clean_image_url(block.get("image"), f"รูป ({where})"),
                 "title": clean_text(block.get("title"), f"หัวข้อ ({where})", max_len=80),
                 "body": clean_text(block.get("body"), f"เนื้อความ ({where})", max_len=2000),
                 "buttonText": button_text,
