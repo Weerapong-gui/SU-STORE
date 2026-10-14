@@ -18,6 +18,7 @@ from datetime import datetime
 from datetime import timezone as timezone
 from typing import Any
 
+from .categories import ensure_exists
 from .common import TZ_BANGKOK as TZ_BANGKOK
 from .common import StoreError as StoreError
 from .common import as_int, unique_slug
@@ -254,6 +255,7 @@ def _serialize_product(connection: sqlite3.Connection, row: sqlite3.Row, *, publ
         "slug": row["slug"],
         "name": row["name"],
         "optionKind": row["option_kind"],
+        "categoryId": row["category_id"],
         "description": row["description"],
         "images": json.loads(row["images_json"] or "[]"),
         "status": row["status"],
@@ -271,10 +273,15 @@ def _serialize_product(connection: sqlite3.Connection, row: sqlite3.Row, *, publ
     }
 
 
-def list_products(connection: sqlite3.Connection, *, public: bool) -> list[dict[str, Any]]:
-    where = "WHERE status = 'active'" if public else ""
+def list_products(connection: sqlite3.Connection, *, public: bool, category_id: int | None = None) -> list[dict[str, Any]]:
+    conditions = ["status = 'active'"] if public else []
+    params: tuple[int, ...] = ()
+    if category_id is not None:
+        conditions.append("category_id = ?")
+        params = (category_id,)
+    where = "WHERE " + " AND ".join(conditions) if conditions else ""
     rows = connection.execute(
-        f"SELECT * FROM store_products {where} ORDER BY sort_order, id"
+        f"SELECT * FROM store_products {where} ORDER BY sort_order, id", params
     ).fetchall()
     return [_serialize_product(connection, r, public=public) for r in rows]
 
@@ -291,6 +298,9 @@ def _product_fields(payload: dict[str, Any]) -> dict[str, Any]:
     fields: dict[str, Any] = {}
     if "name" in payload:
         fields["name"] = clean_text(payload["name"], "ชื่อสินค้า", required=True, max_len=120)
+    if "categoryId" in payload:
+        value = payload["categoryId"]
+        fields["category_id"] = None if value is None else as_int(value, "หมวดหมู่", minimum=1)
     if "description" in payload:
         fields["description"] = clean_text(payload["description"], "คำอธิบาย", max_len=5000)
     if "images" in payload:
@@ -328,6 +338,7 @@ def create_product(connection: sqlite3.Connection, payload: dict[str, Any]) -> d
     if "name" not in payload:
         raise StoreError(400, "กรุณากรอกชื่อสินค้า")
     fields = _product_fields(payload)
+    ensure_exists(connection, fields.get("category_id"))
     status = fields.pop("status", "draft")
     now = now_iso()
     slug = unique_slug(connection, "store_products", slugify(clean_text(payload.get("slug") or fields["name"], "slug")))
@@ -356,6 +367,7 @@ def _apply_product_fields(connection: sqlite3.Connection, product_id: int, field
 def update_product(connection: sqlite3.Connection, product_id: int, payload: dict[str, Any]) -> dict[str, Any]:
     get_product(connection, product_id, public=False)  # 404 if missing
     fields = _product_fields(payload)
+    ensure_exists(connection, fields.get("category_id"))
     if "variants" in payload:
         replace_variants(connection, product_id, payload["variants"])
     if fields.get("status") == "active":
