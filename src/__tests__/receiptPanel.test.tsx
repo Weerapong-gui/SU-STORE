@@ -132,6 +132,29 @@ describe("ReceiptPanel", () => {
       expect(document.body.textContent).toContain("เบราว์เซอร์บล็อก");
     });
 
+    it("prints a copy when the server says the receipt already existed", async () => {
+      await openDialogAndEditName();
+      adminFetch.mockImplementation(async (path: string, init?: { method?: string }) => {
+        if (init?.method === "POST") return { id: 7, created: false };
+        return path === "me" ? { isSuperadmin } : { receipts, warning: null };
+      });
+      await act(async () => button("ออกใบเสร็จและพิมพ์")!.click());
+      expect(tab.location.href).toBe("/admin/receipts/7/print?copy=1");
+      expect(document.body.textContent).toContain("ใบเสร็จนี้ออกไปแล้ว พิมพ์เป็นสำเนา");
+    });
+
+    it("points the blocked-popup link at the copy when the receipt already existed", async () => {
+      vi.spyOn(window, "open").mockReturnValue(null);
+      await openDialogAndEditName();
+      adminFetch.mockImplementation(async (path: string, init?: { method?: string }) => {
+        if (init?.method === "POST") return { id: 7, created: false };
+        return path === "me" ? { isSuperadmin } : { receipts: [{ id: 7, receiptNo: "SU-R2569-0001", issuedAt: "2026-10-15T00:00:00Z", issuedBy: "a", cancelledAt: null }], warning: null };
+      });
+      await act(async () => button("ออกใบเสร็จและพิมพ์")!.click());
+      const link = [...document.querySelectorAll("a")].find((a) => a.textContent === "เปิดหน้าพิมพ์ใบเสร็จ");
+      expect(link?.getAttribute("href")).toBe("/admin/receipts/7/print?copy=1");
+    });
+
     it("closes the pre-opened tab when the POST fails", async () => {
       await openDialogAndEditName();
       adminFetch.mockImplementation(async (path: string, init?: { method?: string }) => {
@@ -141,6 +164,13 @@ describe("ReceiptPanel", () => {
       await act(async () => button("ออกใบเสร็จและพิมพ์")!.click());
       expect(tab.close).toHaveBeenCalled();
     });
+  });
+
+  it("refetches the warning when the order status changes on the same page", async () => {
+    await render(order("paid", {}));
+    const before = getCalls();
+    await render(order("cancelled", {}));
+    expect(getCalls()).toBeGreaterThan(before);
   });
 
   describe("cancel flow", () => {
@@ -167,6 +197,38 @@ describe("ReceiptPanel", () => {
       expect(posts("/cancel")).toHaveLength(1);
       expect(posts("/cancel")[0][1].json).toEqual({ reason: "ออกผิด" });
       expect(getCalls()).toBeGreaterThan(before);
+    });
+
+    it("drops the blocked-popup print link once the receipt is cancelled", async () => {
+      vi.spyOn(window, "open").mockReturnValue(null);
+      isSuperadmin = true;
+      adminFetch.mockImplementation(async (path: string, init?: { method?: string }) => {
+        if (path === "me") return { isSuperadmin };
+        if (init?.method === "POST" && path.endsWith("/receipt")) return { id: 7, created: true };
+        if (init?.method === "POST") return {};
+        return { receipts, warning: null };
+      });
+      await render(order("paid", { name: "สมชาย", studentCode: "6931", school: "School of Dentistry" }));
+      receipts = [{ id: 7, receiptNo: "SU-R2569-0001", issuedAt: "2026-10-15T00:00:00Z", issuedBy: "a", cancelledAt: null }];
+      await act(async () => button("ออกใบเสร็จ")!.click());
+      await act(async () => button("ออกใบเสร็จและพิมพ์")!.click());
+      const printLink = () => [...document.querySelectorAll("a")].find((a) => a.textContent === "เปิดหน้าพิมพ์ใบเสร็จ");
+      expect(printLink()).toBeDefined();
+      await act(async () => button("ยกเลิกใบเสร็จ")!.click());
+      const reason = document.querySelector<HTMLTextAreaElement>("textarea")!;
+      await act(async () => {
+        Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, "value")!.set!.call(reason, "ออกผิด");
+        reason.dispatchEvent(new Event("input", { bubbles: true }));
+      });
+      const active = receipts[0];
+      receipts = [{ ...(active as object), cancelledAt: "2026-10-15T01:00:00Z" }];
+      await act(async () =>
+        ([...document.querySelectorAll('[role="alertdialog"] button')].find((b) => b.textContent === "ยกเลิกใบเสร็จ") as HTMLButtonElement).click());
+      // A receipt becomes active again (issued elsewhere); the stale link must not come back with it.
+      receipts = [active];
+      await render(order("completed", {}));
+      expect(button("พิมพ์ซ้ำ (สำเนา)")).toBeDefined();
+      expect(printLink()).toBeUndefined();
     });
   });
 });

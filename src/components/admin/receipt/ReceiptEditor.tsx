@@ -3,19 +3,23 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type PointerEvent } from "react";
 import { AdminApiError, adminFetch } from "@/lib/adminApi";
 import { useConfirm } from "@/components/admin/ConfirmDialog";
-import { Button, Card, Field, inputClass, useToast } from "@/components/admin/ui";
+import { Button, useToast } from "@/components/admin/ui";
 import {
-  ARROW_KEYS, moveSelection, nudgeRows, nudgeSelection, pxToViewBox, RECEIPT_VIEWBOX, resizeSelection,
-  selectionOrigin, type Point, type Selection,
+  ARROW_KEYS, moveSelection, nudgeSelection, pxToViewBox, RECEIPT_VIEWBOX, selectionOrigin, type Point, type Selection,
 } from "@/lib/receipt/editorMath";
 import { DEFAULT_LAYOUT } from "@/lib/receipt/layout";
 import { createCanvasMeasure } from "@/lib/receipt/measure";
 import { paginate } from "@/lib/receipt/paginate";
 import { formatReceiptDate, renderReceiptSvg, SAMPLE_SNAPSHOT } from "@/lib/receipt/render";
+import { loadReceiptTemplate } from "@/lib/receipt/template";
 import type { ReceiptLayout, ReceiptSettings } from "@/types/store";
-import { COLUMN_LABEL, ColumnHandles } from "./ColumnHandles";
-import { FIELD_LABEL, FieldHandles } from "./FieldHandles";
-import { NudgePad } from "./NudgePad";
+import { ColumnHandles } from "./ColumnHandles";
+import { CONTROL } from "./controls";
+import { FieldHandles } from "./FieldHandles";
+import { NudgeCard } from "./NudgeCard";
+import { PayeeCard } from "./PayeeCard";
+import { PrefixCard } from "./PrefixCard";
+import { TableCard } from "./TableCard";
 
 type Form = Pick<ReceiptSettings, "payeeName" | "signatureUrl" | "prefix" | "layout">;
 type DragState = { selection: Selection; pointer: Point; origin: Point };
@@ -24,14 +28,6 @@ const SAMPLE_PRINT_URL = "/admin/receipts/sample/print";
 const NON_SUPERADMIN_HINT = "เฉพาะผู้ดูแลระบบหลักแก้ได้";
 const ROWS_PROBE_COUNT = 200; // more short lines than any page can hold, to find the per-page capacity
 const SAVE_ROLE_ERROR = 403;
-const CONTROL = "min-h-11";
-
-function selectionLabel(selection: Selection | null): string {
-  if (!selection) return "เลือกกล่องบนใบเสร็จ";
-  if (selection.kind === "field") return FIELD_LABEL[selection.key];
-  if (selection.kind === "signature") return "ลายเซ็น";
-  return `คอลัมน์${COLUMN_LABEL[selection.key]}`;
-}
 
 function toForm(settings: ReceiptSettings): Form {
   const { payeeName, signatureUrl, prefix, layout } = settings;
@@ -52,20 +48,15 @@ export function ReceiptEditor() {
   const [isSuperadmin, setIsSuperadmin] = useState(false);
   const [selection, setSelection] = useState<Selection | null>(null);
   const [busy, setBusy] = useState(false);
-  const [uploading, setUploading] = useState(false);
   const [fontsReady, setFontsReady] = useState(0);
   const drag = useRef<DragState | null>(null);
   const overlay = useRef<SVGSVGElement>(null);
-  const fileInput = useRef<HTMLInputElement>(null);
   const measure = useMemo(() => createCanvasMeasure(), []);
 
   useEffect(() => {
     Promise.all([
       adminFetch<ReceiptSettings>("receipt-settings"),
-      fetch("/api/admin/v2/receipt-template", { cache: "no-store" }).then((res) => {
-        if (!res.ok) throw new Error("โหลดแบบใบเสร็จไม่สำเร็จ");
-        return res.text();
-      }),
+      loadReceiptTemplate(),
       adminFetch<{ isSuperadmin: boolean }>("me").catch(() => ({ isSuperadmin: false })), // the server still enforces Save
     ])
       .then(([settings, svg, me]) => {
@@ -90,6 +81,10 @@ export function ReceiptEditor() {
     window.addEventListener("beforeunload", warn);
     return () => window.removeEventListener("beforeunload", warn);
   }, [dirty]);
+
+  const updateForm = useCallback((patch: Partial<Form>) => {
+    setForm((current) => (current ? { ...current, ...patch } : current));
+  }, []);
 
   const setLayout = useCallback((update: (layout: ReceiptLayout) => ReceiptLayout) => {
     setForm((current) => (current ? { ...current, layout: update(current.layout) } : current));
@@ -132,7 +127,7 @@ export function ReceiptEditor() {
   }, [form, template, measure, fontsReady]);
 
   function startDrag(target: Selection, event: PointerEvent<SVGElement>) {
-    if (!form || !overlay.current) return;
+    if (event.button !== 0 || !form || !overlay.current) return; // right/middle click must not start a drag
     event.preventDefault();
     event.currentTarget.setPointerCapture(event.pointerId);
     setSelection(target);
@@ -151,22 +146,6 @@ export function ReceiptEditor() {
     setLayout((layout) => moveSelection(layout, current.selection, to));
   }
 
-  async function uploadSignature(file: File | undefined) {
-    if (fileInput.current) fileInput.current.value = "";
-    if (!file) return;
-    setUploading(true);
-    try {
-      const body = new FormData();
-      body.append("image", file);
-      const { url } = await adminFetch<{ url: string }>("images", { method: "POST", body });
-      setForm((current) => (current ? { ...current, signatureUrl: url } : current));
-    } catch (e) {
-      toast((e as Error).message, "error");
-    } finally {
-      setUploading(false);
-    }
-  }
-
   async function save() {
     if (!form) return;
     setBusy(true);
@@ -175,13 +154,22 @@ export function ReceiptEditor() {
       const next = toForm(result);
       setSaved(next);
       setForm(next);
-      const fresh = await adminFetch<ReceiptSettings>("receipt-settings");
-      setNextReceiptNo(fresh.nextReceiptNo ?? "");
       toast("บันทึกตั้งค่าใบเสร็จแล้ว");
+      await refreshNextReceiptNo();
     } catch (e) {
       toast(e instanceof AdminApiError && e.status === SAVE_ROLE_ERROR ? NON_SUPERADMIN_HINT : (e as Error).message, "error");
     } finally {
       setBusy(false);
+    }
+  }
+
+  // The save already succeeded; if only this refresh fails the old number stays on screen until the next load.
+  async function refreshNextReceiptNo() {
+    try {
+      const fresh = await adminFetch<ReceiptSettings>("receipt-settings");
+      setNextReceiptNo(fresh.nextReceiptNo ?? "");
+    } catch {
+      // Quiet on purpose: the saved settings are already in place.
     }
   }
 
@@ -234,63 +222,10 @@ export function ReceiptEditor() {
         </div>
 
         <div className="grid items-start gap-4 md:grid-cols-2">
-          <Card title={`กำลังขยับ: ${selectionLabel(selection)}`} hint="ลากบนใบเสร็จ หรือกดลูกศร (ใช้ปุ่มลูกศรบนคีย์บอร์ดได้) ครั้งละ 0.5 หน่วย">
-            <NudgePad
-              disabled={!selection}
-              horizontalOnly={selection?.kind === "col"}
-              onNudge={(dx, dy) => selection && setLayout((l) => nudgeSelection(l, selection, dx, dy))}
-            />
-            <div className="mt-3 flex flex-wrap items-center gap-2">
-              <span className="text-sm text-zinc-600">{selection?.kind === "signature" ? "ความกว้าง" : "ขนาดตัวอักษร"}</span>
-              <Button variant="secondary" className="!h-11 !w-11 !p-0" aria-label="ลดขนาด" disabled={!selection}
-                onClick={() => selection && setLayout((l) => resizeSelection(l, selection, -1))}>A−</Button>
-              <Button variant="secondary" className="!h-11 !w-11 !p-0" aria-label="เพิ่มขนาด" disabled={!selection}
-                onClick={() => selection && setLayout((l) => resizeSelection(l, selection, 1))}>A+</Button>
-            </div>
-          </Card>
-
-          <Card title="ตารางรายการสินค้า" hint="ลากเส้นสีส้มเพื่อตั้งตำแหน่งแต่ละคอลัมน์ ตัวเลขชิดขวา/กึ่งกลางตามแนวเส้นอัตโนมัติ">
-            <div className="flex flex-wrap items-center gap-2">
-              <span className="text-sm text-zinc-600">แถวแรก</span>
-              <Button variant="secondary" className="!h-11 !w-11 !p-0" aria-label="แถวแรกขึ้น" onClick={() => setLayout((l) => nudgeRows(l, -1, 0))}>↑</Button>
-              <Button variant="secondary" className="!h-11 !w-11 !p-0" aria-label="แถวแรกลง" onClick={() => setLayout((l) => nudgeRows(l, 1, 0))}>↓</Button>
-              <span className="ml-2 text-sm text-zinc-600">ระยะห่างแถว</span>
-              <Button variant="secondary" className="!h-11 !w-11 !p-0" aria-label="ลดระยะห่างแถว" onClick={() => setLayout((l) => nudgeRows(l, 0, -1))}>−</Button>
-              <Button variant="secondary" className="!h-11 !w-11 !p-0" aria-label="เพิ่มระยะห่างแถว" onClick={() => setLayout((l) => nudgeRows(l, 0, 1))}>+</Button>
-            </div>
-            <p className="mt-3 text-sm text-zinc-500">
-              ชื่อยาวจะตัดขึ้นบรรทัดใหม่ในคอลัมน์ · ใบหนึ่งใส่ได้ <b className="text-zinc-900">{preview.rowsPerPage}</b> แถว
-            </p>
-          </Card>
-
-          <Card title="ผู้รับเงิน">
-            <div className="space-y-3">
-              <Field label="ชื่อผู้รับเงิน">
-                <input className={`${inputClass} ${CONTROL}`} maxLength={80} value={form.payeeName}
-                  onChange={(e) => setForm({ ...form, payeeName: e.target.value })} />
-              </Field>
-              <div className="flex flex-wrap items-center gap-2">
-                <input ref={fileInput} type="file" accept="image/png" hidden onChange={(e) => uploadSignature(e.target.files?.[0])} />
-                <Button variant="secondary" className={CONTROL} disabled={uploading} onClick={() => fileInput.current?.click()}>
-                  {uploading ? "กำลังอัปโหลด..." : "อัปโหลดรูปลายเซ็น (PNG พื้นใส)"}
-                </Button>
-                {form.signatureUrl && (
-                  <Button variant="ghost" className={CONTROL} onClick={() => setForm({ ...form, signatureUrl: "" })}>ลบรูปลายเซ็น</Button>
-                )}
-              </div>
-            </div>
-          </Card>
-
-          <Card title="เลขที่ใบเสร็จ">
-            <Field label="ตัวหน้าเลข" hint="ใช้ได้เฉพาะ A-Z, 0-9 และขีด (-) ไม่เกิน 20 ตัว">
-              <input className={`${inputClass} ${CONTROL}`} maxLength={20} value={form.prefix}
-                onChange={(e) => setForm({ ...form, prefix: e.target.value })} />
-            </Field>
-            <p className="mt-2 text-sm text-zinc-500">
-              ใบถัดไป: <b className="text-zinc-900">{nextNo}</b>{" "}
-              · นับต่อเนื่อง ไม่ซ้ำ ทุกเครื่องใช้ชุดเดียวกัน
-            </p>
-          </Card>
+          <NudgeCard selection={selection} setLayout={setLayout} />
+          <TableCard rowsPerPage={preview.rowsPerPage} setLayout={setLayout} />
+          <PayeeCard payeeName={form.payeeName} signatureUrl={form.signatureUrl} onChange={updateForm} />
+          <PrefixCard prefix={form.prefix} nextNo={nextNo} onChange={(prefix) => updateForm({ prefix })} />
 
           <div className="flex flex-wrap items-center gap-2 md:col-span-2">
             <Button className={CONTROL} disabled={!isSuperadmin || busy || !dirty} onClick={save}>บันทึก (ทุกเครื่องใช้ค่านี้)</Button>

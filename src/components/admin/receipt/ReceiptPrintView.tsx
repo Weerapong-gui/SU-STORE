@@ -2,9 +2,11 @@
 
 import { useEffect, useRef, useState } from "react";
 import { adminFetch } from "@/lib/adminApi";
+import { RECEIPT_VIEWBOX } from "@/lib/receipt/editorMath";
 import { createCanvasMeasure } from "@/lib/receipt/measure";
 import { paginate } from "@/lib/receipt/paginate";
 import { formatReceiptDate, renderReceiptSvg, SAMPLE_SNAPSHOT } from "@/lib/receipt/render";
+import { loadReceiptTemplate } from "@/lib/receipt/template";
 import type { ReceiptSettings, ReceiptSnapshot, StoreReceipt } from "@/types/store";
 
 // The template names its fonts by PostScript name, so each name maps to the one bundled collection.
@@ -12,8 +14,8 @@ const TEMPLATE_FONT_NAMES = ["Sukhumvit Set", "SukhumvitSet-Text", "SukhumvitSet
 const FONT_FACES = TEMPLATE_FONT_NAMES.map(
   (name) => `@font-face{font-family:'${name}';src:url('/fonts/SukhumvitSet.ttc') format('truetype');font-display:block}`,
 ).join("");
-const PAGE_WIDTH_PT = 812.98;
-const PAGE_HEIGHT_PT = 597.12;
+// The SVG viewBox is in points, so the printed page uses the same numbers.
+const { width: PAGE_WIDTH_PT, height: PAGE_HEIGHT_PT } = RECEIPT_VIEWBOX;
 const PRINT_CSS = `
 ${FONT_FACES}
 @page { size: ${PAGE_WIDTH_PT}pt ${PAGE_HEIGHT_PT}pt; margin: 0 }
@@ -42,12 +44,6 @@ async function waitForImage(url: string): Promise<void> {
   });
 }
 
-async function loadTemplate(): Promise<string> {
-  const res = await fetch("/api/admin/v2/receipt-template", { cache: "no-store" });
-  if (!res.ok) throw new Error("โหลดแบบใบเสร็จไม่สำเร็จ");
-  return res.text();
-}
-
 async function loadReceipt(receiptId: number | null, settings: ReceiptSettings): Promise<{ snapshot: ReceiptSnapshot; receiptNo: string; issuedAt: string }> {
   if (receiptId === null) {
     const snapshot = { ...SAMPLE_SNAPSHOT, payeeName: settings.payeeName, signatureUrl: settings.signatureUrl };
@@ -59,7 +55,7 @@ async function loadReceipt(receiptId: number | null, settings: ReceiptSettings):
 }
 
 async function buildPages(receiptId: number | null, copy: boolean): Promise<Loaded> {
-  const [settings, template] = await Promise.all([adminFetch<ReceiptSettings>("receipt-settings"), loadTemplate()]);
+  const [settings, template] = await Promise.all([adminFetch<ReceiptSettings>("receipt-settings"), loadReceiptTemplate()]);
   const { snapshot, receiptNo, issuedAt } = await loadReceipt(receiptId, settings);
   // Wrapping is measured with canvas, so the text font must be ready before paginating.
   await document.fonts.load(SANS_FONT_PROBE);

@@ -1,8 +1,7 @@
 "use client";
 
 import { Button } from "@/components/admin/ui";
-
-const TOUCH = "!h-11 !w-11 !p-0"; // 44px minimum hit area
+import { TOUCH_ICON_BUTTON } from "./controls";
 
 // Arrow buttons; each press moves the selection by one nudge step (NUDGE_STEP viewBox units).
 export function NudgePad({ disabled, horizontalOnly, onNudge }: {
@@ -13,7 +12,7 @@ export function NudgePad({ disabled, horizontalOnly, onNudge }: {
   const arrow = (label: string, glyph: string, dx: number, dy: number) => (
     <Button
       variant="secondary"
-      className={TOUCH}
+      className={TOUCH_ICON_BUTTON}
       aria-label={label}
       disabled={disabled || (horizontalOnly && dy !== 0)}
       onClick={() => onNudge(dx, dy)}

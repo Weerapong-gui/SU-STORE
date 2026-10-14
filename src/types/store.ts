@@ -186,6 +186,8 @@ export type StoreReceipt = {
   cancelledBy: string | null;
   cancelReason: string | null;
 };
+// POST orders/<code>/receipt: `created` is false when the order already had an active receipt (reprint).
+export type IssuedReceipt = StoreReceipt & { created: boolean };
 export type ReceiptSettings = {
   payeeName: string;
   signatureUrl: string;

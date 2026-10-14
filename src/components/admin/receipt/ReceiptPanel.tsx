@@ -4,13 +4,13 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { adminFetch } from "@/lib/adminApi";
 import { formatReceiptDate } from "@/lib/receipt/render";
 import { Button, Card, useToast } from "@/components/admin/ui";
-import type { OrderStatus, StoreOrder, StoreReceipt } from "@/types/store";
+import type { IssuedReceipt, OrderStatus, StoreOrder, StoreReceipt } from "@/types/store";
 import { CancelReceiptDialog } from "./CancelReceiptDialog";
+import { CONTROL } from "./controls";
 import { IssueReceiptDialog, type ReceiptCustomer } from "./IssueReceiptDialog";
 
 // Statuses the order-api accepts for issuing (server/store receipts rule).
 const ISSUABLE_STATUSES: OrderStatus[] = ["paid", "ready", "completed"];
-const CONTROL = "min-h-11";
 
 type ReceiptsResponse = { receipts: StoreReceipt[]; warning: string | null };
 
@@ -54,12 +54,16 @@ export function ReceiptPanel({ order }: { order: StoreOrder }) {
     }
   }, [order.orderCode, toast]);
 
+  // A status change on this page (e.g. cancelled) can flip the warning, so it re-triggers the fetch.
   useEffect(() => {
     load();
+  }, [load, order.status]);
+
+  useEffect(() => {
     adminFetch<{ isSuperadmin: boolean }>("me")
       .then((me) => setIsSuperadmin(me.isSuperadmin))
       .catch(() => setIsSuperadmin(false)); // hiding cancel is the safe default; the server still enforces it
-  }, [load]);
+  }, []);
 
   const active = receipts.find((r) => !r.cancelledAt) ?? null;
   const history = receipts.filter((r) => r.cancelledAt);
@@ -77,11 +81,15 @@ export function ReceiptPanel({ order }: { order: StoreOrder }) {
     if (inFlight.current) return;
     inFlight.current = true;
     setBusy(true);
+    setBlockedPrintUrl(null);
     // Opened inside the click so browsers don't treat it as a popup; pointed at the print page after the POST.
     const tab = window.open("", "_blank");
     try {
-      const receipt = await adminFetch<StoreReceipt>(`orders/${order.orderCode}/receipt`, { method: "POST", json: { customer } });
-      const printUrl = receiptPrintUrl(receipt.id, { copy: false });
+      const receipt = await adminFetch<IssuedReceipt>(`orders/${order.orderCode}/receipt`, { method: "POST", json: { customer } });
+      // Someone else may have issued it first; a second "original" must never print.
+      const alreadyIssued = receipt.created === false;
+      const printUrl = receiptPrintUrl(receipt.id, { copy: alreadyIssued });
+      if (alreadyIssued) toast("ใบเสร็จนี้ออกไปแล้ว พิมพ์เป็นสำเนา");
       if (tab) {
         tab.location.href = printUrl;
       } else {
@@ -107,6 +115,7 @@ export function ReceiptPanel({ order }: { order: StoreOrder }) {
     try {
       await adminFetch(`receipts/${receipt.id}/cancel`, { method: "POST", json: { reason } });
       setCancelling(false);
+      setBlockedPrintUrl(null);
       toast("ยกเลิกใบเสร็จแล้ว");
       await load();
     } catch (e) {
