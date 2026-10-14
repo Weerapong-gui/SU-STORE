@@ -26,6 +26,7 @@ from .common import as_int, unique_slug
 from .common import clean_text as clean_text
 from .common import now_iso as now_iso
 from .common import slugify as slugify
+from .receipts import RECEIPT_ISSUABLE_STATUSES
 
 ORDER_PREFIX = "SU"
 
@@ -753,8 +754,17 @@ def list_orders(
     counts = {
         r[0]: r[1] for r in connection.execute("SELECT status, COUNT(*) FROM store_orders GROUP BY status")
     }
+    active_receipt_orders = set()
+    if rows:
+        placeholders = ",".join("?" for _ in rows)
+        active_receipt_orders = {r[0] for r in connection.execute(
+            f"SELECT order_id FROM store_receipts WHERE cancelled_at IS NULL AND order_id IN ({placeholders})",
+            tuple(row["id"] for row in rows),
+        )}
     return {
-        "orders": [_serialize_order(connection, r) for r in rows],
+        "orders": [{**_serialize_order(connection, r),
+                    "receiptWarning": r["id"] in active_receipt_orders and r["status"] not in RECEIPT_ISSUABLE_STATUSES}
+                   for r in rows],
         "total": total,
         "page": page,
         "perPage": per_page,

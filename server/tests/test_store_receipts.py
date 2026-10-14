@@ -4,12 +4,14 @@ import json
 import sqlite3
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timedelta
+from pathlib import Path
 
 import pytest
 
 from server.store import db, receipts
 
-from .test_store_v2 import CUSTOMER, _conn, _product
+from .test_store_v2 import CUSTOMER, _call, _conn, _product
+from .test_store_v2 import server as _http_server
 
 
 def _order(conn: sqlite3.Connection, status: str = "paid") -> str:
@@ -192,3 +194,107 @@ def test_failed_insert_rolls_back_counter():
 def test_other_issuable_statuses(status):
     conn = _conn()
     assert _issue(conn, _order(conn, status))["receiptNo"] == "SU-R2569-0001"
+
+
+# Reuse the real HTTP fixture used by the catalog tests.
+receipt_server = pytest.fixture(_http_server.__wrapped__)
+
+GLOBAL_ADMIN = {"Authorization": "Bearer test-token"}
+
+
+def _staff(base: str) -> dict[str, str]:
+    status, body = _call(base, "POST", "/v2/admin/login", {"username": "staff1", "password": "pw"})
+    assert status == 200
+    return {"Authorization": "Claim " + json.loads(body)["token"]}
+
+
+def _http_order(base: str) -> str:
+    _, body = _call(base, "POST", "/v2/admin/products", {
+        "slug": "receipt-shirt", "name": "เสื้อ", "status": "active", "price": 158,
+        "variants": [{"size": "M", "price": 158, "stock": None}],
+    }, GLOBAL_ADMIN)
+    product = json.loads(body)
+    status, body = _call(base, "POST", "/v2/orders", {
+        "items": [{"variantId": product["variants"][0]["id"], "quantity": 1}], "customer": CUSTOMER,
+    })
+    assert status == 201
+    code = json.loads(body)["orderCode"]
+    assert _call(base, "PATCH", f"/v2/admin/orders/{code}", {"status": "paid"}, GLOBAL_ADMIN)[0] == 200
+    return code
+
+
+def test_receipt_http_flow(receipt_server):
+    staff, code = _staff(receipt_server), _http_order(receipt_server)
+    path = f"/v2/admin/orders/{code}/receipt"
+    status, body = _call(receipt_server, "POST", path, {"customer": CUSTOMER}, staff)
+    assert status in (200, 201)
+    receipt = json.loads(body)
+    assert receipt["receiptNo"] == "SU-R2569-0001"
+    assert json.loads(_call(receipt_server, "POST", path, {"customer": CUSTOMER}, staff)[1]) == receipt
+    listing = json.loads(_call(receipt_server, "GET", path + "s", headers=staff)[1])
+    assert listing == {"receipts": [receipt], "warning": None}
+    cancel = f"/v2/admin/receipts/{receipt['id']}/cancel"
+    status, body = _call(receipt_server, "POST", cancel, {"reason": "แก้ชื่อ"}, staff)
+    assert status == 403 and json.loads(body)["message"] == "เฉพาะผู้ดูแลระบบหลัก"
+    assert _call(receipt_server, "POST", cancel, {"reason": ""}, GLOBAL_ADMIN)[0] == 400
+    status, body = _call(receipt_server, "POST", cancel, {"reason": "แก้ชื่อ"}, GLOBAL_ADMIN)
+    assert status == 200 and json.loads(body)["cancelReason"] == "แก้ชื่อ"
+    from fp28.database import open_db
+    with open_db() as conn:
+        events = [row[0] for row in conn.execute(
+            "SELECT event FROM order_audit_log WHERE order_code = ? AND event LIKE 'v2_receipt_%' ORDER BY id",
+            (code,),
+        )]
+    assert events == ["v2_receipt_issued", "v2_receipt_cancelled"]
+
+
+
+def test_settings_put_requires_superadmin(receipt_server):
+    staff = _staff(receipt_server)
+    assert _call(receipt_server, "GET", "/v2/admin/receipt-settings")[0] == 401
+    status, body = _call(receipt_server, "GET", "/v2/admin/receipt-settings", headers=staff)
+    assert status == 200 and json.loads(body)["nextReceiptNo"] == "SU-R2569-0001"
+    status, body = _call(receipt_server, "PUT", "/v2/admin/receipt-settings", {"payeeName": "ผู้รับ"}, staff)
+    assert status == 403 and json.loads(body)["message"] == "เฉพาะผู้ดูแลระบบหลัก"
+    status, body = _call(receipt_server, "PUT", "/v2/admin/receipt-settings", {"payeeName": "ผู้รับ"}, GLOBAL_ADMIN)
+    assert status == 200 and json.loads(body)["payeeName"] == "ผู้รับ"
+
+
+def test_me_reports_superadmin(receipt_server):
+    staff = _staff(receipt_server)
+    assert json.loads(_call(receipt_server, "GET", "/v2/admin/me", headers=staff)[1])["isSuperadmin"] is False
+    assert json.loads(_call(receipt_server, "GET", "/v2/admin/me", headers=GLOBAL_ADMIN)[1])["isSuperadmin"] is True
+    from fp28.database import open_db
+    with open_db() as conn:
+        conn.execute("UPDATE admin_users SET is_superadmin = 1 WHERE username = 'staff1'")
+    assert json.loads(_call(receipt_server, "GET", "/v2/admin/me", headers=staff)[1])["isSuperadmin"] is True
+    assert _call(receipt_server, "PUT", "/v2/admin/receipt-settings", {"payeeName": "หลัก"}, staff)[0] == 200
+
+
+def test_template_v2_has_no_baked_payee():
+    body = (Path(__file__).parents[1] / "templates/receipt_template_v2.svg").read_text()
+    assert body.count("ผู้รับเงิน") == 2
+    assert "บัลลังก์" not in body
+    assert 'href="#laizen-sig"' not in body
+    assert body.count("------------------------------") == 2
+
+
+def test_template_v2_http(receipt_server):
+    assert _call(receipt_server, "GET", "/v2/admin/receipt-template")[0] == 401
+    status, body = _call(receipt_server, "GET", "/v2/admin/receipt-template", headers=_staff(receipt_server))
+    assert status == 200 and "ผู้รับเงิน" in body.decode() and "บัลลังก์" not in body.decode()
+
+
+def test_order_list_flags_receipt_warning(receipt_server):
+    code = _http_order(receipt_server)
+    def warning() -> bool:
+        body = json.loads(_call(receipt_server, "GET", "/v2/admin/orders", headers=GLOBAL_ADMIN)[1])
+        return next(order["receiptWarning"] for order in body["orders"] if order["orderCode"] == code)
+    assert warning() is False
+    _, body = _call(receipt_server, "POST", f"/v2/admin/orders/{code}/receipt", {"customer": CUSTOMER}, GLOBAL_ADMIN)
+    receipt = json.loads(body)
+    assert warning() is False
+    assert _call(receipt_server, "PATCH", f"/v2/admin/orders/{code}", {"status": "cancelled"}, GLOBAL_ADMIN)[0] == 200
+    assert warning() is True
+    _call(receipt_server, "POST", f"/v2/admin/receipts/{receipt['id']}/cancel", {"reason": "ยกเลิก"}, GLOBAL_ADMIN)
+    assert warning() is False

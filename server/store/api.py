@@ -15,6 +15,7 @@ import secrets
 from email.parser import BytesParser
 from email.policy import default
 from http import HTTPStatus
+from pathlib import Path
 from typing import Any
 from urllib.parse import parse_qs, urlparse
 
@@ -24,8 +25,10 @@ from fp28.database import log_audit, open_db
 from fp28.products import save_product_image_file
 from fp28.slips import delete_local_slip_file, resolve_stored_slip_path
 
-from . import categories, dashboard, db, home
+from . import categories, dashboard, db, home, receipts
 from . import meta as store_meta
+
+RECEIPT_SVG_V2 = (Path(__file__).resolve().parents[1] / "templates/receipt_template_v2.svg").read_bytes()
 
 _IMAGE_EXT = {"image/jpeg": ".jpg", "image/png": ".png", "image/webp": ".webp"}
 
@@ -50,6 +53,21 @@ def _is_admin(handler: Any) -> bool:
 
 def _admin_user(handler: Any) -> str:
     return handler.get_claim_station_user() or "token"
+
+
+def _is_superadmin(handler: Any) -> bool:
+    if handler.has_global_authorization():
+        return True
+    with open_db() as conn:
+        row = conn.execute(
+            "SELECT is_superadmin FROM admin_users WHERE username = ?", (_admin_user(handler),)
+        ).fetchone()
+    return bool(row and row["is_superadmin"])
+
+
+def _require_superadmin(handler: Any) -> None:
+    if not _is_superadmin(handler):
+        raise db.StoreError(HTTPStatus.FORBIDDEN, "เฉพาะผู้ดูแลระบบหลัก")
 
 
 MAX_JSON_BYTES = 512 * 1024
@@ -163,7 +181,60 @@ def _route(handler: Any, method: str, path: str, query: dict[str, str]) -> None:
         raise db.StoreError(HTTPStatus.UNAUTHORIZED, "unauthorized")
 
     if method == "GET" and path == "/v2/admin/me":
-        return send(HTTPStatus.OK, {"username": _admin_user(handler)})
+        return send(HTTPStatus.OK, {"username": _admin_user(handler), "isSuperadmin": _is_superadmin(handler)})
+
+    if method == "GET" and path == "/v2/admin/receipt-template":
+        handler.send_response(HTTPStatus.OK)
+        handler.send_header("Content-Type", "image/svg+xml; charset=utf-8")
+        handler.send_header("Content-Length", str(len(RECEIPT_SVG_V2)))
+        handler.end_headers()
+        handler.wfile.write(RECEIPT_SVG_V2)
+        return None
+
+    if path == "/v2/admin/receipt-settings":
+        if method == "GET":
+            with open_db() as conn:
+                settings = receipts.get_receipt_settings(conn)
+                return send(HTTPStatus.OK, {**settings, "nextReceiptNo": receipts.next_receipt_no(conn)})
+        if method == "PUT":
+            _require_superadmin(handler)
+            payload = _json_body(handler)
+            with open_db() as conn:
+                settings = receipts.save_receipt_settings(conn, payload)
+                log_audit(conn, "-", "v2_receipt_settings_changed", f"by {_admin_user(handler)}")
+            return send(HTTPStatus.OK, settings)
+
+    m = re.fullmatch(r"/v2/admin/orders/(SU\d{4}-\d{4,})/receipts?", path)
+    if m:
+        code = m.group(1)
+        if method == "GET" and path.endswith("/receipts"):
+            with open_db() as conn:
+                return send(HTTPStatus.OK, {
+                    "receipts": receipts.list_order_receipts(conn, code),
+                    "warning": receipts.receipt_warning(conn, code),
+                })
+        if method == "POST" and path.endswith("/receipt"):
+            payload = _json_body(handler)
+            with open_db() as conn:
+                # total_changes stays unchanged on the idempotent reprint path, even under concurrency.
+                before = conn.total_changes
+                receipt = receipts.issue_receipt(conn, code, issued_by=_admin_user(handler),
+                                                 customer=payload.get("customer"))
+                created = conn.total_changes != before
+                if created:
+                    log_audit(conn, code, "v2_receipt_issued", f"{receipt['receiptNo']} by {_admin_user(handler)}")
+            return send(HTTPStatus.CREATED if created else HTTPStatus.OK, receipt)
+
+    m = re.fullmatch(r"/v2/admin/receipts/(\d+)/cancel", path)
+    if method == "POST" and m:
+        _require_superadmin(handler)
+        payload = _json_body(handler)
+        with open_db() as conn:
+            receipt = receipts.cancel_receipt(conn, int(m.group(1)), cancelled_by=_admin_user(handler),
+                                              reason=payload.get("reason"))
+            log_audit(conn, receipt["orderCode"], "v2_receipt_cancelled",
+                      f"{receipt['receiptNo']}: {receipt['cancelReason']} by {_admin_user(handler)}")
+        return send(HTTPStatus.OK, receipt)
 
     if method == "GET" and path == "/v2/admin/dashboard":
         with open_db() as conn:
