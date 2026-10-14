@@ -3,11 +3,17 @@ import type { ReceiptField, ReceiptLayout, ReceiptPage, ReceiptSnapshot } from "
 type RenderOptions = { copy: boolean; sample: boolean; page: ReceiptPage; dateText: string };
 const FONT = "'Sarabun','TH Sarabun New','Sukhumvit Set',Arial,sans-serif";
 const INK = "#10122e";
+const COPY_LABEL: ReceiptField = { x: 200, y: 160, size: 12, anchor: "middle" };
+const SAMPLE_WATERMARK = { x: 200, y: 300, size: 60, opacity: 0.12, rotation: -25 };
 const BANGKOK_OFFSET_MS = 7 * 60 * 60 * 1000;
 const BUDDHIST_YEAR_OFFSET = 543;
 
 function escapeXml(value: string | number): string {
-  return String(value).replace(/[&<>"']/g, character => ({
+  // XML 1.0 permits tab, LF, and CR, but forbids the other C0 controls.
+  return Array.from(String(value)).filter(character => {
+    const code = character.charCodeAt(0);
+    return code >= 32 || code === 9 || code === 10 || code === 13;
+  }).join("").replace(/[&<>"']/g, character => ({
     "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&apos;",
   })[character]!);
 }
@@ -46,8 +52,11 @@ function renderCopy(layout: ReceiptLayout, snapshot: ReceiptSnapshot, opts: Rend
     // A square viewport preserves the signature's aspect ratio without requiring image metadata.
     svg += `<image href="${escapeXml(snapshot.signatureUrl)}" x="${x}" y="${y}" width="${width}" height="${width}" preserveAspectRatio="xMidYMin meet"/>`;
   }
-  if (opts.copy) svg += '<text x="200" y="160" font-size="12" text-anchor="middle">สำเนา / COPY</text>';
-  if (opts.sample) svg += '<text x="200" y="300" font-size="60" text-anchor="middle" opacity="0.12" transform="rotate(-25 200 300)">ตัวอย่าง</text>';
+  if (opts.copy) svg += text("สำเนา / COPY", COPY_LABEL);
+  if (opts.sample) {
+    const { x, y, size, opacity, rotation } = SAMPLE_WATERMARK;
+    svg += `<text x="${x}" y="${y}" font-size="${size}" text-anchor="middle" opacity="${opacity}" transform="rotate(${rotation} ${x} ${y})">ตัวอย่าง</text>`;
+  }
   return svg;
 }
 
@@ -58,7 +67,7 @@ export function renderReceiptSvg(templateSvg: string, layout: ReceiptLayout, sna
   const copies = `<g font-family="${escapeXml(FONT)}" fill="${INK}">`
     + `<g data-receipt-copy="left">${content}</g>`
     + `<g data-receipt-copy="right" transform="translate(${layout.rightCopyOffset} 0)">${content}</g></g>`;
-  return templateSvg.replace(closingTag, `${copies}</svg>`);
+  return templateSvg.replace(closingTag, () => `${copies}</svg>`);
 }
 
 export function formatReceiptDate(iso: string): string {

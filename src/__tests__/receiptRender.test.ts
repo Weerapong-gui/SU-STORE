@@ -25,6 +25,7 @@ describe("receipt SVG", () => {
   it("renders totals and words only on the final page", () => {
     const total = SAMPLE_SNAPSHOT.total.toLocaleString("th-TH", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
     expect(render()).toContain(total);
+    expect(render()).toContain("1,049.00");
     expect(render(false, false, false)).not.toContain(total);
     expect(render(false, false, false)).not.toContain(SAMPLE_SNAPSHOT.totalText);
   });
@@ -36,6 +37,26 @@ describe("receipt SVG", () => {
     expect(svg).not.toContain("<script>");
     expect(svg).toContain('href="/signature?a=1&amp;b=&quot;test&quot;"');
     expect(new DOMParser().parseFromString(svg, "image/svg+xml").querySelector("parsererror")).toBeNull();
+  });
+  it("preserves replacement patterns verbatim in customer, school, and line names", () => {
+    const name = "$& $$ $' $`";
+    const line = { ...SAMPLE_SNAPSHOT.lines[0], name };
+    const snapshot = { ...SAMPLE_SNAPSHOT, customer: { ...SAMPLE_SNAPSHOT.customer, name, school: name }, lines: [line] };
+    const receiptPage = paginate(snapshot.lines, DEFAULT_LAYOUT, text => text.length)[0];
+    const svg = renderReceiptSvg(template, DEFAULT_LAYOUT, snapshot, { copy: false, sample: false, page: receiptPage, dateText: "date" });
+    const doc = new DOMParser().parseFromString(svg, "image/svg+xml");
+    expect(doc.querySelector("parsererror")).toBeNull();
+    for (const copy of doc.querySelectorAll("g[data-receipt-copy]")) {
+      expect(Array.from(copy.querySelectorAll("text"), element => element.textContent).filter(text => text === name)).toHaveLength(3);
+    }
+  });
+  it("strips XML 1.0 forbidden controls while preserving allowed whitespace", () => {
+    const controls = Array.from({ length: 32 }, (_, code) => code).filter(code => ![9, 10, 13].includes(code)).map(code => String.fromCharCode(code)).join("");
+    const snapshot = { ...SAMPLE_SNAPSHOT, customer: { ...SAMPLE_SNAPSHOT.customer, name: `before${controls}after\tallowed\nspace` } };
+    const svg = renderReceiptSvg(template, DEFAULT_LAYOUT, snapshot, { copy: false, sample: false, page: page(), dateText: "date" });
+    const doc = new DOMParser().parseFromString(svg, "image/svg+xml");
+    expect(doc.querySelector("parsererror")).toBeNull();
+    expect(Array.from(doc.querySelectorAll("text"), element => element.textContent)).toContain("beforeafter\tallowed\nspace");
   });
   it("adds a sample watermark only for previews", () => {
     expect(render(false, true)).toContain("ตัวอย่าง");
