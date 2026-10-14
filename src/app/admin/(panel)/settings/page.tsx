@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useEffect, useState } from "react";
 import { adminFetch } from "@/lib/adminApi";
 import { useConfirm } from "@/components/admin/ConfirmDialog";
@@ -119,6 +120,15 @@ export default function SettingsPage() {
         >
           บันทึกบัญชีรับเงิน
         </Button>
+      </Card>
+
+      <Card title="ตั้งค่าใบเสร็จ" hint="ตำแหน่งข้อความบนใบเสร็จ ชื่อผู้รับเงิน ลายเซ็น และเลขที่ใบเสร็จ">
+        <Link
+          href="/admin/settings/receipt"
+          className="inline-flex min-h-11 items-center rounded-xl border border-zinc-300 bg-white px-4 py-2.5 text-sm font-semibold text-zinc-800 transition hover:bg-zinc-50"
+        >
+          เปิดตัวตั้งค่าใบเสร็จ →
+        </Link>
       </Card>
 
       <Card title="ข้อความประกาศ" hint="แถบข้อความบนสุดของหน้าร้าน เช่น วัน-เวลารับสินค้า · เว้นว่าง = ไม่แสดง">

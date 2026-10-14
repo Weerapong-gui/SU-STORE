@@ -1,9 +1,9 @@
 import type { ReceiptField, ReceiptLayout, ReceiptPage, ReceiptSnapshot } from "@/types/store";
 
 type RenderOptions = { copy: boolean; sample: boolean; page: ReceiptPage; dateText: string };
-const FONT = "'Sarabun','TH Sarabun New','Sukhumvit Set',Arial,sans-serif";
+export const FONT = "'Sarabun','TH Sarabun New','Sukhumvit Set',Arial,sans-serif";
 const INK = "#10122e";
-const COPY_LABEL: ReceiptField = { x: 200, y: 160, size: 12, anchor: "middle" };
+const COPY_LABEL: ReceiptField = { x: 200, y: 77, size: 10, anchor: "middle" };
 const SAMPLE_WATERMARK = { x: 200, y: 300, size: 60, opacity: 0.12, rotation: -25 };
 const BANGKOK_OFFSET_MS = 7 * 60 * 60 * 1000;
 const BUDDHIST_YEAR_OFFSET = 543;

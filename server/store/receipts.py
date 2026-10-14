@@ -35,7 +35,7 @@ DEFAULT_LAYOUT: dict[str, Any] = {
             "name": {"x": 40, "width": 225, "anchor": "start"},
             "qty": {"x": 290, "width": 30, "anchor": "end"},
             "price": {"x": 343, "width": 40, "anchor": "end"},
-            "amount": {"x": 396, "width": 45, "anchor": "end"},
+            "amount": {"x": 388, "width": 45, "anchor": "end"},
         },
     },
 }
