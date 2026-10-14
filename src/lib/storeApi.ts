@@ -1,7 +1,7 @@
 import { DEFAULT_ACCENT } from "@/lib/accent";
 import { DEFAULT_FONT } from "@/lib/fonts";
 import { DEFAULT_RADIUS } from "@/lib/radius";
-import type { HomeLayout, ResolvedHome, StoreMeta, StoreProduct } from "@/types/store";
+import type { HomeLayout, ResolvedHome, StoreCategory, StoreMeta, StoreProduct } from "@/types/store";
 import { ORDER_API_BASE } from "@/lib/orderApi";
 
 // Server-side reads of the public /v2 catalog (used by server components).
@@ -24,6 +24,30 @@ export async function getStoreProduct(slug: string): Promise<StoreProduct | null
     const res = await fetch(`${ORDER_API_BASE}/v2/products/${slug}`, { cache: "no-store" });
     return res.ok ? ((await res.json()) as StoreProduct) : null;
   } catch {
+    return null;
+  }
+}
+
+export async function getStoreCategories(): Promise<StoreCategory[]> {
+  if (!ORDER_API_BASE) return [];
+  try {
+    const res = await fetch(`${ORDER_API_BASE}/v2/categories`, { cache: "no-store" });
+    if (!res.ok) return [];
+    const data = (await res.json()) as { categories: StoreCategory[] };
+    return data.categories ?? [];
+  } catch {
+    // Catalog reads degrade gracefully when the ordering service is unavailable.
+    return [];
+  }
+}
+
+export async function getStoreCategory(slug: string): Promise<{ category: StoreCategory; products: StoreProduct[] } | null> {
+  if (!ORDER_API_BASE || !/^[a-z0-9-]+$/.test(slug)) return null;
+  try {
+    const res = await fetch(`${ORDER_API_BASE}/v2/categories/${slug}`, { cache: "no-store" });
+    return res.ok ? ((await res.json()) as { category: StoreCategory; products: StoreProduct[] }) : null;
+  } catch {
+    // Missing categories and unavailable catalog reads both render the not-found state.
     return null;
   }
 }

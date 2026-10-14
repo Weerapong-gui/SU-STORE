@@ -7,6 +7,7 @@ export const MAX_SLIDES = 6;
 export const MAX_FEATURED = 12;
 
 export const BLOCK_INFO: Record<HomeBlockType, { label: string; icon: LucideIcon; description: string }> = {
+  categories: { label: "หมวดหมู่", icon: LayoutGrid, description: "แสดงหมวดหมู่สินค้า" },
   hero: { label: "แบนเนอร์", icon: GalleryHorizontal, description: "รูปใหญ่เต็มความกว้าง มีหัวข้อและปุ่ม ใส่ได้หลายรูปแล้วเลื่อนเป็นสไลด์" },
   featured: { label: "สินค้าแนะนำ", icon: Star, description: "เลือกสินค้าที่อยากโชว์เองว่าจะให้ขึ้นชิ้นไหนบ้าง" },
   text: { label: "ข้อความ", icon: Type, description: "หัวข้อกับย่อหน้าสั้นๆ เช่น วันรับของ หรือวิธีสั่งซื้อ" },
@@ -19,6 +20,8 @@ export const emptySlide = (): HeroSlide => ({ image: "", eyebrow: "", title: "",
 export function newBlock(type: HomeBlockType): HomeBlock {
   const id = `b-${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`;
   switch (type) {
+    case "categories":
+      return { id, type, hidden: false, title: "", categoryIds: [] };
     case "hero":
       return { id, type, hidden: false, autoplay: true, slides: [emptySlide()] };
     case "featured":
@@ -37,6 +40,8 @@ const EMPTY_WARNING = "ยังว่างอยู่ จึงยังไ�
 // One-line description of a block for its collapsed card, plus a warning when it won't show.
 export function summarize(block: HomeBlock): { text: string; warning?: string } {
   switch (block.type) {
+    case "categories":
+      return { text: "หมวดหมู่", warning: "ยังไม่พร้อมแสดงในหน้าร้าน" };
     case "hero": {
       const first = block.slides[0];
       const blank = block.slides.length === 1 && !first.image && !first.title && !first.subtitle;

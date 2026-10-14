@@ -15,6 +15,9 @@ type FormProps<T extends HomeBlock["type"]> = {
 
 export function BlockForm({ block, onChange, products }: { block: HomeBlock; onChange: (b: HomeBlock) => void; products: StoreProduct[] }) {
   switch (block.type) {
+    // Category editing/rendering is implemented in Task 13.
+    case "categories":
+      return null;
     case "hero":
       return <HeroForm block={block} onChange={onChange} products={products} />;
     case "featured":

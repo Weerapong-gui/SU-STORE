@@ -1,6 +1,23 @@
 // Shapes returned by the order-api `/v2` routes (server/store/db.py).
 
+export type StoreCategory = {
+  id: number;
+  slug: string;
+  name: string;
+  nameEn: string;
+  tagline: string;
+  taglineEn: string;
+  coverImage: string;
+  visible: boolean;
+  sortOrder: number;
+  productCount: number;
+};
+
 export type StoreVariant = {
+  designCode: string;
+  designName: string;
+  designNameEn: string;
+  image: string;
   id: number;
   size: string;
   color: string;
@@ -16,6 +33,9 @@ export type ProductStatus = "draft" | "active" | "archived";
 export type SaleState = "open" | "upcoming" | "ended";
 
 export type StoreProduct = {
+  nameEn: string;
+  categoryId: number | null;
+  optionKind: "options" | "designs";
   id: number;
   slug: string;
   name: string;
@@ -41,7 +61,9 @@ export type StoreOrderItem = {
   variantId: number;
   productId: number;
   productName: string;
+  productNameEn: string | null;
   variantLabel: string;
+  variantLabelEn: string | null;
   unitPrice: number;
   quantity: number;
   lineTotal: number;
@@ -99,6 +121,7 @@ export type HeroSlide = {
 // radius: this block's corners (0-100); absent = follow the store-wide setting.
 type BlockBase = { id: string; hidden: boolean; radius?: number };
 export type HomeBlock =
+  | (BlockBase & { type: "categories"; title: string; categoryIds: number[]; categories?: StoreCategory[] })
   | (BlockBase & { type: "hero"; autoplay: boolean; slides: HeroSlide[] })
   | (BlockBase & { type: "featured"; title: string; productIds: number[]; products?: StoreProduct[] })
   | (BlockBase & { type: "text"; title: string; body: string; align: "left" | "center" })

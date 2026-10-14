@@ -14,6 +14,9 @@ const headingClass = "mb-8 text-2xl font-semibold tracking-tight text-ink md:tex
 function Block({ block, products }: { block: HomeBlock; products: ResolvedHome["products"] }) {
   const t = useStoreText();
   switch (block.type) {
+    // Category editing/rendering is implemented in Task 13.
+    case "categories":
+      return null;
     case "hero":
       return <HeroSlider slides={block.slides} autoplay={block.autoplay} />;
     case "featured":
