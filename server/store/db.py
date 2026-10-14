@@ -18,6 +18,7 @@ from datetime import datetime
 from datetime import timezone as timezone
 from typing import Any
 
+from . import designs
 from .categories import ensure_exists
 from .common import TZ_BANGKOK as TZ_BANGKOK
 from .common import StoreError as StoreError
@@ -229,11 +230,19 @@ def next_order_code(connection: sqlite3.Connection, when: datetime | None = None
 # ── Products ──────────────────────────────────────────────────────────────────
 
 def _serialize_variant(row: sqlite3.Row) -> dict[str, Any]:
+    label = (
+        designs.design_label(row["design_code"], row["design_name"])
+        if row["design_code"] else variant_label(row["size"], row["color"])
+    )
     return {
         "id": row["id"],
         "size": row["size"],
         "color": row["color"],
-        "label": variant_label(row["size"], row["color"]),
+        "label": label,
+        "designCode": row["design_code"],
+        "designName": row["design_name"],
+        "designNameEn": row["design_name_en"],
+        "image": row["image"],
         "price": row["price"],
         "stock": row["stock"],
         "sku": row["sku"],
@@ -254,6 +263,7 @@ def _serialize_product(connection: sqlite3.Connection, row: sqlite3.Row, *, publ
         "id": row["id"],
         "slug": row["slug"],
         "name": row["name"],
+        "nameEn": row["name_en"],
         "optionKind": row["option_kind"],
         "categoryId": row["category_id"],
         "description": row["description"],
@@ -298,6 +308,12 @@ def _product_fields(payload: dict[str, Any]) -> dict[str, Any]:
     fields: dict[str, Any] = {}
     if "name" in payload:
         fields["name"] = clean_text(payload["name"], "ชื่อสินค้า", required=True, max_len=120)
+    if "nameEn" in payload:
+        fields["name_en"] = clean_text(payload["nameEn"], "ชื่อสินค้าภาษาอังกฤษ", max_len=120)
+    if "optionKind" in payload:
+        if payload["optionKind"] not in ("options", "designs"):
+            raise StoreError(400, "รูปแบบตัวเลือกสินค้าไม่ถูกต้อง")
+        fields["option_kind"] = payload["optionKind"]
     if "categoryId" in payload:
         value = payload["categoryId"]
         fields["category_id"] = None if value is None else as_int(value, "หมวดหมู่", minimum=1)
@@ -368,6 +384,8 @@ def update_product(connection: sqlite3.Connection, product_id: int, payload: dic
     get_product(connection, product_id, public=False)  # 404 if missing
     fields = _product_fields(payload)
     ensure_exists(connection, fields.get("category_id"))
+    if "option_kind" in fields:
+        _apply_product_fields(connection, product_id, {"option_kind": fields.pop("option_kind")})
     if "variants" in payload:
         replace_variants(connection, product_id, payload["variants"])
     if fields.get("status") == "active":
@@ -403,6 +421,8 @@ def replace_variants(connection: sqlite3.Connection, product_id: int, variants: 
     they appear in any order."""
     if not isinstance(variants, list):
         raise StoreError(400, "variants ต้องเป็นรายการ")
+    product = get_product(connection, product_id, public=False)
+    design_rows = designs.clean_designs(variants) if product["optionKind"] == "designs" else None
     existing = {
         r["id"]: r
         for r in connection.execute("SELECT * FROM store_variants WHERE product_id = ?", (product_id,))
@@ -412,13 +432,18 @@ def replace_variants(connection: sqlite3.Connection, product_id: int, variants: 
     for index, raw in enumerate(variants):
         if not isinstance(raw, dict):
             raise StoreError(400, "variants ต้องเป็น object")
-        size = clean_text(raw.get("size"), "ไซซ์", max_len=40)
-        color = clean_text(raw.get("color"), "สี/แบบ", max_len=40)
+        design = (
+            design_rows[index] if design_rows is not None
+            else dict.fromkeys(("design_code", "design_name", "design_name_en", "image"), "")
+        )
+        design_values = tuple(design[key] for key in ("design_code", "design_name", "design_name_en", "image"))
+        size = "" if design_rows is not None else clean_text(raw.get("size"), "ไซซ์", max_len=40)
+        color = "" if design_rows is not None else clean_text(raw.get("color"), "สี/แบบ", max_len=40)
         price = as_int(raw.get("price"), f"ราคา ({variant_label(size, color)})")
         stock = as_int(raw.get("stock"), f"สต็อก ({variant_label(size, color)})", allow_none=True)
         sku = clean_text(raw.get("sku"), "SKU", max_len=60)
         active = 1 if raw.get("active", True) else 0
-        if active:
+        if active and design_rows is None:
             if (size, color) in seen_labels:
                 raise StoreError(400, f"ตัวเลือก {variant_label(size, color)} ซ้ำกัน")
             seen_labels.add((size, color))
@@ -427,15 +452,15 @@ def replace_variants(connection: sqlite3.Connection, product_id: int, variants: 
             if variant_id not in existing:
                 raise StoreError(400, f"ไม่พบตัวเลือก id {variant_id} ในสินค้านี้")
             connection.execute(
-                "UPDATE store_variants SET size=?, color=?, price=?, stock=?, sku=?, active=?, sort_order=? WHERE id=?",
-                (size, color, price, stock, sku, active, index, variant_id),
+                "UPDATE store_variants SET size=?, color=?, price=?, stock=?, sku=?, active=?, sort_order=?, design_code=?, design_name=?, design_name_en=?, image=? WHERE id=?",
+                (size, color, price, stock, sku, active, index, *design_values, variant_id),
             )
             kept_ids.add(variant_id)
         else:
             connection.execute(
-                "INSERT INTO store_variants (product_id, size, color, price, stock, sku, active, sort_order) "
-                "VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
-                (product_id, size, color, price, stock, sku, active, index),
+                "INSERT INTO store_variants (product_id, size, color, price, stock, sku, active, sort_order, design_code, design_name, design_name_en, image) "
+                "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                (product_id, size, color, price, stock, sku, active, index, *design_values),
             )
     for variant_id in set(existing) - kept_ids:
         ordered = connection.execute(

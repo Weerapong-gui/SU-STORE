@@ -1,0 +1,46 @@
+"""Design row validation and catalog labels; independent of database wiring."""
+from .common import StoreError, as_int, clean_image_url, clean_text
+
+MAX_CODE_LENGTH = 12
+MAX_NAME_LENGTH = 80
+CODE_CHARACTERS = frozenset("ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789-")
+
+
+def normalize_code(code: str) -> str:
+    if isinstance(code, str):
+        code = code.strip().upper()
+        if code and len(code) <= MAX_CODE_LENGTH and all(c in CODE_CHARACTERS for c in code):
+            return code
+    raise StoreError(400, "ตัวย่อใช้ได้เฉพาะ A-Z, 0-9 และ -")
+
+
+def design_label(code: str, name: str) -> str:
+    return f"{code} · {name}"
+
+
+def clean_design(raw: dict, index: int) -> dict[str, str]:
+    return {
+        "design_code": normalize_code(raw.get("designCode", "")),
+        "design_name": clean_text(raw.get("designName"), f"ชื่อลาย ({index + 1})", required=True, max_len=MAX_NAME_LENGTH),
+        "design_name_en": clean_text(raw.get("designNameEn"), "ชื่อลายภาษาอังกฤษ", max_len=MAX_NAME_LENGTH),
+        "image": clean_image_url(raw.get("image"), "รูปลาย"),
+    }
+
+
+def clean_designs(variants: list) -> list[dict[str, str]]:
+    designs = []
+    codes: set[str] = set()
+    prices: set[int] = set()
+    for index, raw in enumerate(variants):
+        if not isinstance(raw, dict):
+            raise StoreError(400, "variants ต้องเป็น object")
+        design = clean_design(raw, index)
+        code = design["design_code"]
+        if code in codes:
+            raise StoreError(400, f"ตัวย่อ {code} ซ้ำกัน")
+        codes.add(code)
+        prices.add(as_int(raw.get("price"), f"ราคา ({design_label(code, design['design_name'])})"))
+        designs.append(design)
+    if len(prices) > 1:
+        raise StoreError(400, "ทุกลายต้องราคาเดียวกัน")
+    return designs
