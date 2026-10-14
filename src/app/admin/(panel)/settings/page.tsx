@@ -77,6 +77,17 @@ export default function SettingsPage() {
           <Button variant={settings.siteClosed ? "primary" : "danger"} disabled={busy} onClick={toggleSite}>
             {settings.siteClosed ? "เปิดหน้าร้าน" : "ปิดหน้าร้าน"}
           </Button>
+          {settings.siteClosed && (
+            <a
+              href="/"
+              target="_blank"
+              rel="noreferrer"
+              className="rounded-xl border border-zinc-300 bg-white px-4 py-2.5 text-sm font-semibold text-zinc-800 transition hover:bg-zinc-50"
+              title="ทีมงานที่ login อยู่จะเห็นหน้าร้านจริงพร้อมแถบเตือน ลูกค้ายังเห็นหน้าร้านปิด และกดสั่งซื้อไม่ได้"
+            >
+              ดูหน้าร้าน (ตัวอย่าง) ↗
+            </a>
+          )}
         </div>
         <p className="mt-3 text-xs text-zinc-500">
           ใช้ปิดทั้งเว็บชั่วคราว ถ้าต้องการหยุดขายแค่บางสินค้า ให้ตั้ง &quot;เวลาปิดขาย&quot; หรือเปลี่ยนสถานะในหน้าสินค้าแทน

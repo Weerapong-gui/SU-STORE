@@ -3,6 +3,7 @@ import { ADMIN_COOKIE } from "@/lib/adminAuth";
 import { clientIp } from "@/lib/clientIp";
 import { ORDER_API_BASE } from "@/lib/orderApi";
 import { consume, type RateLimitStore } from "@/lib/rateLimitCore";
+import { adminCookie, isStaffSession, PREVIEW_ORDER_BLOCKED_MESSAGE, STORE_PREVIEW_HEADER, storeGate } from "@/lib/storePreview";
 import { setVisitorCookie, siteStatusQuery, visitorId } from "@/lib/visitorId";
 
 // ── Rate limiting (order creation / lookup) ───────────────────────────────────
@@ -36,6 +37,11 @@ function isPageRequest(request: NextRequest): boolean {
   return true;
 }
 
+function isAlwaysOpen(request: NextRequest): boolean {
+  const host = request.headers.get("host") ?? "";
+  return ALWAYS_OPEN || (STAGING_HOST !== "" && host.startsWith(STAGING_HOST));
+}
+
 export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
@@ -47,8 +53,14 @@ export async function middleware(request: NextRequest) {
     return NextResponse.next();
   }
 
+  const hasBypass = BYPASS_TOKEN !== "" && request.cookies.get("bypass_gate")?.value === "1";
+
   // ── Rate-limit order creation and order lookup ──────────────────────────────
   if (request.method === "POST" && (pathname === "/api/store/orders" || pathname === "/api/store/orders/lookup")) {
+    // Staff previewing the closed store must not create real orders.
+    if (pathname === "/api/store/orders" && adminCookie(request) && !hasBypass && !isAlwaysOpen(request) && (await siteClosedReason(request))) {
+      return NextResponse.json({ success: false, message: PREVIEW_ORDER_BLOCKED_MESSAGE }, { status: 403 });
+    }
     if (consume(orderRateLimits, clientIp(request), MAX_ORDER_REQUESTS) === "limited") {
       return NextResponse.json(
         { success: false, message: "Too many requests. Please try again later." },
@@ -59,9 +71,7 @@ export async function middleware(request: NextRequest) {
   }
 
   // ── Always-open deployments (store.sumfu.xyz / Docker) ─────────────────────
-  const host = request.headers.get("host") ?? "";
-  const isStaging = STAGING_HOST !== "" && host.startsWith(STAGING_HOST);
-  if (ALWAYS_OPEN || isStaging) return NextResponse.next();
+  if (isAlwaysOpen(request)) return NextResponse.next();
 
   // ── Bypass token ────────────────────────────────────────────────────────────
   if (BYPASS_TOKEN && request.method === "GET") {
@@ -76,20 +86,42 @@ export async function middleware(request: NextRequest) {
   }
 
   // ── Page navigations: visitor cookie + site-closed check ─────────────────────
-  const hasBypass = BYPASS_TOKEN && request.cookies.get("bypass_gate")?.value === "1";
   if (request.method === "GET" && isPageRequest(request)) {
     const existingId = visitorId(request);
     const id = existingId ?? crypto.randomUUID();
-    const response = hasBypass ? NextResponse.next() : await siteClosedResponse(request, id);
+    const response = hasBypass ? pageResponse(request, false) : await gatedPageResponse(request, id);
     return existingId ? response : setVisitorCookie(response, id);
   }
 
   return NextResponse.next();
 }
 
-// Page navigations: rewrite to /maintenance while the store is closed.
-async function siteClosedResponse(request: NextRequest, visitorIdValue: string): Promise<NextResponse> {
-  if (request.nextUrl.pathname === "/maintenance" || !ORDER_API_BASE) return NextResponse.next();
+// Page navigations: rewrite to /maintenance while the store is closed, except for
+// signed-in staff, who get a read-only preview.
+async function gatedPageResponse(request: NextRequest, visitorIdValue: string): Promise<NextResponse> {
+  const reason = await siteClosedReason(request, visitorIdValue);
+  const gate = storeGate({
+    closed: reason !== "",
+    staff: reason !== "" && (await isStaffSession(request)),
+    pathname: request.nextUrl.pathname
+  });
+  if (gate === "closed") {
+    return NextResponse.rewrite(new URL(`/maintenance?reason=${reason}`, request.url));
+  }
+  return pageResponse(request, gate === "preview");
+}
+
+// The layout trusts the preview flag, so never pass through a client-sent copy.
+function pageResponse(request: NextRequest, preview: boolean): NextResponse {
+  const headers = new Headers(request.headers);
+  headers.delete(STORE_PREVIEW_HEADER);
+  if (preview) headers.set(STORE_PREVIEW_HEADER, "1");
+  return NextResponse.next({ request: { headers } });
+}
+
+// Why the store is closed ("" = open), cached for SITE_STATUS_TTL.
+async function siteClosedReason(request: NextRequest, visitorIdValue?: string): Promise<string> {
+  if (request.nextUrl.pathname === "/maintenance" || !ORDER_API_BASE) return "";
 
   const now = Date.now();
   if (now - siteClosedCache.ts > SITE_STATUS_TTL) {
@@ -110,10 +142,7 @@ async function siteClosedResponse(request: NextRequest, visitorIdValue: string):
     }
   }
 
-  if (siteClosedCache.closed) {
-    return NextResponse.rewrite(new URL(`/maintenance?reason=${siteClosedCache.reason}`, request.url));
-  }
-  return NextResponse.next();
+  return siteClosedCache.closed ? siteClosedCache.reason : "";
 }
 
 export const config = {

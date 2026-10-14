@@ -3,6 +3,7 @@
 import { useRouter } from "next/navigation";
 import { useMemo, useState } from "react";
 import { MAX_ITEM_QUANTITY, useCart } from "@/components/CartProvider";
+import { useStorePreview } from "@/components/store/StorePreview";
 import { formatPrice } from "@/lib/formatPrice";
 import { useSaleDate, useStoreText } from "@/lib/storeI18n";
 import { cn } from "@/lib/utils";
@@ -53,6 +54,7 @@ export function ProductDetail({ product }: { product: StoreProduct }) {
   const saleDate = useSaleDate();
   const router = useRouter();
   const { addItem } = useCart();
+  const preview = useStorePreview();
   const variants = product.variants;
   const sizes = unique(variants.map((v) => v.size));
   const colors = unique(variants.map((v) => v.color));
@@ -74,9 +76,10 @@ export function ProductDetail({ product }: { product: StoreProduct }) {
   const maxQty = Math.min(MAX_ITEM_QUANTITY, variant?.stock ?? MAX_ITEM_QUANTITY);
 
   const saleOpen = product.saleState === "open";
+  const canOrder = saleOpen && !preview;
 
   function add(goToCheckout: boolean) {
-    if (!saleOpen) return;
+    if (!canOrder) return;
     if (!variant || variant.soldOut) {
       setNotice(t.chooseOption);
       return;
@@ -179,7 +182,7 @@ export function ProductDetail({ product }: { product: StoreProduct }) {
           <button
             type="button"
             onClick={() => add(true)}
-            disabled={!saleOpen || variant?.soldOut || product.soldOut}
+            disabled={!canOrder || variant?.soldOut || product.soldOut}
             className="rounded-full bg-apple-blue px-7 py-3 text-sm font-semibold text-white shadow-[0_4px_14px_rgb(var(--accent)/0.35)] transition hover:bg-apple-blue-dark disabled:cursor-not-allowed disabled:opacity-40"
           >
             {t.buyNow}
@@ -187,12 +190,13 @@ export function ProductDetail({ product }: { product: StoreProduct }) {
           <button
             type="button"
             onClick={() => add(false)}
-            disabled={!saleOpen || variant?.soldOut || product.soldOut}
+            disabled={!canOrder || variant?.soldOut || product.soldOut}
             className="rounded-full bg-apple-blue-soft px-7 py-3 text-sm font-semibold text-apple-blue transition hover:bg-apple-blue/15 disabled:cursor-not-allowed disabled:opacity-40"
           >
             {t.addToCart}
           </button>
         </div>
+        {preview && <p className="rounded-2xl bg-amber-100 px-4 py-3 text-sm font-semibold text-amber-900">{t.previewNoOrders}</p>}
         {notice && <p className="text-sm font-medium text-apple-blue" role="status">{notice}</p>}
 
         {product.description && (

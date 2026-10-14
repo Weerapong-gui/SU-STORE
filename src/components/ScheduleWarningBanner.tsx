@@ -2,11 +2,13 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
+import { useStorePreview } from "@/components/store/StorePreview";
 import { useLang } from "@/lib/i18n";
 
 type SiteStatus = {
   siteClosed?: boolean;
   scheduleClosed?: boolean;
+  beRightBack?: boolean;
   scheduleEnabled?: boolean;
   scheduleWarning?: boolean;
   scheduleWarningMessage?: string;
@@ -33,6 +35,7 @@ const CLOSE_MIN = 23 * 60;           // 23:00
 export function ScheduleWarningBanner() {
   const router = useRouter();
   const { t } = useLang();
+  const preview = useStorePreview();
   const [warning, setWarning] = useState(false);
   const [customMessage, setCustomMessage] = useState<string | null>(null);
   const [secondsLeft, setSecondsLeft] = useState(0);
@@ -44,6 +47,13 @@ export function ScheduleWarningBanner() {
       const data = (await res.json()) as SiteStatus;
 
       if (data.alwaysOpen) return;
+      if (preview) {
+        // The middleware decided preview per request; once the store reopens, re-render so
+        // the preview bar and disabled buttons go away.
+        const closed = data.siteClosed || data.scheduleClosed || data.beRightBack;
+        if (!closed && preview === "closedStore") router.refresh();
+        return;
+      }
       if (data.siteClosed) { router.replace("/maintenance?reason=manual"); return; }
       if (data.scheduleClosed) { router.replace("/maintenance?reason=schedule"); return; }
 
@@ -63,7 +73,7 @@ export function ScheduleWarningBanner() {
     } catch {
       // ignore network errors
     }
-  }, [router]);
+  }, [router, preview]);
 
   // Poll every 10s so test-warning appears quickly
   useEffect(() => {
