@@ -67,6 +67,19 @@ _CHECKOUT_ID_RE = re.compile(r"[A-Za-z0-9-]{16,64}")
 def ensure_store_db(connection: sqlite3.Connection) -> None:
     connection.executescript(
         """
+        CREATE TABLE IF NOT EXISTS store_categories (
+            id INTEGER PRIMARY KEY,
+            slug TEXT UNIQUE NOT NULL,
+            name TEXT NOT NULL,
+            name_en TEXT NOT NULL DEFAULT '',
+            tagline TEXT NOT NULL DEFAULT '',
+            tagline_en TEXT NOT NULL DEFAULT '',
+            cover_image TEXT NOT NULL DEFAULT '',
+            visible INTEGER NOT NULL DEFAULT 1,
+            sort_order INTEGER NOT NULL DEFAULT 0,
+            created_at TEXT NOT NULL,
+            updated_at TEXT NOT NULL
+        );
         CREATE TABLE IF NOT EXISTS store_products (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             slug TEXT UNIQUE NOT NULL,
@@ -133,10 +146,32 @@ def ensure_store_db(connection: sqlite3.Connection) -> None:
         );
         """
     )
-    columns = {r[1] for r in connection.execute("PRAGMA table_info(store_products)")}
-    for column in ("sale_starts_at", "sale_ends_at"):
-        if column not in columns:
-            connection.execute(f"ALTER TABLE store_products ADD COLUMN {column} TEXT")
+    for table, additions in (
+        ("store_products", (
+            ("sale_starts_at", "TEXT"),
+            ("sale_ends_at", "TEXT"),
+            ("name_en", "TEXT NOT NULL DEFAULT ''"),
+            ("category_id", "INTEGER"),
+            ("option_kind", "TEXT NOT NULL DEFAULT 'options'"),
+        )),
+        ("store_variants", (
+            ("design_name", "TEXT NOT NULL DEFAULT ''"),
+            ("design_name_en", "TEXT NOT NULL DEFAULT ''"),
+            ("design_code", "TEXT NOT NULL DEFAULT ''"),
+            ("image", "TEXT NOT NULL DEFAULT ''"),
+        )),
+        ("store_order_items", (
+            ("product_name_en", "TEXT"),
+            ("variant_label_en", "TEXT"),
+        )),
+    ):
+        columns = {r[1] for r in connection.execute(f"PRAGMA table_info({table})")}
+        for column, definition in additions:
+            if column not in columns:
+                connection.execute(f"ALTER TABLE {table} ADD COLUMN {column} {definition}")
+    connection.execute(
+        "CREATE INDEX IF NOT EXISTS idx_store_products_category ON store_products(category_id)"
+    )
     order_columns = {r[1] for r in connection.execute("PRAGMA table_info(store_orders)")}
     if "checkout_id" not in order_columns:
         connection.execute("ALTER TABLE store_orders ADD COLUMN checkout_id TEXT")
@@ -218,6 +253,7 @@ def _serialize_product(connection: sqlite3.Connection, row: sqlite3.Row, *, publ
         "id": row["id"],
         "slug": row["slug"],
         "name": row["name"],
+        "optionKind": row["option_kind"],
         "description": row["description"],
         "images": json.loads(row["images_json"] or "[]"),
         "status": row["status"],

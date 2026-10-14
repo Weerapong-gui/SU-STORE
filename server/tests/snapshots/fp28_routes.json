@@ -4278,6 +4278,7 @@
    "{\"key\": \"announcement_banner_enabled\", \"updated_at\": \"<ts>\", \"value\": \"1\"}"
   ],
   "slip_ocr_results": [],
+  "store_categories": [],
   "store_counters": [],
   "store_order_items": [],
   "store_orders": [],
