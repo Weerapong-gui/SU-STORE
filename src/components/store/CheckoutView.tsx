@@ -7,6 +7,7 @@ import { MAX_CART_LINES, MAX_ITEM_QUANTITY, useCart } from "@/components/CartPro
 import { SCHOOL_OPTIONS } from "@/lib/checkoutOptions";
 import { formatPrice } from "@/lib/formatPrice";
 import { useLang } from "@/lib/i18n";
+import { localized, variantDisplayLabel } from "@/lib/localized";
 import { orderPageHref, saveOrderToken } from "@/lib/orderTokens";
 import { BUYER_FIELD_LABEL_EN, useStoreText } from "@/lib/storeI18n";
 import type { StoreMeta, StoreOrder, StoreProduct, StoreVariant } from "@/types/store";
@@ -15,7 +16,7 @@ const BUYER_KEY = "su-store-buyer";
 const ALWAYS = ["name", "phone", "email"];
 
 const inputClass =
-  "w-full rounded-2xl border border-zinc-300 bg-white px-4 py-3 text-sm outline-none transition focus:border-apple-blue focus:ring-4 focus:ring-apple-blue/10";
+  "w-full rounded-2xl border border-zinc-300 bg-white px-4 py-3 text-base outline-none transition focus:border-apple-blue focus:ring-4 focus:ring-apple-blue/10";
 
 export function CheckoutView() {
   const t = useStoreText();
@@ -60,13 +61,13 @@ export function CheckoutView() {
         price: live?.variant.price ?? item.unitPrice,
         // Show what the server will actually record: staff may have renamed the product
         // or relabelled the variant since it went into the cart.
-        name: live?.product.name ?? item.productName,
-        variantLabel: live ? (live.variant.label === "-" ? "" : live.variant.label) : item.variantLabel,
+        name: live ? localized(live.product.name, live.product.nameEn, lang) : item.productName,
+        variantLabel: live ? variantDisplayLabel(live.variant, lang) : item.variantLabel,
         tooMany: stockLeft !== null && item.quantity > stockLeft,
         stockLeft,
       };
     });
-  }, [items, products]);
+  }, [items, products, lang]);
 
   const fields = useMemo(() => {
     const extra = new Set<string>();
@@ -138,24 +139,25 @@ export function CheckoutView() {
   }
 
   return (
-    <form onSubmit={submit} className="grid gap-10 lg:grid-cols-[1fr_380px]">
-      <div className="space-y-8">
+    <form onSubmit={submit} className="grid grid-cols-1 gap-10 lg:grid-cols-[1fr_380px]">
+      <div className="min-w-0 space-y-8">
         <section>
           <h2 className="mb-4 text-xl font-semibold text-ink">{t.cart}</h2>
-          <ul className="divide-y divide-zinc-200 rounded-3xl bg-mist px-5">
+          {/* Cart line on mobile: image | name | price on the first row, quantity controls full width below. */}
+          <ul className="divide-y divide-zinc-200 rounded-3xl bg-mist px-4 sm:px-5">
             {lines.map(({ item, price, name, variantLabel, unavailable, tooMany, stockLeft }) => (
-              <li key={item.variantId} className="flex gap-4 py-4">
-                <div className="h-20 w-20 shrink-0 overflow-hidden rounded-2xl bg-zinc-200">
+              <li key={item.variantId} className="grid grid-cols-[4rem_minmax(0,1fr)_auto] gap-x-3 py-4 sm:grid-cols-[5rem_minmax(0,1fr)_auto] sm:gap-x-4">
+                <div className="h-16 w-16 overflow-hidden rounded-2xl bg-zinc-200 sm:row-span-2 sm:h-20 sm:w-20">
                   {item.image && (
                     // eslint-disable-next-line @next/next/no-img-element
                     <img src={item.image} alt="" className="h-full w-full object-cover" />
                   )}
                 </div>
-                <div className="min-w-0 flex-1">
-                  <Link href={`/products/${item.productSlug}`} className="font-semibold text-ink hover:underline">
+                <div className="min-w-0">
+                  <Link href={`/products/${item.productSlug}`} className="inline-flex min-h-11 items-center break-words font-semibold text-ink hover:underline">
                     {name}
                   </Link>
-                  {variantLabel && <p className="text-sm text-ink-soft">{variantLabel}</p>}
+                  {variantLabel && <p className="break-words text-sm text-ink-soft">{variantLabel}</p>}
                   {unavailable && <p className="text-sm font-semibold text-red-600">{t.unavailableItem}</p>}
                   {!unavailable && tooMany && stockLeft !== null && (
                     <p className="text-sm font-semibold text-red-600">{t.left(stockLeft)}</p>
@@ -163,25 +165,25 @@ export function CheckoutView() {
                   {!unavailable && price !== item.unitPrice && (
                     <p className="text-sm text-amber-700">{t.priceChanged(formatPrice(price))}</p>
                   )}
-                  <div className="mt-2 flex items-center gap-3">
-                    <div className="inline-flex items-center rounded-full border border-zinc-300 bg-white">
-                      <button type="button" className="px-3 py-1" onClick={() => setQuantity(item.variantId, item.quantity - 1)} aria-label="-">−</button>
-                      <span className="w-8 text-center text-sm font-semibold">{item.quantity}</span>
-                      <button
-                        type="button"
-                        className="px-3 py-1"
-                        onClick={() => setQuantity(item.variantId, Math.min(item.quantity + 1, stockLeft ?? MAX_ITEM_QUANTITY))}
-                        aria-label="+"
-                      >
-                        +
-                      </button>
-                    </div>
-                    <button type="button" className="text-sm text-ink-soft hover:text-red-600" onClick={() => removeItem(item.variantId)}>
-                      {t.remove}
-                    </button>
-                  </div>
                 </div>
                 <p className="font-semibold text-ink">{formatPrice(price * item.quantity)}</p>
+                <div className="col-span-3 mt-2 flex items-center gap-3 sm:col-span-1 sm:col-start-2">
+                  <div className="inline-flex items-center rounded-full border border-zinc-300 bg-white">
+                    <button type="button" className="h-11 w-11 text-lg" onClick={() => setQuantity(item.variantId, item.quantity - 1)} aria-label="-">−</button>
+                    <span className="w-8 text-center text-sm font-semibold">{item.quantity}</span>
+                    <button
+                      type="button"
+                      className="h-11 w-11 text-lg"
+                      onClick={() => setQuantity(item.variantId, Math.min(item.quantity + 1, stockLeft ?? MAX_ITEM_QUANTITY))}
+                      aria-label="+"
+                    >
+                      +
+                    </button>
+                  </div>
+                  <button type="button" className="min-h-11 min-w-11 text-sm text-ink-soft hover:text-red-600" onClick={() => removeItem(item.variantId)}>
+                    {t.remove}
+                  </button>
+                </div>
               </li>
             ))}
           </ul>
@@ -246,7 +248,7 @@ export function CheckoutView() {
         >
           {submitting ? t.placing : t.placeOrder}
         </button>
-        <Link href="/products" className="block text-center text-sm font-semibold text-apple-blue hover:underline">
+        <Link href="/products" className="flex min-h-11 items-center justify-center text-sm font-semibold text-apple-blue hover:underline">
           {t.continueShopping}
         </Link>
       </aside>

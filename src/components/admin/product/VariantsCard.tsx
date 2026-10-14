@@ -5,8 +5,8 @@ import { useConfirm } from "@/components/admin/ConfirmDialog";
 import { Button, Card, Field, inputClass } from "@/components/admin/ui";
 import { buildRows, droppedRows, rowLabel, splitList, uniqueValues, type VariantRow } from "./variants";
 
-// Step 3 of the product editor: sizes × colours → a table of price and stock per variant.
-export function VariantsCard({ rows, onChange }: { rows: VariantRow[]; onChange: (rows: VariantRow[]) => void }) {
+// The "ไซซ์ / สี" branch of step 3 (OptionsStep): sizes × colours → a table of price and stock per variant.
+export function VariantsCard({ rows, onChange, header }: { rows: VariantRow[]; onChange: (rows: VariantRow[]) => void; header?: React.ReactNode }) {
   const [sizesText, setSizesText] = useState(() => uniqueValues(rows, "size").join(", "));
   const [colorsText, setColorsText] = useState(() => uniqueValues(rows, "color").join(", "));
   const [defaultPrice, setDefaultPrice] = useState("");
@@ -33,6 +33,7 @@ export function VariantsCard({ rows, onChange }: { rows: VariantRow[]; onChange:
 
   return (
     <Card step={3} title="ตัวเลือก ราคา และสต็อก" hint="ถ้าสินค้ามีแบบเดียว ไม่ต้องกรอกไซซ์/สี ใส่แค่ราคาในตารางได้เลย">
+      {header}
       <div className="grid gap-4 sm:grid-cols-3">
         <Field label="ไซซ์" hint="คั่นด้วยจุลภาค เช่น S, M, L, XL">
           <input className={inputClass} value={sizesText} onChange={(e) => setSizesText(e.target.value)} placeholder="S, M, L, XL" />

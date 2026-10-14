@@ -21,7 +21,8 @@ export function useStorePreview(): StorePreviewMode | null {
 export function StorePreviewBar() {
   const t = useStoreText();
   return (
-    <div className="sticky top-0 z-[60] bg-amber-300 px-4 py-2 text-center text-sm font-semibold text-amber-950">
+    // Not sticky: the navbar sticks at top-0 too, and a sticky bar would cover its buttons while scrolling.
+    <div className="bg-amber-300 px-4 py-2 text-center text-sm font-semibold text-amber-950">
       {t.previewBar}
     </div>
   );

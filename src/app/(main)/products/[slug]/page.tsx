@@ -6,17 +6,24 @@ import { getStoreProduct } from "@/lib/storeApi";
 
 export const dynamic = "force-dynamic";
 
-export async function generateMetadata({ params }: { params: { slug: string } }): Promise<Metadata> {
+type PageProps = { params: { slug: string }; searchParams: { design?: string | string[] } };
+
+// Next gives repeated query params as an array.
+const designParam = (value: string | string[] | undefined) => (Array.isArray(value) ? value[0] : value);
+
+export async function generateMetadata({ params, searchParams }: PageProps): Promise<Metadata> {
   const product = await getStoreProduct(params.slug);
-  return { title: product ? `${product.name} · SU STORE` : "SU STORE" };
+  if (!product) return { title: "SU STORE" };
+  const design = product.variants.find((v) => v.designCode.toLowerCase() === designParam(searchParams.design)?.toLowerCase());
+  return { title: `${design?.designName || product.name} · SU STORE` };
 }
 
-export default async function ProductPage({ params }: { params: { slug: string } }) {
+export default async function ProductPage({ params, searchParams }: PageProps) {
   const product = await getStoreProduct(params.slug);
   if (!product) notFound();
   return (
     <Container className="py-10 md:py-14">
-      <ProductDetail product={product} />
+      <ProductDetail product={product} initialDesign={designParam(searchParams.design)} />
     </Container>
   );
 }

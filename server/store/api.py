@@ -24,7 +24,7 @@ from fp28.database import log_audit, open_db
 from fp28.products import save_product_image_file
 from fp28.slips import delete_local_slip_file, resolve_stored_slip_path
 
-from . import dashboard, db, home
+from . import categories, dashboard, db, home
 from . import meta as store_meta
 
 _IMAGE_EXT = {"image/jpeg": ".jpg", "image/png": ".png", "image/webp": ".webp"}
@@ -79,6 +79,17 @@ def _route(handler: Any, method: str, path: str, query: dict[str, str]) -> None:
     if method == "GET" and path in ("/v2/meta", "/v2/admin/meta"):
         with open_db() as conn:
             return send(HTTPStatus.OK, store_meta.meta(conn))
+
+    if method == "GET" and path == "/v2/categories":
+        with open_db() as conn:
+            return send(HTTPStatus.OK, {"categories": categories.list_categories(conn, public=True)})
+
+    m = re.fullmatch(r"/v2/categories/([a-z0-9-]+)", path)
+    if method == "GET" and m:
+        with open_db() as conn:
+            category = categories.get_category(conn, m.group(1), public=True)
+            products = db.list_products(conn, public=True, category_id=category["id"])
+            return send(HTTPStatus.OK, {"category": category, "products": products})
 
     if method == "GET" and path == "/v2/products":
         with open_db() as conn:
@@ -202,14 +213,47 @@ def _route(handler: Any, method: str, path: str, query: dict[str, str]) -> None:
         with open_db() as conn:
             return send(HTTPStatus.OK, home.discard_home_draft(conn))
 
-    if method == "POST" and path == "/v2/admin/home/images":
-        content, mime = _read_multipart_file(handler, "image", config.MAX_PRODUCT_IMAGE_SIZE_BYTES)
-        if mime not in _IMAGE_EXT:
-            raise db.StoreError(HTTPStatus.BAD_REQUEST, "รองรับเฉพาะรูป JPG, PNG หรือ WebP")
-        filename, error = save_product_image_file(f"home-{secrets.token_hex(4)}", f"image{_IMAGE_EXT[mime]}", mime, content)
-        if error:
-            raise db.StoreError(HTTPStatus.BAD_REQUEST, error)
-        return send(HTTPStatus.OK, {"url": f"/product-images/{filename}"})
+    if method == "POST" and path in ("/v2/admin/home/images", "/v2/admin/images"):
+        prefix = "home" if path == "/v2/admin/home/images" else "admin"
+        return send(HTTPStatus.OK, {"url": _save_admin_image(handler, prefix)})
+
+    if path == "/v2/admin/categories":
+        if method == "GET":
+            with open_db() as conn:
+                return send(HTTPStatus.OK, {"categories": categories.list_categories(conn, public=False)})
+        if method == "POST":
+            payload = _json_body(handler)
+            with open_db() as conn:
+                category = categories.create_category(conn, payload)
+                log_audit(conn, "-", "v2_category_created", f"{category['slug']} by {_admin_user(handler)}")
+            return send(HTTPStatus.CREATED, category)
+
+    if method == "PUT" and path == "/v2/admin/categories/order":
+        payload = _json_body(handler)
+        with open_db() as conn:
+            ordered = categories.reorder_categories(conn, payload.get("ids"))
+            slugs = ",".join(category["slug"] for category in ordered)
+            log_audit(conn, "-", "v2_category_reordered", f"{slugs} by {_admin_user(handler)}")
+        return send(HTTPStatus.OK, {"categories": ordered})
+
+    m = re.fullmatch(r"/v2/admin/categories/(\d+)", path)
+    if m:
+        category_id = int(m.group(1))
+        if method == "GET":
+            with open_db() as conn:
+                return send(HTTPStatus.OK, categories.get_category(conn, category_id, public=False))
+        if method == "PUT":
+            payload = _json_body(handler)
+            with open_db() as conn:
+                category = categories.update_category(conn, category_id, payload)
+                log_audit(conn, "-", "v2_category_updated", f"{category['slug']} by {_admin_user(handler)}")
+            return send(HTTPStatus.OK, category)
+        if method == "DELETE":
+            with open_db() as conn:
+                category = categories.get_category(conn, category_id, public=False)
+                result = categories.delete_category(conn, category_id)
+                log_audit(conn, "-", "v2_category_deleted", f"{category['slug']} by {_admin_user(handler)}")
+            return send(HTTPStatus.OK, result)
 
     if path == "/v2/admin/products":
         if method == "GET":
@@ -335,6 +379,16 @@ def _int(value: str | None, fallback: int) -> int:
         return int(value) if value else fallback
     except ValueError:
         return fallback
+
+
+def _save_admin_image(handler: Any, prefix: str) -> str:
+    content, mime = _read_multipart_file(handler, "image", config.MAX_PRODUCT_IMAGE_SIZE_BYTES)
+    if mime not in _IMAGE_EXT:
+        raise db.StoreError(HTTPStatus.BAD_REQUEST, "รองรับเฉพาะรูป JPG, PNG หรือ WebP")
+    filename, error = save_product_image_file(f"{prefix}-{secrets.token_hex(4)}", f"image{_IMAGE_EXT[mime]}", mime, content)
+    if error:
+        raise db.StoreError(HTTPStatus.BAD_REQUEST, error)
+    return f"/product-images/{filename}"
 
 
 def _read_multipart_file(handler: Any, field: str, max_bytes: int) -> tuple[bytes, str]:

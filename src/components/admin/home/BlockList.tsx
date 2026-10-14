@@ -4,16 +4,17 @@ import { useRef, useState } from "react";
 import { ArrowDown, ArrowUp, ChevronDown, Eye, EyeOff, GripVertical, Trash2 } from "lucide-react";
 import { useConfirm } from "@/components/admin/ConfirmDialog";
 import { Button } from "@/components/admin/ui";
-import type { HomeBlock, HomeBlockType, StoreProduct } from "@/types/store";
+import type { HomeBlock, HomeBlockType, StoreCategory, StoreProduct } from "@/types/store";
 import { BLOCK_INFO, MAX_BLOCKS, move, newBlock, summarize } from "./blocks";
 import { BlockForm } from "./BlockForms";
 import { BlockCornerField } from "./CornerPicker";
 import { IconButton } from "./controls";
 
 // The ordered list of home page blocks: reorder (buttons or drag), hide, delete, edit, add.
-export function BlockList({ blocks, products, storeRadius, onChange }: {
+export function BlockList({ blocks, products, categories, storeRadius, onChange }: {
   blocks: HomeBlock[];
   products: StoreProduct[];
+  categories: StoreCategory[];
   storeRadius: number;
   onChange: (blocks: HomeBlock[]) => void;
 }) {
@@ -51,6 +52,7 @@ export function BlockList({ blocks, products, storeRadius, onChange }: {
           isFirst={i === 0}
           isLast={i === blocks.length - 1}
           products={products}
+          categories={categories}
           storeRadius={storeRadius}
           onToggle={() => setOpenId(openId === block.id ? null : block.id)}
           onChange={(b) => setBlock(i, b)}
@@ -72,12 +74,13 @@ export function BlockList({ blocks, products, storeRadius, onChange }: {
   );
 }
 
-function BlockCard({ block, open, isFirst, isLast, products, storeRadius, onToggle, onChange, onMove, onRemove, onDragStart, onDrop }: {
+function BlockCard({ block, open, isFirst, isLast, products, categories, storeRadius, onToggle, onChange, onMove, onRemove, onDragStart, onDrop }: {
   block: HomeBlock;
   open: boolean;
   isFirst: boolean;
   isLast: boolean;
   products: StoreProduct[];
+  categories: StoreCategory[];
   storeRadius: number;
   onToggle: () => void;
   onChange: (block: HomeBlock) => void;
@@ -126,7 +129,7 @@ function BlockCard({ block, open, isFirst, isLast, products, storeRadius, onTogg
       </div>
       {open && (
         <div className="border-t border-zinc-100 p-4 sm:p-5">
-          <BlockForm block={block} onChange={onChange} products={products} />
+          <BlockForm block={block} onChange={onChange} products={products} categories={categories} />
           <BlockCornerField value={block.radius} storeRadius={storeRadius} onChange={(radius) => onChange({ ...block, radius })} />
         </div>
       )}

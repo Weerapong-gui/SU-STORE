@@ -1,12 +1,15 @@
-import { GalleryHorizontal, LayoutGrid, PanelLeft, Star, Type, type LucideIcon } from "lucide-react";
+import { GalleryHorizontal, LayoutGrid, PanelLeft, Shapes, Star, Type, type LucideIcon } from "lucide-react";
 import type { HeroSlide, HomeBlock, HomeBlockType } from "@/types/store";
 
-// Limits mirror validate_home() in server/store/db.py (MAX_HOME_BLOCKS, MAX_HERO_SLIDES, MAX_FEATURED).
+// Block types mirror HOME_BLOCK_TYPES in server/store/home.py: keep the two lists in sync.
+// Limits mirror validate_home() in server/store/home.py (MAX_HOME_BLOCKS, MAX_HERO_SLIDES, MAX_FEATURED, MAX_HOME_CATEGORIES).
 export const MAX_BLOCKS = 20;
 export const MAX_SLIDES = 6;
 export const MAX_FEATURED = 12;
+export const MAX_HOME_CATEGORIES = 12;
 
 export const BLOCK_INFO: Record<HomeBlockType, { label: string; icon: LucideIcon; description: string }> = {
+  categories: { label: "หมวดหมู่", icon: Shapes, description: "ปกหมวดหมู่สินค้า กดแล้วเข้าไปดูสินค้าในหมวดนั้น เลือกเองได้ว่าจะโชว์หมวดไหน" },
   hero: { label: "แบนเนอร์", icon: GalleryHorizontal, description: "รูปใหญ่เต็มความกว้าง มีหัวข้อและปุ่ม ใส่ได้หลายรูปแล้วเลื่อนเป็นสไลด์" },
   featured: { label: "สินค้าแนะนำ", icon: Star, description: "เลือกสินค้าที่อยากโชว์เองว่าจะให้ขึ้นชิ้นไหนบ้าง" },
   text: { label: "ข้อความ", icon: Type, description: "หัวข้อกับย่อหน้าสั้นๆ เช่น วันรับของ หรือวิธีสั่งซื้อ" },
@@ -19,6 +22,8 @@ export const emptySlide = (): HeroSlide => ({ image: "", eyebrow: "", title: "",
 export function newBlock(type: HomeBlockType): HomeBlock {
   const id = `b-${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`;
   switch (type) {
+    case "categories":
+      return { id, type, hidden: false, title: "", categoryIds: [] };
     case "hero":
       return { id, type, hidden: false, autoplay: true, slides: [emptySlide()] };
     case "featured":
@@ -37,6 +42,8 @@ const EMPTY_WARNING = "ยังว่างอยู่ จึงยังไ�
 // One-line description of a block for its collapsed card, plus a warning when it won't show.
 export function summarize(block: HomeBlock): { text: string; warning?: string } {
   switch (block.type) {
+    case "categories":
+      return { text: block.categoryIds.length ? `${block.categoryIds.length} หมวด` : "ทุกหมวด" };
     case "hero": {
       const first = block.slides[0];
       const blank = block.slides.length === 1 && !first.image && !first.title && !first.subtitle;

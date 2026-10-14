@@ -5,7 +5,7 @@ import { Eye } from "lucide-react";
 import { adminFetch, formatThaiDateTime } from "@/lib/adminApi";
 import { useConfirm } from "@/components/admin/ConfirmDialog";
 import { Button, useToast } from "@/components/admin/ui";
-import type { HomeAdminState, HomeLayout, StoreProduct } from "@/types/store";
+import type { HomeAdminState, HomeLayout, StoreCategory, StoreProduct } from "@/types/store";
 import { AccentPicker } from "./AccentPicker";
 import { BlockList } from "./BlockList";
 import { CornerPicker } from "./CornerPicker";
@@ -22,17 +22,21 @@ export function HomeEditor() {
   const [state, setState] = useState<HomeAdminState | null>(null);
   const [layout, setLayout] = useState<HomeLayout | null>(null);
   const [products, setProducts] = useState<StoreProduct[]>([]);
+  const [categories, setCategories] = useState<StoreCategory[]>([]);
   const [save, setSave] = useState<SaveStatus>({ kind: "idle" });
   const [busy, setBusy] = useState(false);
   const pending = useRef<HomeLayout | null>(null);
   const timer = useRef<ReturnType<typeof setTimeout>>();
 
   useEffect(() => {
-    Promise.all([adminFetch<HomeAdminState>("home"), adminFetch<{ products: StoreProduct[] }>("products")])
-      .then(([home, list]) => {
+    Promise.all([adminFetch<HomeAdminState>("home"), adminFetch<{ products: StoreProduct[] }>("products"),
+      adminFetch<{ categories: StoreCategory[] }>("categories"),
+    ])
+      .then(([home, list, cats]) => {
         setState(home);
         setLayout(home.draft);
         setProducts(list.products);
+        setCategories(cats.categories);
       })
       .catch((e: Error) => toast(e.message, "error"));
   }, [toast]);
@@ -168,7 +172,7 @@ export function HomeEditor() {
         )}
       </div>
 
-      <BlockList blocks={layout.blocks} products={products} storeRadius={layout.radius} onChange={(blocks) => update({ ...layout, blocks })} />
+      <BlockList blocks={layout.blocks} products={products} categories={categories} storeRadius={layout.radius} onChange={(blocks) => update({ ...layout, blocks })} />
 
       <AccentPicker value={layout.accent} onChange={(accent) => update({ ...layout, accent })} />
 

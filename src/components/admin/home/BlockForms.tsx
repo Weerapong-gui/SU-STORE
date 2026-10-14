@@ -3,8 +3,9 @@
 import { AlignCenter, AlignLeft, ArrowDown, ArrowUp, Trash2 } from "lucide-react";
 import { useConfirm } from "@/components/admin/ConfirmDialog";
 import { Button, Field, inputClass } from "@/components/admin/ui";
-import type { HeroSlide, HomeBlock, StoreProduct } from "@/types/store";
+import type { HeroSlide, HomeBlock, StoreCategory, StoreProduct } from "@/types/store";
 import { MAX_FEATURED, MAX_SLIDES, emptySlide, move } from "./blocks";
+import { CategoriesForm } from "./CategoriesForm";
 import { ButtonFields, IconButton, ImagePicker, Segmented } from "./controls";
 
 type FormProps<T extends HomeBlock["type"]> = {
@@ -13,8 +14,10 @@ type FormProps<T extends HomeBlock["type"]> = {
   products: StoreProduct[];
 };
 
-export function BlockForm({ block, onChange, products }: { block: HomeBlock; onChange: (b: HomeBlock) => void; products: StoreProduct[] }) {
+export function BlockForm({ block, onChange, products, categories }: { block: HomeBlock; onChange: (b: HomeBlock) => void; products: StoreProduct[]; categories: StoreCategory[] }) {
   switch (block.type) {
+    case "categories":
+      return <CategoriesForm block={block} onChange={onChange} categories={categories} />;
     case "hero":
       return <HeroForm block={block} onChange={onChange} products={products} />;
     case "featured":

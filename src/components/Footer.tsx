@@ -22,12 +22,12 @@ export function Footer() {
           </p>
           <div className="mt-4">
             <p className="text-xs font-semibold tracking-[0.1em] text-zinc-500">CONTACT US</p>
-            <div className="mt-2 flex flex-wrap items-center gap-x-5 gap-y-2">
+            <div className="mt-2 flex flex-wrap items-center gap-x-5">
               <a
                 href="https://www.instagram.com/su.mfu/"
                 target="_blank"
                 rel="noopener noreferrer"
-                className="inline-flex items-center gap-2 text-sm text-zinc-400 transition hover:text-white"
+                className="inline-flex min-h-11 items-center gap-2 text-sm text-zinc-400 transition hover:text-white"
               >
                 <Instagram className="h-4 w-4" />
                 @su.mfu
@@ -36,7 +36,7 @@ export function Footer() {
                 href="https://www.facebook.com/mfu.su"
                 target="_blank"
                 rel="noopener noreferrer"
-                className="inline-flex items-center gap-2 text-sm text-zinc-400 transition hover:text-white"
+                className="inline-flex min-h-11 items-center gap-2 text-sm text-zinc-400 transition hover:text-white"
               >
                 <Facebook className="h-4 w-4" />
                 mfu.su
@@ -45,7 +45,7 @@ export function Footer() {
                 href="https://www.tiktok.com/@su.mfu"
                 target="_blank"
                 rel="noopener noreferrer"
-                className="inline-flex items-center gap-2 text-sm text-zinc-400 transition hover:text-white"
+                className="inline-flex min-h-11 items-center gap-2 text-sm text-zinc-400 transition hover:text-white"
               >
                 <svg className="h-4 w-4" viewBox="0 0 24 24" fill="currentColor">
                   <path d="M19.59 6.69a4.83 4.83 0 0 1-3.77-4.25V2h-3.45v13.67a2.89 2.89 0 0 1-2.88 2.5 2.89 2.89 0 0 1-2.89-2.89 2.89 2.89 0 0 1 2.89-2.89c.28 0 .54.04.79.1V9.01a6.33 6.33 0 0 0-.79-.05 6.34 6.34 0 0 0-6.34 6.34 6.34 6.34 0 0 0 6.34 6.34 6.34 6.34 0 0 0 6.33-6.34V8.69a8.18 8.18 0 0 0 4.78 1.52V6.76a4.85 4.85 0 0 1-1.01-.07z"/>

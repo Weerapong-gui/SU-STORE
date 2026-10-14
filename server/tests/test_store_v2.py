@@ -19,7 +19,7 @@ sys.modules.setdefault("ocr", MagicMock())
 
 import order_api  # noqa: E402
 from fp28 import auth, config, database, slips  # noqa: E402
-from store import dashboard, db, home  # noqa: E402
+from store import categories, dashboard, db, home  # noqa: E402
 from store import meta as store_meta  # noqa: E402
 
 
@@ -405,10 +405,52 @@ class TestHome:
         {"blocks": [{**HERO, "radius": "square"}]},
         {"font": None, "blocks": []},
         {"blocks": [{"id": "f", "type": "featured", "productIds": list(range(13))}]},
+        {"blocks": [{"id": "c", "type": "categories", "categoryIds": list(range(13))}]},
+        {"blocks": [{"id": "c", "type": "categories", "title": "x" * 81}]},
+        {"blocks": [{"id": "c", "type": "categories", "categoryIds": "1"}]},
     ])
     def test_rejects_bad_layouts(self, payload):
         with pytest.raises(db.StoreError):
             home.validate_home(payload)
+
+    def test_categories_block_resolves_visible_only(self):
+        conn = _conn()
+        first = categories.create_category(conn, {"name": "First"})
+        hidden = categories.create_category(conn, {"name": "Hidden", "visible": False})
+        last = categories.create_category(conn, {"name": "Last"})
+        categories.reorder_categories(conn, [last["id"], hidden["id"], first["id"]])
+        layout = home.validate_home({"blocks": [
+            {"id": "all", "type": "categories", "title": "x" * 80, "categoryIds": []},
+            {"id": "selected", "type": "categories", "categoryIds": [first["id"], hidden["id"], last["id"], 999]},
+            {"id": "one", "type": "categories", "categoryIds": [first["id"]]},
+            {"id": "hidden", "type": "categories", "hidden": True},
+            {"id": "limit", "type": "categories", "categoryIds": list(range(12))},
+        ]})
+        resolved = home.resolve_home(conn, layout)
+        assert [b["id"] for b in resolved["blocks"]] == ["all", "selected", "one", "limit"]
+        for block in resolved["blocks"][:2]:
+            assert [c["id"] for c in block["categories"]] == [last["id"], first["id"]]
+            assert all(c["visible"] for c in block["categories"])
+        assert resolved["blocks"][0]["title"] == "x" * 80
+        assert [c["name"] for c in resolved["blocks"][2]["categories"]] == ["First"]
+        assert "categories" not in layout["blocks"][0]
+
+    def test_categories_block_dropped_when_none_visible(self):
+        conn = _conn()
+        hidden = categories.create_category(conn, {"name": "Hidden", "visible": False})
+        layout = home.validate_home({"blocks": [
+            {"id": "all", "type": "categories", "categoryIds": []},
+            {"id": "selected", "type": "categories", "categoryIds": [hidden["id"], 999]},
+        ]})
+        assert home.resolve_home(conn, layout)["blocks"] == []
+        categories.create_category(conn, {"name": "Visible"})
+        assert [b["id"] for b in home.resolve_home(conn, layout)["blocks"]] == ["all"]
+
+    @pytest.mark.parametrize("value", ["1", True, False, 1.5, None, {}, []])
+    def test_categories_block_rejects_non_int_ids(self, value):
+        with pytest.raises(db.StoreError, match="รายการหมวดหมู่ไม่ถูกต้อง") as error:
+            home.validate_home({"blocks": [{"id": "c", "type": "categories", "categoryIds": [value]}]})
+        assert error.value.status == 400
 
     def test_resolve_skips_hidden_empty_and_unavailable(self):
         conn = _conn()

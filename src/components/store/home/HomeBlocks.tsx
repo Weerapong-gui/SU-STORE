@@ -2,6 +2,7 @@
 
 import { BuyButton } from "@/components/BuyButton";
 import { Container } from "@/components/ui/Container";
+import { CategoryCovers } from "@/components/store/CategoryCovers";
 import { ProductGrid } from "@/components/store/ProductGrid";
 import { radiusVars } from "@/lib/radius";
 import { useStoreText } from "@/lib/storeI18n";
@@ -14,6 +15,13 @@ const headingClass = "mb-8 text-2xl font-semibold tracking-tight text-ink md:tex
 function Block({ block, products }: { block: HomeBlock; products: ResolvedHome["products"] }) {
   const t = useStoreText();
   switch (block.type) {
+    case "categories":
+      return (
+        // CategoryCovers brings its own top padding; the bottom padding keeps the next block (or footer) off the tiles.
+        <Container className="pb-10 md:pb-14">
+          <CategoryCovers categories={block.categories ?? []} title={block.title || t.shopByCategory} />
+        </Container>
+      );
     case "hero":
       return <HeroSlider slides={block.slides} autoplay={block.autoplay} />;
     case "featured":

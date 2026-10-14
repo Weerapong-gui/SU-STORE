@@ -83,7 +83,10 @@ Python HTTP server แบบ raw `http.server` (`ThreadingHTTPServer`) ไม่
 ระบบขายของใหม่ แยกจาก FP28 แต่อยู่ใน `orders.db` ไฟล์เดียวกัน
 
 - ไฟล์ในแพ็กเกจ (ใช้ DB pool, audit และที่เก็บไฟล์จาก `fp28` ไม่ import `order_api`)
-  - `store/db.py`: schema `store_*`, สินค้า, ออเดอร์, settings และ helper กลาง (`StoreError`, `clean_text`, `_as_int`)
+  - `store/common.py`: helper กลาง (`StoreError`, `clean_text`, `as_int`, `slugify`, `unique_slug`, `clean_image_url`, `now_iso`)
+  - `store/db.py`: schema `store_*`, สินค้า, ออเดอร์, settings
+  - `store/categories.py`: หมวดหมู่ (CRUD, เรียงลำดับ, ซ่อน = 404 หน้าหมวดแต่สินค้ายังขายได้)
+  - `store/designs.py`: โค้ดและ label ของลาย (`CODE · ชื่อ`)
   - `store/home.py`: หน้าแรก
   - `store/dashboard.py`: ยอดขาย
   - `store/meta.py`: ข้อมูลที่หน้าร้านและหลังร้านโหลดครั้งเดียว

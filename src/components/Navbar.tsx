@@ -43,7 +43,7 @@ export function Navbar() {
       <Container className="flex h-16 items-center justify-between">
         <Link
           href="/"
-          className="inline-flex items-center transition hover:opacity-80"
+          className="inline-flex min-h-11 min-w-11 items-center transition hover:opacity-80"
           aria-label="SU STORE"
         >
           <Image
@@ -90,18 +90,18 @@ export function Navbar() {
         <div className="flex items-center gap-2 md:hidden">
           <button
             onClick={() => setLang(lang === "en" ? "th" : "en")}
-            className="rounded-full border border-zinc-300 px-2.5 py-1 text-xs font-semibold text-zinc-600 transition hover:border-zinc-400 hover:text-zinc-900"
+            className="min-h-11 min-w-11 rounded-full border border-zinc-300 px-3 text-xs font-semibold text-zinc-600 transition hover:border-zinc-400 hover:text-zinc-900"
           >
             {lang === "en" ? "EN" : "TH"}
           </button>
           <Link
             href="/checkout"
-            className="relative flex h-9 w-9 items-center justify-center rounded-circle text-zinc-600 transition hover:bg-zinc-100 hover:text-zinc-900"
+            className="relative flex h-11 w-11 items-center justify-center rounded-circle text-zinc-600 transition hover:bg-zinc-100 hover:text-zinc-900"
             aria-label="Checkout"
           >
             <ShoppingBag className="h-5 w-5" strokeWidth={1.8} />
             {itemCount > 0 ? (
-              <span className="absolute right-1 top-1 inline-flex min-w-[1.1rem] items-center justify-center rounded-circle bg-apple-blue px-1 text-[9px] font-semibold leading-none text-white">
+              <span className="absolute right-1.5 top-1.5 inline-flex min-w-[1.1rem] items-center justify-center rounded-circle bg-apple-blue px-1 text-[9px] font-semibold leading-none text-white">
                 {itemCount > 99 ? "99+" : itemCount}
               </span>
             ) : null}
@@ -111,7 +111,7 @@ export function Navbar() {
             onClick={() => setIsMenuOpen((prev) => !prev)}
             aria-label={isMenuOpen ? "Close menu" : "Open menu"}
             aria-expanded={isMenuOpen}
-            className="flex h-9 w-9 items-center justify-center rounded-circle text-zinc-600 transition hover:bg-zinc-100 hover:text-zinc-900"
+            className="flex h-11 w-11 items-center justify-center rounded-circle text-zinc-600 transition hover:bg-zinc-100 hover:text-zinc-900"
           >
             {isMenuOpen ? (
               <X className="h-5 w-5" />
@@ -125,7 +125,7 @@ export function Navbar() {
       {/* Mobile dropdown */}
       <div
         className={cn(
-          "absolute left-0 right-0 overflow-hidden bg-[rgba(255,255,255,0.96)] backdrop-blur-xl transition-[max-height,opacity] duration-300 ease-in-out md:hidden",
+          "absolute left-0 right-0 overflow-hidden bg-white transition-[max-height,opacity] duration-300 ease-in-out md:hidden",
           isMenuOpen ? "max-h-72 opacity-100 border-b border-black/[0.06]" : "max-h-0 opacity-0"
         )}
       >

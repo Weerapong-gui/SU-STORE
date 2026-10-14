@@ -4,6 +4,8 @@ import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { BankAccountCopyField } from "@/components/BankAccountCopyField";
+import { useLang } from "@/lib/i18n";
+import { orderItemText } from "@/lib/localized";
 import { formatPrice } from "@/lib/formatPrice";
 import { getOrderToken, orderPageHref, saveOrderToken } from "@/lib/orderTokens";
 import { useStoreText } from "@/lib/storeI18n";
@@ -15,6 +17,7 @@ const MAX_SLIP_BYTES = 5 * 1024 * 1024;
 
 export function OrderView({ code }: { code: string }) {
   const t = useStoreText();
+  const { lang } = useLang();
   const searchParams = useSearchParams();
   const [token, setToken] = useState<string | null>(null);
   const [order, setOrder] = useState<StoreOrder | null>(null);
@@ -110,7 +113,7 @@ export function OrderView({ code }: { code: string }) {
       <div className="rounded-3xl bg-mist px-6 py-16 text-center">
         <p className="text-lg font-semibold text-ink">{t.orderNotFound}</p>
         <p className="mx-auto mt-2 max-w-md text-sm text-ink-soft">{t.orderNotFoundHint}</p>
-        <Link href={`/check-order?code=${code}`} className="mt-5 inline-block font-semibold text-apple-blue hover:underline">
+        <Link href={`/check-order?code=${code}`} className="mt-5 inline-flex min-h-11 items-center font-semibold text-apple-blue hover:underline">
           {t.trackTitle} →
         </Link>
       </div>
@@ -200,16 +203,19 @@ export function OrderView({ code }: { code: string }) {
       <section className="rounded-3xl bg-mist p-6">
         <h2 className="mb-3 text-xl font-semibold text-ink">{t.orderSummary}</h2>
         <ul className="divide-y divide-zinc-200">
-          {order.items.map((i) => (
-            <li key={i.variantId} className="flex justify-between gap-4 py-3 text-sm">
-              <span>
-                <span className="font-semibold text-ink">{i.productName}</span>
-                {i.variantLabel !== "-" && <span className="text-ink-soft"> · {i.variantLabel}</span>}
-                <span className="text-ink-soft"> × {i.quantity}</span>
-              </span>
-              <span className="font-semibold text-ink">{formatPrice(i.lineTotal)}</span>
-            </li>
-          ))}
+          {order.items.map((i) => {
+            const { name, label } = orderItemText(i, lang);
+            return (
+              <li key={i.variantId} className="flex justify-between gap-4 py-3 text-sm">
+                <span>
+                  <span className="font-semibold text-ink">{name}</span>
+                  {label && <span className="text-ink-soft"> · {label}</span>}
+                  <span className="text-ink-soft"> × {i.quantity}</span>
+                </span>
+                <span className="font-semibold text-ink">{formatPrice(i.lineTotal)}</span>
+              </li>
+            );
+          })}
         </ul>
         <div className="mt-3 flex justify-between border-t border-zinc-300 pt-3 text-lg font-semibold text-ink">
           <span>{t.subtotal}</span>
@@ -220,7 +226,7 @@ export function OrderView({ code }: { code: string }) {
       <section className="rounded-3xl border border-zinc-200 p-6">
         <h2 className="font-semibold text-ink">{t.saveLink}</h2>
         <p className="mt-1 text-sm text-ink-soft">{t.saveLinkHint}</p>
-        <button type="button" onClick={copyLink} className="mt-3 rounded-full bg-apple-blue-soft px-5 py-2 text-sm font-semibold text-apple-blue hover:bg-apple-blue/15">
+        <button type="button" onClick={copyLink} className="mt-3 min-h-11 rounded-full bg-apple-blue-soft px-5 text-sm font-semibold text-apple-blue hover:bg-apple-blue/15">
           {copied ? t.copied : t.copyLink}
         </button>
       </section>

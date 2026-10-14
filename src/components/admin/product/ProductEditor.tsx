@@ -6,82 +6,17 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { adminFetch } from "@/lib/adminApi";
 import { useConfirm } from "@/components/admin/ConfirmDialog";
 import { Badge, Button, Card, Field, inputClass, PRODUCT_STATUS_LABEL, useToast } from "@/components/admin/ui";
-import type { ProductStatus, StoreMeta, StoreProduct } from "@/types/store";
+import type { ProductStatus, StoreCategory, StoreMeta, StoreProduct } from "@/types/store";
 import { ImagesCard } from "./ImagesCard";
-import { VariantsCard } from "./VariantsCard";
-import { EMPTY_ROW, rowProblems, rowsFromProduct, type VariantRow } from "./variants";
+import { OptionsStep } from "./OptionsStep";
+import { newDesignRow, type DesignRowsUpdate } from "./designRows";
+import { EMPTY_FORM, formFromProduct, formProblems, payloadFromForm, type Form } from "./productForm";
 
 const STATUS_HELP: Record<ProductStatus, string> = {
   draft: "ยังไม่แสดงบนหน้าร้าน ใช้ระหว่างเตรียมข้อมูล",
   active: "แสดงบนหน้าร้าน ลูกค้าสั่งซื้อได้",
   archived: "ซ่อนจากหน้าร้าน แต่ออเดอร์เก่ายังอยู่ครบ",
 };
-
-type Form = {
-  name: string;
-  slug: string;
-  description: string;
-  rows: VariantRow[];
-  buyerFields: string[];
-  status: ProductStatus;
-  saleStartsAt: string;
-  saleEndsAt: string;
-};
-
-const EMPTY_FORM: Form = {
-  name: "",
-  slug: "",
-  description: "",
-  rows: [EMPTY_ROW],
-  buyerFields: [],
-  status: "draft",
-  saleStartsAt: "",
-  saleEndsAt: "",
-};
-
-function formFromProduct(p: StoreProduct): Form {
-  const rows = rowsFromProduct(p);
-  return {
-    name: p.name,
-    slug: p.slug,
-    description: p.description,
-    rows: rows.length ? rows : [EMPTY_ROW],
-    buyerFields: p.buyerFields,
-    status: p.status,
-    // Stored as Bangkok-time ISO (+07:00); datetime-local wants "YYYY-MM-DDTHH:mm".
-    saleStartsAt: p.saleStartsAt?.slice(0, 16) ?? "",
-    saleEndsAt: p.saleEndsAt?.slice(0, 16) ?? "",
-  };
-}
-
-function formProblems(form: Form): string[] {
-  return [
-    ...(form.name.trim() ? [] : ["ยังไม่ได้ใส่ชื่อสินค้า"]),
-    ...rowProblems(form.rows),
-    ...(form.status === "active" && form.rows.length === 0 ? ["ต้องมีตัวเลือกอย่างน้อย 1 แบบก่อนเปิดขาย"] : []),
-    ...(form.saleStartsAt && form.saleEndsAt && form.saleEndsAt <= form.saleStartsAt ? ["เวลาปิดขายต้องอยู่หลังเวลาเปิดขาย"] : []),
-  ];
-}
-
-function payloadFromForm(form: Form, isNew: boolean) {
-  return {
-    name: form.name,
-    description: form.description,
-    buyerFields: form.buyerFields,
-    status: form.status,
-    saleStartsAt: form.saleStartsAt || null,
-    saleEndsAt: form.saleEndsAt || null,
-    variants: form.rows.map((r) => ({
-      id: r.id,
-      size: r.size,
-      color: r.color,
-      price: Number(r.price),
-      stock: r.stock === "" ? null : Number(r.stock),
-      active: true,
-    })),
-    ...(isNew && form.slug.trim() ? { slug: form.slug } : {}),
-  };
-}
 
 export function ProductEditor({ productId }: { productId?: number }) {
   const router = useRouter();
@@ -90,6 +25,7 @@ export function ProductEditor({ productId }: { productId?: number }) {
   const isNew = productId === undefined;
 
   const [meta, setMeta] = useState<StoreMeta | null>(null);
+  const [categories, setCategories] = useState<StoreCategory[]>([]);
   const [product, setProduct] = useState<StoreProduct | null>(null);
   const [form, setForm] = useState<Form>(EMPTY_FORM);
   const [images, setImages] = useState<string[]>([]);
@@ -107,6 +43,9 @@ export function ProductEditor({ productId }: { productId?: number }) {
     adminFetch<StoreMeta>("meta")
       .then(setMeta)
       .catch((e: Error) => toast(e.message, "error"));
+    adminFetch<{ categories: StoreCategory[] }>("categories")
+      .then((r) => setCategories(r.categories))
+      .catch((e: Error) => toast(e.message, "error"));
     if (!isNew) {
       adminFetch<StoreProduct>(`products/${productId}`)
         .then(load)
@@ -123,6 +62,12 @@ export function ProductEditor({ productId }: { productId?: number }) {
 
   const set = <K extends keyof Form>(key: K, value: Form[K]) => {
     setForm((f) => ({ ...f, [key]: value }));
+    setDirty(true);
+  };
+
+  // Functional so an upload finishing mid-edit applies to the current rows, not a stale render's.
+  const updateDesignRows: DesignRowsUpdate = (update) => {
+    setForm((f) => ({ ...f, designRows: update(f.designRows) }));
     setDirty(true);
   };
 
@@ -185,8 +130,25 @@ export function ProductEditor({ productId }: { productId?: number }) {
 
       <Card step={1} title="ข้อมูลสินค้า" hint="ชื่อและรายละเอียดที่ลูกค้าจะเห็นบนหน้าร้าน">
         <div className="space-y-4">
-          <Field label="ชื่อสินค้า *">
+          <Field label="ชื่อสินค้า (ไทย) *">
             <input className={inputClass} value={form.name} onChange={(e) => set("name", e.target.value)} placeholder="เช่น เสื้อฮู้ด SU 2026" />
+          </Field>
+          <Field label="ชื่อสินค้า (อังกฤษ)" hint="ไม่บังคับ · ถ้าเว้นว่าง หน้าร้านภาษาอังกฤษจะแสดงชื่อไทยแทน">
+            <input className={inputClass} value={form.nameEn} onChange={(e) => set("nameEn", e.target.value)} placeholder="e.g. SU Hoodie 2026" />
+          </Field>
+          <Field label="หมวด">
+            <select
+              className={inputClass}
+              value={form.categoryId ?? ""}
+              onChange={(e) => set("categoryId", e.target.value === "" ? null : Number(e.target.value))}
+            >
+              <option value="">ไม่มีหมวด</option>
+              {categories.map((c) => (
+                <option key={c.id} value={c.id}>
+                  {c.name}
+                </option>
+              ))}
+            </select>
           </Field>
           {isNew ? (
             <Field
@@ -208,8 +170,21 @@ export function ProductEditor({ productId }: { productId?: number }) {
 
       <ImagesCard productId={productId} images={images} onChange={setImages} />
 
-      {/* Remount after each load so the size/colour inputs reflect the saved variants. */}
-      <VariantsCard key={product?.updatedAt ?? "new"} rows={form.rows} onChange={(rows) => set("rows", rows)} />
+      <OptionsStep
+        saved={!isNew}
+        resetKey={product?.updatedAt ?? "new"}
+        optionKind={form.optionKind}
+        onKindChange={(kind) => {
+          set("optionKind", kind);
+          if (kind === "designs" && form.designRows.length === 0) set("designRows", [newDesignRow()]);
+        }}
+        rows={form.rows}
+        onRowsChange={(rows) => set("rows", rows)}
+        designRows={form.designRows}
+        designPrice={form.designPrice}
+        onDesignRowsChange={updateDesignRows}
+        onDesignPriceChange={(price) => set("designPrice", price)}
+      />
 
       <Card step={4} title="ข้อมูลที่ต้องการจากผู้ซื้อ" hint="ผู้ซื้อต้องกรอกช่องที่เลือกก่อนสั่งซื้อ">
         <p className="mb-3 text-sm text-zinc-600">บังคับทุกออเดอร์อยู่แล้ว: {requiredFields.map((f) => f.label).join(", ")}</p>

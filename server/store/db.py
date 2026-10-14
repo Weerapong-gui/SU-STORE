@@ -14,10 +14,18 @@ import json
 import re
 import secrets
 import sqlite3
-from datetime import datetime, timedelta, timezone
+from datetime import datetime
+from datetime import timezone as timezone
 from typing import Any
 
-TZ_BANGKOK = timezone(timedelta(hours=7))
+from . import designs
+from .categories import ensure_exists
+from .common import TZ_BANGKOK as TZ_BANGKOK
+from .common import StoreError as StoreError
+from .common import as_int, unique_slug
+from .common import clean_text as clean_text
+from .common import now_iso as now_iso
+from .common import slugify as slugify
 
 ORDER_PREFIX = "SU"
 
@@ -53,19 +61,7 @@ PRODUCT_STATUSES: dict[str, str] = {
 
 MAX_ITEMS_PER_ORDER = 20
 MAX_QTY_PER_ITEM = 50
-MAX_FIELD_LENGTH = 500
 _CHECKOUT_ID_RE = re.compile(r"[A-Za-z0-9-]{16,64}")
-
-
-class StoreError(Exception):
-    def __init__(self, status: int, message: str) -> None:
-        super().__init__(message)
-        self.status = status
-        self.message = message
-
-
-def now_iso() -> str:
-    return datetime.now(TZ_BANGKOK).replace(microsecond=0).isoformat()
 
 
 # ── Schema ────────────────────────────────────────────────────────────────────
@@ -73,6 +69,19 @@ def now_iso() -> str:
 def ensure_store_db(connection: sqlite3.Connection) -> None:
     connection.executescript(
         """
+        CREATE TABLE IF NOT EXISTS store_categories (
+            id INTEGER PRIMARY KEY,
+            slug TEXT UNIQUE NOT NULL,
+            name TEXT NOT NULL,
+            name_en TEXT NOT NULL DEFAULT '',
+            tagline TEXT NOT NULL DEFAULT '',
+            tagline_en TEXT NOT NULL DEFAULT '',
+            cover_image TEXT NOT NULL DEFAULT '',
+            visible INTEGER NOT NULL DEFAULT 1,
+            sort_order INTEGER NOT NULL DEFAULT 0,
+            created_at TEXT NOT NULL,
+            updated_at TEXT NOT NULL
+        );
         CREATE TABLE IF NOT EXISTS store_products (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             slug TEXT UNIQUE NOT NULL,
@@ -139,10 +148,32 @@ def ensure_store_db(connection: sqlite3.Connection) -> None:
         );
         """
     )
-    columns = {r[1] for r in connection.execute("PRAGMA table_info(store_products)")}
-    for column in ("sale_starts_at", "sale_ends_at"):
-        if column not in columns:
-            connection.execute(f"ALTER TABLE store_products ADD COLUMN {column} TEXT")
+    for table, additions in (
+        ("store_products", (
+            ("sale_starts_at", "TEXT"),
+            ("sale_ends_at", "TEXT"),
+            ("name_en", "TEXT NOT NULL DEFAULT ''"),
+            ("category_id", "INTEGER"),
+            ("option_kind", "TEXT NOT NULL DEFAULT 'options'"),
+        )),
+        ("store_variants", (
+            ("design_name", "TEXT NOT NULL DEFAULT ''"),
+            ("design_name_en", "TEXT NOT NULL DEFAULT ''"),
+            ("design_code", "TEXT NOT NULL DEFAULT ''"),
+            ("image", "TEXT NOT NULL DEFAULT ''"),
+        )),
+        ("store_order_items", (
+            ("product_name_en", "TEXT"),
+            ("variant_label_en", "TEXT"),
+        )),
+    ):
+        columns = {r[1] for r in connection.execute(f"PRAGMA table_info({table})")}
+        for column, definition in additions:
+            if column not in columns:
+                connection.execute(f"ALTER TABLE {table} ADD COLUMN {column} {definition}")
+    connection.execute(
+        "CREATE INDEX IF NOT EXISTS idx_store_products_category ON store_products(category_id)"
+    )
     order_columns = {r[1] for r in connection.execute("PRAGMA table_info(store_orders)")}
     if "checkout_id" not in order_columns:
         connection.execute("ALTER TABLE store_orders ADD COLUMN checkout_id TEXT")
@@ -153,45 +184,6 @@ def ensure_store_db(connection: sqlite3.Connection) -> None:
 
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
-
-def clean_text(value: Any, field: str, *, required: bool = False, max_len: int = MAX_FIELD_LENGTH) -> str:
-    if value is None:
-        value = ""
-    if not isinstance(value, str):
-        raise StoreError(400, f"{field} ต้องเป็นข้อความ")
-    value = value.strip()
-    if required and not value:
-        raise StoreError(400, f"กรุณากรอก{field}")
-    if len(value) > max_len:
-        raise StoreError(400, f"{field} ยาวเกิน {max_len} ตัวอักษร")
-    return value
-
-
-def _as_int(value: Any, field: str, *, minimum: int = 0, allow_none: bool = False) -> int | None:
-    if value is None or value == "":
-        if allow_none:
-            return None
-        raise StoreError(400, f"กรุณากรอก{field}")
-    if isinstance(value, bool) or not isinstance(value, int):
-        raise StoreError(400, f"{field} ต้องเป็นจำนวนเต็ม")
-    if value < minimum:
-        raise StoreError(400, f"{field} ต้องไม่น้อยกว่า {minimum}")
-    return value
-
-
-def slugify(name: str) -> str:
-    slug = re.sub(r"[^a-z0-9]+", "-", name.lower()).strip("-")
-    return slug[:48] or "product"
-
-
-def _unique_slug(connection: sqlite3.Connection, base: str, exclude_id: int | None = None) -> str:
-    slug, n = base, 2
-    while True:
-        row = connection.execute("SELECT id FROM store_products WHERE slug = ?", (slug,)).fetchone()
-        if row is None or row[0] == exclude_id:
-            return slug
-        slug, n = f"{base}-{n}", n + 1
-
 
 def variant_label(size: str, color: str) -> str:
     return " / ".join(p for p in (size, color) if p) or "-"
@@ -238,11 +230,19 @@ def next_order_code(connection: sqlite3.Connection, when: datetime | None = None
 # ── Products ──────────────────────────────────────────────────────────────────
 
 def _serialize_variant(row: sqlite3.Row) -> dict[str, Any]:
+    label = (
+        designs.design_label(row["design_code"], row["design_name"])
+        if row["design_code"] else variant_label(row["size"], row["color"])
+    )
     return {
         "id": row["id"],
         "size": row["size"],
         "color": row["color"],
-        "label": variant_label(row["size"], row["color"]),
+        "label": label,
+        "designCode": row["design_code"],
+        "designName": row["design_name"],
+        "designNameEn": row["design_name_en"],
+        "image": row["image"],
         "price": row["price"],
         "stock": row["stock"],
         "sku": row["sku"],
@@ -263,6 +263,9 @@ def _serialize_product(connection: sqlite3.Connection, row: sqlite3.Row, *, publ
         "id": row["id"],
         "slug": row["slug"],
         "name": row["name"],
+        "nameEn": row["name_en"],
+        "optionKind": row["option_kind"],
+        "categoryId": row["category_id"],
         "description": row["description"],
         "images": json.loads(row["images_json"] or "[]"),
         "status": row["status"],
@@ -280,10 +283,15 @@ def _serialize_product(connection: sqlite3.Connection, row: sqlite3.Row, *, publ
     }
 
 
-def list_products(connection: sqlite3.Connection, *, public: bool) -> list[dict[str, Any]]:
-    where = "WHERE status = 'active'" if public else ""
+def list_products(connection: sqlite3.Connection, *, public: bool, category_id: int | None = None) -> list[dict[str, Any]]:
+    conditions = ["status = 'active'"] if public else []
+    params: tuple[int, ...] = ()
+    if category_id is not None:
+        conditions.append("category_id = ?")
+        params = (category_id,)
+    where = "WHERE " + " AND ".join(conditions) if conditions else ""
     rows = connection.execute(
-        f"SELECT * FROM store_products {where} ORDER BY sort_order, id"
+        f"SELECT * FROM store_products {where} ORDER BY sort_order, id", params
     ).fetchall()
     return [_serialize_product(connection, r, public=public) for r in rows]
 
@@ -300,6 +308,15 @@ def _product_fields(payload: dict[str, Any]) -> dict[str, Any]:
     fields: dict[str, Any] = {}
     if "name" in payload:
         fields["name"] = clean_text(payload["name"], "ชื่อสินค้า", required=True, max_len=120)
+    if "nameEn" in payload:
+        fields["name_en"] = clean_text(payload["nameEn"], "ชื่อสินค้าภาษาอังกฤษ", max_len=120)
+    if "optionKind" in payload:
+        if payload["optionKind"] not in ("options", "designs"):
+            raise StoreError(400, "รูปแบบตัวเลือกสินค้าไม่ถูกต้อง")
+        fields["option_kind"] = payload["optionKind"]
+    if "categoryId" in payload:
+        value = payload["categoryId"]
+        fields["category_id"] = None if value is None else as_int(value, "หมวดหมู่", minimum=1)
     if "description" in payload:
         fields["description"] = clean_text(payload["description"], "คำอธิบาย", max_len=5000)
     if "images" in payload:
@@ -313,7 +330,7 @@ def _product_fields(payload: dict[str, Any]) -> dict[str, Any]:
             raise StoreError(400, f"buyerFields ต้องเลือกจาก {', '.join(OPTIONAL_FIELDS)}")
         fields["buyer_fields_json"] = json.dumps(list(dict.fromkeys(chosen)))
     if "sortOrder" in payload:
-        fields["sort_order"] = _as_int(payload["sortOrder"], "ลำดับ")
+        fields["sort_order"] = as_int(payload["sortOrder"], "ลำดับ")
     if "saleStartsAt" in payload:
         fields["sale_starts_at"] = _parse_when(payload["saleStartsAt"], "วันเริ่มขาย")
     if "saleEndsAt" in payload:
@@ -337,9 +354,10 @@ def create_product(connection: sqlite3.Connection, payload: dict[str, Any]) -> d
     if "name" not in payload:
         raise StoreError(400, "กรุณากรอกชื่อสินค้า")
     fields = _product_fields(payload)
+    ensure_exists(connection, fields.get("category_id"))
     status = fields.pop("status", "draft")
     now = now_iso()
-    slug = _unique_slug(connection, slugify(clean_text(payload.get("slug") or fields["name"], "slug")))
+    slug = unique_slug(connection, "store_products", slugify(clean_text(payload.get("slug") or fields["name"], "slug")))
     cursor = connection.execute(
         "INSERT INTO store_products (slug, name, status, created_at, updated_at) VALUES (?, ?, 'draft', ?, ?)",
         (slug, fields.pop("name"), now, now),
@@ -363,8 +381,14 @@ def _apply_product_fields(connection: sqlite3.Connection, product_id: int, field
 
 
 def update_product(connection: sqlite3.Connection, product_id: int, payload: dict[str, Any]) -> dict[str, Any]:
-    get_product(connection, product_id, public=False)  # 404 if missing
+    stored = get_product(connection, product_id, public=False)  # 404 if missing
     fields = _product_fields(payload)
+    ensure_exists(connection, fields.get("category_id"))
+    if fields.get("option_kind", stored["optionKind"]) != stored["optionKind"] and "variants" not in payload:
+        # Old size/colour rows would turn into design chips with empty codes.
+        raise StoreError(400, "เปลี่ยนแบบตัวเลือกต้องส่งรายการตัวเลือกมาด้วย")
+    if "option_kind" in fields:
+        _apply_product_fields(connection, product_id, {"option_kind": fields.pop("option_kind")})
     if "variants" in payload:
         replace_variants(connection, product_id, payload["variants"])
     if fields.get("status") == "active":
@@ -400,6 +424,8 @@ def replace_variants(connection: sqlite3.Connection, product_id: int, variants: 
     they appear in any order."""
     if not isinstance(variants, list):
         raise StoreError(400, "variants ต้องเป็นรายการ")
+    product = get_product(connection, product_id, public=False)
+    design_rows = designs.clean_designs(variants) if product["optionKind"] == "designs" else None
     existing = {
         r["id"]: r
         for r in connection.execute("SELECT * FROM store_variants WHERE product_id = ?", (product_id,))
@@ -409,13 +435,18 @@ def replace_variants(connection: sqlite3.Connection, product_id: int, variants: 
     for index, raw in enumerate(variants):
         if not isinstance(raw, dict):
             raise StoreError(400, "variants ต้องเป็น object")
-        size = clean_text(raw.get("size"), "ไซซ์", max_len=40)
-        color = clean_text(raw.get("color"), "สี/แบบ", max_len=40)
-        price = _as_int(raw.get("price"), f"ราคา ({variant_label(size, color)})")
-        stock = _as_int(raw.get("stock"), f"สต็อก ({variant_label(size, color)})", allow_none=True)
+        design = (
+            design_rows[index] if design_rows is not None
+            else dict.fromkeys(("design_code", "design_name", "design_name_en", "image"), "")
+        )
+        design_values = tuple(design[key] for key in ("design_code", "design_name", "design_name_en", "image"))
+        size = "" if design_rows is not None else clean_text(raw.get("size"), "ไซซ์", max_len=40)
+        color = "" if design_rows is not None else clean_text(raw.get("color"), "สี/แบบ", max_len=40)
+        price = as_int(raw.get("price"), f"ราคา ({variant_label(size, color)})")
+        stock = as_int(raw.get("stock"), f"สต็อก ({variant_label(size, color)})", allow_none=True)
         sku = clean_text(raw.get("sku"), "SKU", max_len=60)
         active = 1 if raw.get("active", True) else 0
-        if active:
+        if active and design_rows is None:
             if (size, color) in seen_labels:
                 raise StoreError(400, f"ตัวเลือก {variant_label(size, color)} ซ้ำกัน")
             seen_labels.add((size, color))
@@ -424,15 +455,15 @@ def replace_variants(connection: sqlite3.Connection, product_id: int, variants: 
             if variant_id not in existing:
                 raise StoreError(400, f"ไม่พบตัวเลือก id {variant_id} ในสินค้านี้")
             connection.execute(
-                "UPDATE store_variants SET size=?, color=?, price=?, stock=?, sku=?, active=?, sort_order=? WHERE id=?",
-                (size, color, price, stock, sku, active, index, variant_id),
+                "UPDATE store_variants SET size=?, color=?, price=?, stock=?, sku=?, active=?, sort_order=?, design_code=?, design_name=?, design_name_en=?, image=? WHERE id=?",
+                (size, color, price, stock, sku, active, index, *design_values, variant_id),
             )
             kept_ids.add(variant_id)
         else:
             connection.execute(
-                "INSERT INTO store_variants (product_id, size, color, price, stock, sku, active, sort_order) "
-                "VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
-                (product_id, size, color, price, stock, sku, active, index),
+                "INSERT INTO store_variants (product_id, size, color, price, stock, sku, active, sort_order, design_code, design_name, design_name_en, image) "
+                "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                (product_id, size, color, price, stock, sku, active, index, *design_values),
             )
     for variant_id in set(existing) - kept_ids:
         ordered = connection.execute(
@@ -471,7 +502,9 @@ def _serialize_order(connection: sqlite3.Connection, row: sqlite3.Row, *, includ
                 "variantId": i["variant_id"],
                 "productId": i["product_id"],
                 "productName": i["product_name"],
+                "productNameEn": i["product_name_en"],
                 "variantLabel": i["variant_label"],
+                "variantLabelEn": i["variant_label_en"],
                 "unitPrice": i["unit_price"],
                 "quantity": i["quantity"],
                 "lineTotal": i["unit_price"] * i["quantity"],
@@ -516,8 +549,8 @@ def create_order(connection: sqlite3.Connection, payload: Any) -> dict[str, Any]
     for raw in raw_items:
         if not isinstance(raw, dict):
             raise StoreError(400, "items ไม่ถูกต้อง")
-        variant_id = _as_int(raw.get("variantId"), "variantId", minimum=1)
-        qty = _as_int(raw.get("quantity"), "จำนวน", minimum=1)
+        variant_id = as_int(raw.get("variantId"), "variantId", minimum=1)
+        qty = as_int(raw.get("quantity"), "จำนวน", minimum=1)
         quantities[variant_id] = quantities.get(variant_id, 0) + qty
     if len(quantities) > MAX_ITEMS_PER_ORDER:
         raise StoreError(400, f"สั่งได้ไม่เกิน {MAX_ITEMS_PER_ORDER} รายการต่อออเดอร์")
@@ -535,7 +568,7 @@ def create_order(connection: sqlite3.Connection, payload: Any) -> dict[str, Any]
     # Total the buyer saw. If a price changed since, refuse rather than charge a different amount.
     expected_total = payload.get("expectedTotal")
     if expected_total is not None:
-        expected_total = _as_int(expected_total, "expectedTotal")
+        expected_total = as_int(expected_total, "expectedTotal")
 
     connection.commit()  # make sure no implicit transaction is open before BEGIN
     connection.execute("BEGIN IMMEDIATE")
@@ -551,7 +584,7 @@ def create_order(connection: sqlite3.Connection, payload: Any) -> dict[str, Any]
         required_fields: list[str] = list(ALWAYS_REQUIRED_FIELDS)
         for variant_id, qty in quantities.items():
             row = connection.execute(
-                "SELECT v.*, p.name AS product_name, p.status AS product_status, p.buyer_fields_json, "
+                "SELECT v.*, p.name AS product_name, p.name_en AS product_name_en, p.status AS product_status, p.buyer_fields_json, "
                 "p.sale_starts_at, p.sale_ends_at "
                 "FROM store_variants v JOIN store_products p ON p.id = v.product_id WHERE v.id = ?",
                 (variant_id,),
@@ -562,7 +595,10 @@ def create_order(connection: sqlite3.Connection, payload: Any) -> dict[str, Any]
             if state != "open":
                 when = "ยังไม่ถึงเวลาเปิดขาย" if state == "upcoming" else "ปิดรับสั่งแล้ว"
                 raise StoreError(409, f"{row['product_name']} {when}")
-            label = variant_label(row["size"], row["color"])
+            label = (
+                designs.design_label(row["design_code"], row["design_name"])
+                if row["design_code"] else variant_label(row["size"], row["color"])
+            )
             updated = connection.execute(
                 "UPDATE store_variants SET stock = stock - ? WHERE id = ? AND stock IS NOT NULL AND stock >= ?",
                 (qty, variant_id, qty),
@@ -596,10 +632,15 @@ def create_order(connection: sqlite3.Connection, payload: Any) -> dict[str, Any]
         )
         order_id = int(cursor.lastrowid)
         for row, label, qty in lines:
+            label_en = (
+                designs.design_label(row["design_code"], row["design_name_en"])
+                if row["design_code"] and row["design_name_en"] else None
+            )
             connection.execute(
-                "INSERT INTO store_order_items (order_id, variant_id, product_id, product_name, variant_label, unit_price, quantity) "
-                "VALUES (?, ?, ?, ?, ?, ?, ?)",
-                (order_id, row["id"], row["product_id"], row["product_name"], label, row["price"], qty),
+                "INSERT INTO store_order_items (order_id, variant_id, product_id, product_name, product_name_en, "
+                "variant_label, variant_label_en, unit_price, quantity) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                (order_id, row["id"], row["product_id"], row["product_name"], row["product_name_en"] or None,
+                 label, label_en, row["price"], qty),
             )
         connection.commit()
     except BaseException:
