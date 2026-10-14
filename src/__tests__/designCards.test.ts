@@ -22,6 +22,10 @@ describe("design cards", () => {
     expect(cards[1]).toMatchObject({ image: "/product.jpg", soldOut: true });
     expect(new Set(cards.map((card) => card.key)).size).toBe(2);
   });
+  it("marks price ranges as from-prices only on product cards", () => {
+    expect(productCard({ ...product, maxPrice: 150 }).priceFrom).toBe(true);
+    expect(designCards([{ ...product, maxPrice: 150 }])[0].priceFrom).toBe(false);
+  });
   it("matches trimmed case-insensitive design and product text", () => {
     const [scsCard] = designCards([product]);
     expect(cardMatches(scsCard, "scs")).toBe(true);

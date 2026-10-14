@@ -10,6 +10,8 @@ export type ProductCard = {
   productName: string;
   productNameEn: string;
   price: number | null;
+  // True when the product's variants have different prices, so the card reads "from ฿X".
+  priceFrom: boolean;
   soldOut: boolean;
   saleState: SaleState;
   saleStartsAt: string | null;
@@ -26,6 +28,7 @@ export function productCard(p: StoreProduct): ProductCard {
     productName: p.name,
     productNameEn: p.nameEn,
     price: p.minPrice,
+    priceFrom: p.minPrice !== p.maxPrice,
     soldOut: p.soldOut,
     saleState: p.saleState,
     saleStartsAt: p.saleStartsAt,
@@ -45,6 +48,7 @@ export function designCards(products: StoreProduct[]): ProductCard[] {
       nameEn: variant.designNameEn,
       code: variant.designCode,
       price: variant.price,
+      priceFrom: false,
       soldOut: variant.soldOut,
     }));
   });
