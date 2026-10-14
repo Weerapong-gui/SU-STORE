@@ -1,6 +1,7 @@
 """Frozen receipt snapshots and transactional store-wide numbering."""
 import copy
 import json
+import re
 import sqlite3
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timedelta
@@ -25,7 +26,7 @@ def _order(conn: sqlite3.Connection, status: str = "paid") -> str:
 
 
 def _issue(conn: sqlite3.Connection, code: str) -> dict:
-    return receipts.issue_receipt(conn, code, issued_by="staff", customer=CUSTOMER)
+    return receipts.issue_receipt(conn, code, issued_by="staff", customer=CUSTOMER)[0]
 
 
 def test_first_receipt_number():
@@ -87,7 +88,7 @@ def test_staff_customer_fields_not_written_to_order():
     conn = _conn()
     code = _order(conn)
     before = conn.execute("SELECT customer_json FROM store_orders").fetchone()[0]
-    receipt = receipts.issue_receipt(conn, code, issued_by="staff", customer={**CUSTOMER, "studentCode": "6931501178"})
+    receipt = receipts.issue_receipt(conn, code, issued_by="staff", customer={**CUSTOMER, "studentCode": "6931501178"})[0]
     assert receipt["snapshot"]["customer"]["studentCode"] == "6931501178"
     after = conn.execute("SELECT customer_json FROM store_orders").fetchone()[0]
     assert before == after and "studentCode" not in json.loads(after)
@@ -229,8 +230,9 @@ def test_receipt_http_flow(receipt_server):
     status, body = _call(receipt_server, "POST", path, {"customer": CUSTOMER}, staff)
     assert status in (200, 201)
     receipt = json.loads(body)
+    assert receipt.pop("created") is True  # the POST-only flag is not part of the stored receipt
     assert receipt["receiptNo"] == "SU-R2569-0001"
-    assert json.loads(_call(receipt_server, "POST", path, {"customer": CUSTOMER}, staff)[1]) == receipt
+    assert json.loads(_call(receipt_server, "POST", path, {"customer": CUSTOMER}, staff)[1]) == {**receipt, "created": False}
     listing = json.loads(_call(receipt_server, "GET", path + "s", headers=staff)[1])
     assert listing == {"receipts": [receipt], "warning": None}
     cancel = f"/v2/admin/receipts/{receipt['id']}/cancel"
@@ -252,6 +254,7 @@ def test_receipt_http_flow(receipt_server):
 def test_get_receipt_by_id_http(receipt_server):
     staff, code = _staff(receipt_server), _http_order(receipt_server)
     issued = json.loads(_call(receipt_server, "POST", f"/v2/admin/orders/{code}/receipt", {"customer": CUSTOMER}, staff)[1])
+    issued.pop("created")
     status, body = _call(receipt_server, "GET", f"/v2/admin/receipts/{issued['id']}", headers=staff)
     assert status == 200 and json.loads(body) == issued
     status, body = _call(receipt_server, "GET", "/v2/admin/receipts/99999", headers=staff)
@@ -308,3 +311,54 @@ def test_order_list_flags_receipt_warning(receipt_server):
     assert warning() is True
     _call(receipt_server, "POST", f"/v2/admin/receipts/{receipt['id']}/cancel", {"reason": "ยกเลิก"}, GLOBAL_ADMIN)
     assert warning() is False
+
+
+def test_issue_reports_created_only_once():
+    conn = _conn()
+    code = _order(conn)
+    first, first_created = receipts.issue_receipt(conn, code, issued_by="staff", customer=CUSTOMER)
+    second, second_created = receipts.issue_receipt(conn, code, issued_by="staff", customer=CUSTOMER)
+    assert (first_created, second_created) == (True, False)
+    assert second == first
+
+
+def test_issue_http_status_and_created_flag(receipt_server):
+    code = _http_order(receipt_server)
+    path = f"/v2/admin/orders/{code}/receipt"
+    status, body = _call(receipt_server, "POST", path, {"customer": CUSTOMER}, GLOBAL_ADMIN)
+    assert (status, json.loads(body)["created"]) == (201, True)
+    status, body = _call(receipt_server, "POST", path, {"customer": CUSTOMER}, GLOBAL_ADMIN)
+    assert (status, json.loads(body)["created"]) == (200, False)
+
+
+def test_orders_with_receipt_warning_batches_by_status():
+    conn = _conn()
+    paid, cancelled, no_receipt = _order(conn), _order(conn), _order(conn, "pending_payment")
+    _issue(conn, paid)
+    _issue(conn, cancelled)
+    db.update_order(conn, cancelled, {"status": "cancelled"})
+    ids = {code: conn.execute("SELECT id FROM store_orders WHERE order_code = ?", (code,)).fetchone()[0]
+           for code in (paid, cancelled, no_receipt)}
+    assert receipts.orders_with_receipt_warning(conn, []) == set()
+    assert receipts.orders_with_receipt_warning(conn, list(ids.values())) == {ids[cancelled]}
+
+
+def test_stored_layout_missing_a_field_gets_defaults():
+    conn = _conn()
+    stored = copy.deepcopy(receipts.DEFAULT_RECEIPT_SETTINGS)
+    del stored["layout"]["fields"]["pageNo"]
+    del stored["layout"]["table"]["cols"]["qty"]["anchor"]
+    stored["payeeName"] = "เก่า"
+    conn.execute("INSERT INTO store_settings (key, value, updated_at) VALUES ('receipt', ?, 'x')",
+                 (json.dumps(stored),))
+    settings = receipts.get_receipt_settings(conn)
+    assert settings["payeeName"] == "เก่า"
+    assert settings["layout"] == receipts.DEFAULT_LAYOUT
+
+
+def test_default_layout_matches_typescript_copy():
+    source = (Path(__file__).parents[2] / "src/lib/receipt/layout.ts").read_text()
+    body = source[source.index("= {") + 2: source.rindex("};") + 1]
+    as_json = re.sub(r"([{,]\s*)([A-Za-z]+):", r'\1"\2":', body)
+    as_json = re.sub(r",(\s*[}\]])", r"\1", as_json)
+    assert json.loads(as_json) == receipts.DEFAULT_LAYOUT

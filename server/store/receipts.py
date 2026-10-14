@@ -67,9 +67,20 @@ def _validate_layout(value: Any, template: Any = DEFAULT_LAYOUT, key: str = "lay
     return value
 
 
+def _deep_merge(base: dict[str, Any], override: dict[str, Any]) -> dict[str, Any]:
+    """Overlay stored settings on defaults so a field added to DEFAULT_LAYOUT later still has a value."""
+    for key, value in override.items():
+        if isinstance(value, dict) and isinstance(base.get(key), dict):
+            _deep_merge(base[key], value)
+        else:
+            base[key] = value
+    return base
+
+
 def get_receipt_settings(conn: sqlite3.Connection) -> dict[str, Any]:
     row = conn.execute("SELECT value FROM store_settings WHERE key = 'receipt'").fetchone()
-    return json.loads(row[0]) if row else copy.deepcopy(DEFAULT_RECEIPT_SETTINGS)
+    defaults = copy.deepcopy(DEFAULT_RECEIPT_SETTINGS)
+    return _deep_merge(defaults, json.loads(row[0])) if row else defaults
 
 
 def save_receipt_settings(conn: sqlite3.Connection, payload: Any) -> dict[str, Any]:
@@ -162,7 +173,8 @@ def _snapshot(conn: sqlite3.Connection, order: sqlite3.Row, number: str, issued_
 
 
 def issue_receipt(conn: sqlite3.Connection, order_code: str, *, issued_by: str,
-                  customer: dict[str, Any]) -> dict[str, Any]:
+                  customer: dict[str, Any]) -> tuple[dict[str, Any], bool]:
+    """Return `(receipt, created)`; `created` is False when the order already had an active receipt."""
     # Match create_order's transaction boundary; the lock covers the idempotency check too.
     conn.commit()
     conn.execute("BEGIN IMMEDIATE")
@@ -173,7 +185,7 @@ def issue_receipt(conn: sqlite3.Connection, order_code: str, *, issued_by: str,
         ).fetchone()
         if existing:
             conn.rollback()
-            return _serialize(existing)
+            return _serialize(existing), False
         if order["status"] not in RECEIPT_ISSUABLE_STATUSES:
             raise StoreError(400, "ออกใบเสร็จได้เฉพาะออเดอร์ที่ชำระเงินแล้ว")
         number, issued_at = next_receipt_no(conn), _utc_now()
@@ -190,7 +202,7 @@ def issue_receipt(conn: sqlite3.Connection, order_code: str, *, issued_by: str,
         )
         row = conn.execute(_RECEIPT_SELECT + " WHERE r.id = ?", (cursor.lastrowid,)).fetchone()
         conn.commit()
-        return _serialize(row)
+        return _serialize(row), True
     except Exception:
         conn.rollback()
         raise
@@ -224,12 +236,24 @@ def list_order_receipts(conn: sqlite3.Connection, order_code: str) -> list[dict[
     ).fetchall()]
 
 
+def orders_with_receipt_warning(conn: sqlite3.Connection, order_ids: list[int]) -> set[int]:
+    """Orders that still hold an active receipt although their status is no longer issuable."""
+    if not order_ids:
+        return set()
+    placeholders = ",".join("?" for _ in order_ids)
+    status_marks = ",".join("?" for _ in RECEIPT_ISSUABLE_STATUSES)
+    return {row[0] for row in conn.execute(
+        "SELECT r.order_id FROM store_receipts r JOIN store_orders o ON o.id = r.order_id "
+        f"WHERE r.cancelled_at IS NULL AND r.order_id IN ({placeholders}) AND o.status NOT IN ({status_marks})",
+        (*order_ids, *RECEIPT_ISSUABLE_STATUSES),
+    )}
+
+
 def receipt_warning(conn: sqlite3.Connection, order_code: str) -> str | None:
     order = _order(conn, order_code)
-    if order["status"] not in RECEIPT_ISSUABLE_STATUSES:
-        row = conn.execute(
-            "SELECT receipt_no FROM store_receipts WHERE order_id = ? AND cancelled_at IS NULL", (order["id"],)
-        ).fetchone()
-        if row:
-            return f"ออเดอร์นี้ไม่ได้อยู่ในสถานะชำระแล้ว แต่ใบเสร็จ {row[0]} ยังใช้งานอยู่"
-    return None
+    if order["id"] not in orders_with_receipt_warning(conn, [order["id"]]):
+        return None
+    receipt_no = conn.execute(
+        "SELECT receipt_no FROM store_receipts WHERE order_id = ? AND cancelled_at IS NULL", (order["id"],)
+    ).fetchone()[0]
+    return f"ออเดอร์นี้ไม่ได้อยู่ในสถานะชำระแล้ว แต่ใบเสร็จ {receipt_no} ยังใช้งานอยู่"
