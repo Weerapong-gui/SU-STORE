@@ -87,7 +87,7 @@ export function BankAccountCopyField({
               type="button"
               onClick={handleCopy}
               aria-label="Copy bank account number"
-              className="flex size-10 items-center justify-center rounded-2xl bg-zinc-950 text-white transition hover:bg-zinc-800 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-zinc-400/40 sm:size-12"
+              className="flex size-11 items-center justify-center rounded-2xl bg-zinc-950 text-white transition hover:bg-zinc-800 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-zinc-400/40 sm:size-12"
             >
               <CopyIcon />
             </button>

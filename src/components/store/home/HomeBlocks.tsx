@@ -17,7 +17,8 @@ function Block({ block, products }: { block: HomeBlock; products: ResolvedHome["
   switch (block.type) {
     case "categories":
       return (
-        <Container>
+        // CategoryCovers brings its own top padding; the bottom padding keeps the next block (or footer) off the tiles.
+        <Container className="pb-10 md:pb-14">
           <CategoryCovers categories={block.categories ?? []} title={block.title || t.shopByCategory} />
         </Container>
       );

@@ -23,7 +23,7 @@ export function CategoryView({ category, products }: { category: StoreCategory; 
 
   return (
     <Container className="pb-16">
-      <Link href="/products" className="inline-flex min-h-11 items-center text-[15px] text-apple-blue">
+      <Link href="/products" className="inline-flex min-h-11 min-w-11 items-center text-[15px] text-apple-blue">
         ‹ {t.backToShop}
       </Link>
       <section className="grid items-end gap-6 pb-2 pt-2 md:grid-cols-2 md:gap-10 md:pt-6">
@@ -40,8 +40,8 @@ export function CategoryView({ category, products }: { category: StoreCategory; 
         <ProductCardGrid cards={[]} />
       ) : (
         <>
-          {/* Sticks under the 64px navbar; the margin bleeds the background to the container edges. */}
-          <div className="sticky top-16 z-10 -mx-4 mt-6 bg-white/95 px-4 pb-3 pt-4 md:-mx-0 md:mt-10 md:border-t md:border-black/[0.06] md:px-0 md:py-4">
+          {/* Sticks under the 64px navbar; the margin bleeds the background to the container edges (Container is px-6 on mobile). */}
+          <div className="sticky top-16 z-10 -mx-6 mt-6 bg-white px-6 pb-3 pt-4 md:-mx-0 md:mt-10 md:border-t md:border-black/[0.06] md:px-0 md:py-4">
             <div className="md:flex md:items-center md:gap-5">
               <label htmlFor="category-search" className="sr-only">{t.searchLabel}</label>
               <div className="flex h-11 items-center gap-2 rounded-xl bg-mist px-3.5 md:w-[420px] md:max-w-full">

@@ -80,7 +80,7 @@ export function ProductDetail({ product, initialDesign }: { product: StoreProduc
   }
 
   return (
-    <div className="grid gap-10 md:grid-cols-2">
+    <div className="grid grid-cols-1 gap-10 md:grid-cols-2">
       <ProductGallery
         key={variant?.image}
         images={variant?.image ? [variant.image] : product.images}
@@ -88,7 +88,7 @@ export function ProductDetail({ product, initialDesign }: { product: StoreProduc
         fallback={variant?.designCode}
       />
 
-      <div className="flex flex-col gap-6">
+      <div className="flex min-w-0 flex-col gap-6">
         <div>
           {isDesigns && designName ? (
             <>

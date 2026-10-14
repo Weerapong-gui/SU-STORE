@@ -113,7 +113,7 @@ export function OrderView({ code }: { code: string }) {
       <div className="rounded-3xl bg-mist px-6 py-16 text-center">
         <p className="text-lg font-semibold text-ink">{t.orderNotFound}</p>
         <p className="mx-auto mt-2 max-w-md text-sm text-ink-soft">{t.orderNotFoundHint}</p>
-        <Link href={`/check-order?code=${code}`} className="mt-5 inline-block font-semibold text-apple-blue hover:underline">
+        <Link href={`/check-order?code=${code}`} className="mt-5 inline-flex min-h-11 items-center font-semibold text-apple-blue hover:underline">
           {t.trackTitle} →
         </Link>
       </div>
@@ -226,7 +226,7 @@ export function OrderView({ code }: { code: string }) {
       <section className="rounded-3xl border border-zinc-200 p-6">
         <h2 className="font-semibold text-ink">{t.saveLink}</h2>
         <p className="mt-1 text-sm text-ink-soft">{t.saveLinkHint}</p>
-        <button type="button" onClick={copyLink} className="mt-3 rounded-full bg-apple-blue-soft px-5 py-2 text-sm font-semibold text-apple-blue hover:bg-apple-blue/15">
+        <button type="button" onClick={copyLink} className="mt-3 min-h-11 rounded-full bg-apple-blue-soft px-5 text-sm font-semibold text-apple-blue hover:bg-apple-blue/15">
           {copied ? t.copied : t.copyLink}
         </button>
       </section>

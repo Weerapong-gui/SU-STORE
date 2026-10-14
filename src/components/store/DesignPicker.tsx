@@ -15,7 +15,7 @@ export function DesignPicker({ designs, selectedId, onSelect }: {
   const localized = useLocalized();
   const selected = designs.find((d) => d.id === selectedId);
   return (
-    <fieldset>
+    <fieldset className="min-w-0">
       <legend className="text-[15px] font-semibold text-ink">
         {t.design}
         {selected && <span className="font-normal text-ink-soft"> · {selected.designCode}</span>}

@@ -118,7 +118,7 @@ export function HeroSlider({ slides, autoplay }: { slides: HeroSlide[]; autoplay
       </div>
 
       {count > 1 && (
-        <div className="absolute inset-x-0 bottom-5 flex justify-center gap-2">
+        <div className="absolute inset-x-0 bottom-2 flex justify-center">
           {slides.map((slide, i) => (
             <button
               key={i}
@@ -126,14 +126,19 @@ export function HeroSlider({ slides, autoplay }: { slides: HeroSlide[]; autoplay
               onClick={() => go(i)}
               aria-label={t.slideLabel(i + 1)}
               aria-current={i === active}
-              className={cn(
-                "h-2 rounded-circle transition-all",
-                i === active ? "w-6" : "w-2",
-                slide.image || slides[active].image
-                  ? i === active ? "bg-white" : "bg-white/50 hover:bg-white/80"
-                  : i === active ? "bg-ink" : "bg-ink/25 hover:bg-ink/50"
-              )}
-            />
+              // The visible dot is 8px; the button is the 44px tap target around it.
+              className="group flex h-11 items-center justify-center px-2"
+            >
+              <span
+                className={cn(
+                  "h-2 rounded-circle transition-all",
+                  i === active ? "w-6" : "w-2",
+                  slide.image || slides[active].image
+                    ? i === active ? "bg-white" : "bg-white/50 group-hover:bg-white/80"
+                    : i === active ? "bg-ink" : "bg-ink/25 group-hover:bg-ink/50"
+                )}
+              />
+            </button>
           ))}
         </div>
       )}
