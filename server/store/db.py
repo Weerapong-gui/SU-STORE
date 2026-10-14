@@ -137,6 +137,20 @@ def ensure_store_db(connection: sqlite3.Connection) -> None:
         );
         CREATE INDEX IF NOT EXISTS idx_store_order_items_order ON store_order_items(order_id);
         CREATE INDEX IF NOT EXISTS idx_store_order_items_variant ON store_order_items(variant_id);
+        CREATE TABLE IF NOT EXISTS store_receipts (
+            id INTEGER PRIMARY KEY,
+            receipt_no TEXT UNIQUE NOT NULL,
+            seq INTEGER NOT NULL,
+            order_id INTEGER NOT NULL REFERENCES store_orders(id),
+            issued_at TEXT NOT NULL,
+            issued_by TEXT NOT NULL,
+            snapshot_json TEXT NOT NULL,
+            cancelled_at TEXT,
+            cancelled_by TEXT,
+            cancel_reason TEXT
+        );
+        CREATE UNIQUE INDEX IF NOT EXISTS idx_store_receipts_active_order
+            ON store_receipts(order_id) WHERE cancelled_at IS NULL;
         CREATE TABLE IF NOT EXISTS store_counters (
             period TEXT PRIMARY KEY,
             last_seq INTEGER NOT NULL
