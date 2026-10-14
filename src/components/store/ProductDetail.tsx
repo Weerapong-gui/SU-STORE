@@ -50,7 +50,8 @@ export function ProductDetail({ product, initialDesign }: { product: StoreProduc
   const canOrder = product.saleState === "open" && !preview;
   const productName = localized(product.name, product.nameEn);
   const designName = variant && isDesigns ? localized(variant.designName, variant.designNameEn) : "";
-  const otherName = variant && isDesigns ? (designName === variant.designNameEn ? variant.designName : variant.designNameEn) : "";
+  const otherDesignName = designName === variant?.designNameEn ? variant.designName : variant?.designNameEn;
+  const otherName = isDesigns && otherDesignName && otherDesignName !== designName ? otherDesignName : "";
   const price = variant?.price ?? product.minPrice;
 
   function selectDesign(design: StoreVariant) {
@@ -87,7 +88,7 @@ export function ProductDetail({ product, initialDesign }: { product: StoreProduc
         fallback={variant?.designCode}
       />
 
-      <div className="space-y-6">
+      <div className="flex flex-col gap-6">
         <div>
           {isDesigns && designName ? (
             <>
