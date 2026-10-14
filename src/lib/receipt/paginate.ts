@@ -1,0 +1,48 @@
+import type { ReceiptLayout, ReceiptPage, ReceiptSnapshot } from "@/types/store";
+export type { ReceiptPage } from "@/types/store";
+
+type Measure = (text: string, size: number) => number;
+type SegmenterConstructor = new (locale: string, options: { granularity: "word" }) => {
+  segment(text: string): Iterable<{ segment: string }>;
+};
+
+function wrapName(name: string, width: number, size: number, measure: Measure): string[] {
+  // ES2022 typings omit Segmenter, even though modern browsers and Node provide it.
+  const Segmenter = (Intl as typeof Intl & { Segmenter?: SegmenterConstructor }).Segmenter;
+  const segments = Segmenter
+    ? Array.from(new Segmenter("th", { granularity: "word" }).segment(name), part => part.segment)
+    : Array.from(name);
+  const wrapped: string[] = [];
+  let current = "";
+  const append = (part: string) => {
+    if (current && measure(current + part, size) > width) {
+      wrapped.push(current);
+      current = "";
+    }
+    current += part;
+  };
+  for (const segment of segments) {
+    if (measure(segment, size) <= width) append(segment);
+    else for (const character of segment) append(character);
+  }
+  if (current || !wrapped.length) wrapped.push(current);
+  return wrapped;
+}
+
+export function paginate(lines: ReceiptSnapshot["lines"], layout: ReceiptLayout, measure: Measure): ReceiptPage[] {
+  const { firstY, bottomY, rowSpacing, size, cols } = layout.table;
+  const groups: ReceiptPage["rows"][] = [[]];
+  let usedHeight = 0;
+  for (const line of lines) {
+    const nameLines = wrapName(line.name, cols.name.width, size, measure);
+    const height = rowSpacing * nameLines.length;
+    // An oversized row stays intact on its own page; always advance instead of looping.
+    if (groups[groups.length - 1].length && firstY + usedHeight + height > bottomY) {
+      groups.push([]);
+      usedHeight = 0;
+    }
+    groups[groups.length - 1].push({ line, nameLines });
+    usedHeight += height;
+  }
+  return groups.map((rows, index) => ({ rows, pageNo: index + 1, pageCount: groups.length, isLast: index === groups.length - 1 }));
+}

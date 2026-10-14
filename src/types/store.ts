@@ -149,3 +149,52 @@ export type HomeAdminState = {
   dirty: boolean;
   publishedAt: string | null;
 };
+
+export type ReceiptField = { x: number; y: number; size: number; anchor: "start" | "middle" | "end" };
+export type ReceiptColumn = { x: number; width: number; anchor: "start" | "middle" | "end" };
+export type ReceiptLayout = {
+  rightCopyOffset: number;
+  fields: Record<"date" | "receiptNo" | "customer" | "studentId" | "school" | "subtotal" | "total" | "words" | "payeeName" | "pageNo", ReceiptField>;
+  signature: { x: number; y: number; width: number };
+  table: {
+    firstY: number;
+    rowSpacing: number;
+    size: number;
+    bottomY: number;
+    cols: Record<"no" | "name" | "qty" | "price" | "amount", ReceiptColumn>;
+  };
+};
+export type ReceiptSnapshot = {
+  receiptNo: string;
+  issuedAt: string;
+  customer: { name: string; studentCode: string; school: string };
+  lines: { no: number; name: string; quantity: number; unitPrice: number; amount: number }[];
+  total: number;
+  totalText: string;
+  payeeName: string;
+  signatureUrl: string;
+};
+export type StoreReceipt = {
+  id: number;
+  receiptNo: string;
+  orderCode: string;
+  issuedAt: string;
+  issuedBy: string;
+  snapshot: ReceiptSnapshot;
+  cancelledAt: string | null;
+  cancelledBy: string | null;
+  cancelReason: string | null;
+};
+export type ReceiptSettings = {
+  payeeName: string;
+  signatureUrl: string;
+  prefix: string;
+  layout: ReceiptLayout;
+  nextReceiptNo?: string;
+};
+export type ReceiptPage = {
+  rows: { line: ReceiptSnapshot["lines"][number]; nameLines: string[] }[];
+  pageNo: number;
+  pageCount: number;
+  isLast: boolean;
+};
