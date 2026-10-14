@@ -19,8 +19,8 @@ SU STORE เป็นระบบสั่งซื้อเสื้อรั�
 
 **หลังร้านใหม่ (store v2):** `https://sumfu.store/admin` — Next.js ภาษาไทย สำหรับ staff ที่ไม่ใช่ dev (เพิ่มสินค้า/ตัวเลือก/สต็อก, จัดการออเดอร์ `SU…`) login ด้วยบัญชีใน `admin_users` เดียวกับ claim station · ส่วน `admin.sumfu.xyz` คือระบบ FP28 เดิม (ออเดอร์ `FP28…`, claim station, display)
 
-- หน้า: `src/app/admin/(panel)/{dashboard,products,orders,home,settings}` (ภาพรวมยอดขาย, สินค้า+รอบขาย, ออเดอร์, ตกแต่งหน้าแรก, เปิด/ปิดร้าน+บัญชีรับเงิน+ประกาศ) · component กลาง `src/components/admin/{ui,ProductEditor,HomeEditor}.tsx`
-- ตกแต่งหน้าแรก: staff เรียงบล็อก (แบนเนอร์สไลด์ / สินค้าแนะนำ / ข้อความ / รูปคู่ข้อความ / สินค้าทั้งหมด) เลือกสีหลัก ความโค้งของมุม และฟอนต์ แก้แล้วบันทึกเป็นร่างอัตโนมัติ ดูตัวอย่างที่ `/admin/home/preview` ลูกค้าเห็นเฉพาะหลังกด เผยแพร่ · หน้าร้าน render ด้วย `src/components/store/home/HomeBlocks.tsx`
+- หน้า: `src/app/admin/(panel)/{dashboard,products,categories,orders,home,settings}` (ภาพรวมยอดขาย, สินค้า+รอบขาย, หมวดหมู่, ออเดอร์, ตกแต่งหน้าแรก, เปิด/ปิดร้าน+บัญชีรับเงิน+ประกาศ) · component กลาง `src/components/admin/ui.tsx` กับโฟลเดอร์ `src/components/admin/{product,category,home}/`
+- ตกแต่งหน้าแรก: staff เรียงบล็อก (แบนเนอร์สไลด์ / สินค้าแนะนำ / หมวดหมู่ / ข้อความ / รูปคู่ข้อความ / สินค้าทั้งหมด) เลือกสีหลัก ความโค้งของมุม และฟอนต์ แก้แล้วบันทึกเป็นร่างอัตโนมัติ ดูตัวอย่างที่ `/admin/home/preview` ลูกค้าเห็นเฉพาะหลังกด เผยแพร่ · หน้าร้าน render ด้วย `src/components/store/home/HomeBlocks.tsx`
 - สีหลัก: Tailwind `apple-blue*` อ่านจาก CSS variable `--accent*` (`globals.css` เป็นค่า default, `StoreShell` ใส่ค่าที่เผยแพร่ผ่าน `src/lib/accent.ts`) ห้าม hardcode `#0071e3` ในหน้าร้าน
 - มุมโค้ง: `rounded-*` ของ Tailwind คูณด้วย `--radius-scale` (`tailwind.config.ts`) และ `StoreShell` ตั้งค่าผ่าน `src/lib/radius.ts` (0 = เหลี่ยม, 100 = แบบเดิม)
   - จุด, ป้ายตัวเลข และไอคอนวงกลมที่ต้องกลมเสมอให้ใช้ `rounded-circle`
@@ -28,6 +28,13 @@ SU STORE เป็นระบบสั่งซื้อเสื้อรั�
 - ฟอนต์: รายการอยู่ที่ `src/lib/fonts.ts` (id ต้องตรงกับ `HOME_FONTS` ใน `server/store/home.py`) โดย `StoreShell` จะโหลดจาก Google Fonts เฉพาะฟอนต์ที่เลือก ส่วน Sarabun โหลดไว้แล้วใน `globals.css`
 - ทุกคำขอจากหน้า admin ผ่าน proxy `src/app/api/admin/v2/[...path]/route.ts` → order-api `/v2/admin/*` โดยแนบ cookie `su-admin-auth` (`Claim <token>`)
 - รูปสินค้าที่อัปโหลดเสิร์ฟผ่าน `src/app/product-images/[name]/route.ts`
+- หมวดหมู่ (`server/store/categories.py`): สินค้าอยู่ได้หมวดเดียว (`categoryId`) เรียงลำดับได้ที่ `/admin/categories`
+  - หมวดที่ซ่อน = ไม่โผล่ใน category strip, หน้าปก และบล็อกหน้าแรก และหน้าของหมวดคืน 404 แต่สินค้าในหมวดยังอยู่ใน "ทั้งหมด" และสั่งได้ตามปกติ (หยุดขายสินค้าใช้ status ของสินค้า)
+  - routes: public `/v2/categories`, `/v2/categories/<slug>` · admin `/v2/admin/categories*`, `/v2/admin/categories/order` · อัปโหลดรูปทั่วไป `/v2/admin/images`
+- สินค้าหลายลาย: สินค้ามี `nameEn`, `categoryId`, `optionKind` (`options` = ไซซ์/สี, `designs` = หลายลาย) โหมดหลายลายตั้งใน ProductEditor
+  - variant แบบลายมี `designCode`, `designName`, `designNameEn`, `image` · โค้ด A-Z 0-9 `-` ตัวใหญ่ ยาวไม่เกิน 12 · label แสดงเป็น "CODE · ชื่อ" (`server/store/designs.py`)
+  - ทุกลายในสินค้าเดียวกันราคาเดียว
+- ชื่อ 2 ภาษา: ภาษาไทยจำเป็น อังกฤษไม่บังคับ ถ้าภาษาที่เลือกว่างจะใช้อีกภาษา · `store_order_items` เก็บ snapshot `product_name_en` / `variant_label_en` (nullable ออเดอร์เก่าเป็น NULL แสดงภาษาไทย)
 - `middleware.ts` บังคับ login สำหรับ `/admin/*` และไม่ให้หน้า "ปิดร้าน" บังหน้า admin
 - Rate limit ใช้ IP จาก `src/lib/clientIp.ts` (`cf-connecting-ip` ก่อน) **ห้ามใช้ค่าแรกของ `x-forwarded-for`** เพราะ client ปลอมได้ Cloudflare ต่อ IP จริงไว้ท้ายสุด
   - login หลังร้าน (`/api/admin/auth`) จำกัด 5 ครั้ง/นาที/IP และ 10 ครั้ง/นาที/username
@@ -35,6 +42,8 @@ SU STORE เป็นระบบสั่งซื้อเสื้อรั�
 **หน้าร้าน (store v2):** ดึงสินค้าจาก `/v2/products` (`src/lib/storeApi.ts` ฝั่ง server) · ฝั่ง browser เรียกผ่าน proxy `src/app/api/store/[...path]` (บล็อก `/admin`)
 - flow: `/products/[slug]` เลือกไซซ์/สี → ตะกร้า (`CartProvider`, localStorage `su-store-cart-v2` + `su-store-checkout-id` ซิงก์ข้ามแท็บด้วย `storage` event, ราคา/ชื่อในตะกร้าใช้แสดงผลเท่านั้น หน้า checkout แสดงค่าล่าสุดจาก catalog) → `/checkout` ฟอร์มผู้ซื้อตาม `buyerFields` ของสินค้า → `/order/[code]?t=<token>` วิธีโอน + อัปสลิป
 - token ของออเดอร์เก็บใน localStorage (`src/lib/orderTokens.ts`) และอยู่ในลิงก์ `?t=` · ลูกค้าค้นออเดอร์ด้วยเลขออเดอร์ + เบอร์โทรที่ `/check-order`
+- หน้า `/products` มี category strip + หน้าปกหมวด · หน้าหมวดคือ `/products/c/[category]` มีช่องค้นหา sticky (ชื่อ, ชื่ออังกฤษ, โค้ดลาย) · `/products/[slug]?design=<code>` เลือกลายตั้งต้น
+- แถบซื้อ sticky บนมือถือ (`BuyBar`) มีทุกหน้าสินค้า รวมเสื้อ · ผลตรวจมือถือ `docs/superpowers/specs/2026-10-14-mobile-audit.md`
 - ข้อความ 2 ภาษา (EN/TH) ของร้านใหม่อยู่ที่ `src/lib/storeI18n.ts` ใช้ตัวสลับภาษาเดิม `useLang()`
 - **Cookie มี 3 ตัว เป็น cookie ที่จำเป็นทั้งหมด จึงไม่ต้องมี cookie banner (PDPA)** ถ้าจะเพิ่ม cookie ติดตามหรือโฆษณา ต้องมี banner ขอความยินยอมก่อน
   - `su-admin-auth`: session หลังร้าน อายุ 12 ชม.
