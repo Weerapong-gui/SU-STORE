@@ -7,6 +7,7 @@ import { MAX_CART_LINES, MAX_ITEM_QUANTITY, useCart } from "@/components/CartPro
 import { SCHOOL_OPTIONS } from "@/lib/checkoutOptions";
 import { formatPrice } from "@/lib/formatPrice";
 import { useLang } from "@/lib/i18n";
+import { localized, variantDisplayLabel } from "@/lib/localized";
 import { orderPageHref, saveOrderToken } from "@/lib/orderTokens";
 import { BUYER_FIELD_LABEL_EN, useStoreText } from "@/lib/storeI18n";
 import type { StoreMeta, StoreOrder, StoreProduct, StoreVariant } from "@/types/store";
@@ -60,13 +61,13 @@ export function CheckoutView() {
         price: live?.variant.price ?? item.unitPrice,
         // Show what the server will actually record: staff may have renamed the product
         // or relabelled the variant since it went into the cart.
-        name: live?.product.name ?? item.productName,
-        variantLabel: live ? (live.variant.label === "-" ? "" : live.variant.label) : item.variantLabel,
+        name: live ? localized(live.product.name, live.product.nameEn, lang) : item.productName,
+        variantLabel: live ? variantDisplayLabel(live.variant, lang) : item.variantLabel,
         tooMany: stockLeft !== null && item.quantity > stockLeft,
         stockLeft,
       };
     });
-  }, [items, products]);
+  }, [items, products, lang]);
 
   const fields = useMemo(() => {
     const extra = new Set<string>();

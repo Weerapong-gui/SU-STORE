@@ -9,7 +9,7 @@ import { OptionButtons } from "@/components/store/OptionButtons";
 import { ProductGallery } from "@/components/store/ProductGallery";
 import { useStorePreview } from "@/components/store/StorePreview";
 import { formatPrice } from "@/lib/formatPrice";
-import { useLocalized } from "@/lib/localized";
+import { useLocalized, variantDisplayLabel } from "@/lib/localized";
 import { useSaleDate, useStoreText } from "@/lib/storeI18n";
 import { cn } from "@/lib/utils";
 import type { StoreProduct, StoreVariant } from "@/types/store";
@@ -70,7 +70,7 @@ export function ProductDetail({ product, initialDesign }: { product: StoreProduc
       variantId: variant.id,
       productSlug: product.slug,
       productName: product.name,
-      variantLabel: isDesigns ? `${variant.designCode} · ${variant.designName}` : variant.label === "-" ? "" : variant.label,
+      variantLabel: variantDisplayLabel(variant, "th"),
       unitPrice: variant.price,
       image: variant.image || product.images[0] || "",
       quantity: Math.min(quantity, maxQty),

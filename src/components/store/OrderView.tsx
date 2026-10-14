@@ -4,6 +4,8 @@ import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { BankAccountCopyField } from "@/components/BankAccountCopyField";
+import { useLang } from "@/lib/i18n";
+import { orderItemText } from "@/lib/localized";
 import { formatPrice } from "@/lib/formatPrice";
 import { getOrderToken, orderPageHref, saveOrderToken } from "@/lib/orderTokens";
 import { useStoreText } from "@/lib/storeI18n";
@@ -15,6 +17,7 @@ const MAX_SLIP_BYTES = 5 * 1024 * 1024;
 
 export function OrderView({ code }: { code: string }) {
   const t = useStoreText();
+  const { lang } = useLang();
   const searchParams = useSearchParams();
   const [token, setToken] = useState<string | null>(null);
   const [order, setOrder] = useState<StoreOrder | null>(null);
@@ -200,16 +203,19 @@ export function OrderView({ code }: { code: string }) {
       <section className="rounded-3xl bg-mist p-6">
         <h2 className="mb-3 text-xl font-semibold text-ink">{t.orderSummary}</h2>
         <ul className="divide-y divide-zinc-200">
-          {order.items.map((i) => (
-            <li key={i.variantId} className="flex justify-between gap-4 py-3 text-sm">
-              <span>
-                <span className="font-semibold text-ink">{i.productName}</span>
-                {i.variantLabel !== "-" && <span className="text-ink-soft"> · {i.variantLabel}</span>}
-                <span className="text-ink-soft"> × {i.quantity}</span>
-              </span>
-              <span className="font-semibold text-ink">{formatPrice(i.lineTotal)}</span>
-            </li>
-          ))}
+          {order.items.map((i) => {
+            const { name, label } = orderItemText(i, lang);
+            return (
+              <li key={i.variantId} className="flex justify-between gap-4 py-3 text-sm">
+                <span>
+                  <span className="font-semibold text-ink">{name}</span>
+                  {label && <span className="text-ink-soft"> · {label}</span>}
+                  <span className="text-ink-soft"> × {i.quantity}</span>
+                </span>
+                <span className="font-semibold text-ink">{formatPrice(i.lineTotal)}</span>
+              </li>
+            );
+          })}
         </ul>
         <div className="mt-3 flex justify-between border-t border-zinc-300 pt-3 text-lg font-semibold text-ink">
           <span>{t.subtotal}</span>
