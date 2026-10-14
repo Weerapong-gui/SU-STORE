@@ -70,6 +70,41 @@ def test_options_product_unchanged():
     assert product["variants"][0]["designCode"] == ""
 
 
+def test_order_snapshots_both_languages() -> None:
+    conn = _conn()
+    product = db.create_product(conn, {
+        "name": "พวงกุญแจ", "nameEn": "Keychain", "status": "active",
+        "optionKind": "designs", "variants": _designs(),
+    })
+    order = db.create_order(conn, {
+        "items": [{"variantId": v["id"], "quantity": 1} for v in product["variants"]],
+        "customer": CUSTOMER,
+    })
+    item = order["items"][0]
+    assert item["productNameEn"] == "Keychain"
+    assert item["variantLabelEn"] == "SCS · Cosmetic Science"
+    assert item["productName"] == "พวงกุญแจ"
+    assert item["variantLabel"] == "SCS · วิทยาศาสตร์เครื่องสำอาง"
+    assert order["items"][1]["variantLabelEn"] is None
+    db.update_product(conn, product["id"], {
+        "name": "ชื่อใหม่", "nameEn": "New Keychain",
+        "variants": [{**v, "designName": "ลายใหม่", "designNameEn": "New Design"} for v in product["variants"]],
+    })
+    assert db.get_order(conn, order["orderCode"])["items"] == order["items"]
+
+
+def test_old_order_item_has_null_english() -> None:
+    conn = _conn()
+    product = _product(conn)
+    order = db.create_order(conn, {
+        "items": [{"variantId": product["variants"][0]["id"], "quantity": 1}],
+        "customer": CUSTOMER,
+    })
+    item = db.get_order(conn, order["orderCode"])["items"][0]
+    assert item["productNameEn"] is None
+    assert item["variantLabelEn"] is None
+
+
 @pytest.mark.parametrize("code", ["", "A B", "ไทย", "A_", "A" * 13, 123])
 def test_invalid_design_code(code):
     with pytest.raises(db.StoreError, match="ตัวย่อใช้ได้เฉพาะ A-Z, 0-9 และ -"):

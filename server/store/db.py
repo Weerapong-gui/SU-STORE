@@ -499,7 +499,9 @@ def _serialize_order(connection: sqlite3.Connection, row: sqlite3.Row, *, includ
                 "variantId": i["variant_id"],
                 "productId": i["product_id"],
                 "productName": i["product_name"],
+                "productNameEn": i["product_name_en"],
                 "variantLabel": i["variant_label"],
+                "variantLabelEn": i["variant_label_en"],
                 "unitPrice": i["unit_price"],
                 "quantity": i["quantity"],
                 "lineTotal": i["unit_price"] * i["quantity"],
@@ -579,7 +581,7 @@ def create_order(connection: sqlite3.Connection, payload: Any) -> dict[str, Any]
         required_fields: list[str] = list(ALWAYS_REQUIRED_FIELDS)
         for variant_id, qty in quantities.items():
             row = connection.execute(
-                "SELECT v.*, p.name AS product_name, p.status AS product_status, p.buyer_fields_json, "
+                "SELECT v.*, p.name AS product_name, p.name_en AS product_name_en, p.status AS product_status, p.buyer_fields_json, "
                 "p.sale_starts_at, p.sale_ends_at "
                 "FROM store_variants v JOIN store_products p ON p.id = v.product_id WHERE v.id = ?",
                 (variant_id,),
@@ -590,7 +592,10 @@ def create_order(connection: sqlite3.Connection, payload: Any) -> dict[str, Any]
             if state != "open":
                 when = "ยังไม่ถึงเวลาเปิดขาย" if state == "upcoming" else "ปิดรับสั่งแล้ว"
                 raise StoreError(409, f"{row['product_name']} {when}")
-            label = variant_label(row["size"], row["color"])
+            label = (
+                designs.design_label(row["design_code"], row["design_name"])
+                if row["design_code"] else variant_label(row["size"], row["color"])
+            )
             updated = connection.execute(
                 "UPDATE store_variants SET stock = stock - ? WHERE id = ? AND stock IS NOT NULL AND stock >= ?",
                 (qty, variant_id, qty),
@@ -624,10 +629,15 @@ def create_order(connection: sqlite3.Connection, payload: Any) -> dict[str, Any]
         )
         order_id = int(cursor.lastrowid)
         for row, label, qty in lines:
+            label_en = (
+                designs.design_label(row["design_code"], row["design_name_en"])
+                if row["design_code"] and row["design_name_en"] else None
+            )
             connection.execute(
-                "INSERT INTO store_order_items (order_id, variant_id, product_id, product_name, variant_label, unit_price, quantity) "
-                "VALUES (?, ?, ?, ?, ?, ?, ?)",
-                (order_id, row["id"], row["product_id"], row["product_name"], label, row["price"], qty),
+                "INSERT INTO store_order_items (order_id, variant_id, product_id, product_name, product_name_en, "
+                "variant_label, variant_label_en, unit_price, quantity) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                (order_id, row["id"], row["product_id"], row["product_name"], row["product_name_en"] or None,
+                 label, label_en, row["price"], qty),
             )
         connection.commit()
     except BaseException:
