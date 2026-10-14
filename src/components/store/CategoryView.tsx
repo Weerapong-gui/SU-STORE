@@ -36,6 +36,10 @@ export function CategoryView({ category, products }: { category: StoreCategory; 
         )}
       </section>
 
+      {cards.length === 0 ? (
+        <ProductCardGrid cards={[]} />
+      ) : (
+        <>
       {/* Sticks under the 64px navbar; the margin bleeds the background to the container edges. */}
       <div className="sticky top-16 z-10 -mx-4 mt-6 bg-white/95 px-4 pb-3 pt-4 md:-mx-0 md:mt-10 md:border-t md:border-black/[0.06] md:px-0 md:py-4">
         <div className="md:flex md:items-center md:gap-5">
@@ -76,6 +80,8 @@ export function CategoryView({ category, products }: { category: StoreCategory; 
             {t.showAllDesigns}
           </button>
         </div>
+      )}
+        </>
       )}
     </Container>
   );
