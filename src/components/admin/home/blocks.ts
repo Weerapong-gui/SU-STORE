@@ -2,7 +2,7 @@ import { GalleryHorizontal, LayoutGrid, PanelLeft, Shapes, Star, Type, type Luci
 import type { HeroSlide, HomeBlock, HomeBlockType } from "@/types/store";
 
 // Block types mirror HOME_BLOCK_TYPES in server/store/home.py: keep the two lists in sync.
-// Limits mirror validate_home() in server/store/db.py (MAX_HOME_BLOCKS, MAX_HERO_SLIDES, MAX_FEATURED).
+// Limits mirror validate_home() in server/store/home.py (MAX_HOME_BLOCKS, MAX_HERO_SLIDES, MAX_FEATURED, MAX_HOME_CATEGORIES).
 export const MAX_BLOCKS = 20;
 export const MAX_SLIDES = 6;
 export const MAX_FEATURED = 12;

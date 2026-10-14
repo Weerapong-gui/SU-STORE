@@ -56,3 +56,17 @@ describe("ProductDetail design picker", () => {
     expect(swatch("LAW").getAttribute("aria-label")).toContain("sold out");
   });
 });
+
+describe("BuyBar feedback", () => {
+  it("shows the choose-an-option notice inside the buy bar", () => {
+    const sizeVariant = (id: number, size: string): StoreVariant => ({ ...variant(id, "", ""), size, label: size, designCode: "", designName: "", designNameEn: "" });
+    const shirt: StoreProduct = { ...product, optionKind: "options", variants: [sizeVariant(10, "S"), sizeVariant(11, "M")] };
+    act(() => root.render(<ProductDetail product={shirt} />));
+    const add = [...container.querySelectorAll("button")].find((b) => b.textContent === "เพิ่มลงตะกร้า" || b.textContent === "Add to cart")!;
+    act(() => add.click());
+    const status = container.querySelector('[role="status"]')!;
+    expect(status.textContent).toMatch(/Please choose an option|กรุณาเลือกตัวเลือกสินค้า/);
+    expect(status.getAttribute("aria-live")).toBe("polite");
+    expect(status.closest(".sticky")).toBe(add.parentElement);
+  });
+});

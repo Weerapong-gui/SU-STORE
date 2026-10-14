@@ -62,6 +62,35 @@ def test_switching_kind_deactivates_ordered_variants():
     assert db.get_order(conn, order["orderCode"])["items"][0]["variantLabel"] == "Black"
 
 
+def test_kind_change_without_variants_rejected():
+    conn = _conn()
+    product = _product(conn)
+    with pytest.raises(db.StoreError, match="เปลี่ยนแบบตัวเลือกต้องส่งรายการตัวเลือกมาด้วย") as error:
+        db.update_product(conn, product["id"], {"optionKind": "designs"})
+    assert error.value.status == 400
+    assert db.get_product(conn, product["id"], public=False) == product
+
+
+def test_designs_to_options_keeps_order_label():
+    conn = _conn()
+    product = db.create_product(conn, {"name": "เสื้อ", "optionKind": "designs", "variants": _designs(), "status": "active"})
+    design_id = product["variants"][0]["id"]
+    order = db.create_order(conn, {"items": [{"variantId": design_id, "quantity": 1}], "customer": CUSTOMER})
+    label = db.get_order(conn, order["orderCode"])["items"][0]["variantLabel"]
+    updated = db.update_product(conn, product["id"], {"optionKind": "options", "variants": [{"size": "M", "color": "", "price": 150}]})
+    assert updated["optionKind"] == "options"
+    assert next(v for v in updated["variants"] if v["id"] == design_id)["active"] is False
+    assert [v["size"] for v in updated["variants"] if v["active"]] == ["M"]
+    assert db.get_order(conn, order["orderCode"])["items"][0]["variantLabel"] == label
+
+
+def test_same_kind_without_variants_allowed():
+    conn = _conn()
+    product = _product(conn)
+    updated = db.update_product(conn, product["id"], {"optionKind": "options", "nameEn": "Tote"})
+    assert updated["nameEn"] == "Tote"
+
+
 def test_options_product_unchanged():
     product = _product(_conn())
     assert product["optionKind"] == "options"

@@ -142,9 +142,14 @@ export function ProductDetail({ product, initialDesign }: { product: StoreProduc
           <p className="text-sm text-ink-soft">{t.closesAt(saleDate(product.saleEndsAt))}</p>
         )}
 
-        <BuyBar canOrder={canOrder} disabled={!!variant?.soldOut || product.soldOut} onBuy={() => add(true)} onAdd={() => add(false)} />
-        {preview && <p className="rounded-2xl bg-amber-100 px-4 py-3 text-sm font-semibold text-amber-900">{t.previewNoOrders}</p>}
-        {notice && <p className="text-sm font-medium text-apple-blue" role="status">{notice}</p>}
+        <BuyBar
+          canOrder={canOrder}
+          disabled={!!variant?.soldOut || product.soldOut}
+          notice={notice}
+          previewMessage={preview ? t.previewNoOrders : undefined}
+          onBuy={() => add(true)}
+          onAdd={() => add(false)}
+        />
 
         {product.description && (
           <div className="whitespace-pre-line border-t border-zinc-200 pt-6 text-sm leading-relaxed text-ink-soft">

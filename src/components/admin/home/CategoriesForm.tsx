@@ -11,9 +11,12 @@ type Props = {
 };
 
 export function CategoriesForm({ block, onChange, categories }: Props) {
-  const selected = new Set(block.categoryIds);
+  // Ids of deleted categories are dropped so they neither count toward the cap nor linger after the next save.
+  const existing = new Set(categories.map((c) => c.id));
+  const categoryIds = block.categoryIds.filter((id) => existing.has(id));
+  const selected = new Set(categoryIds);
   const toggle = (id: number) =>
-    onChange({ ...block, categoryIds: selected.has(id) ? block.categoryIds.filter((x) => x !== id) : [...block.categoryIds, id] });
+    onChange({ ...block, categoryIds: selected.has(id) ? categoryIds.filter((x) => x !== id) : [...categoryIds, id] });
 
   return (
     <div className="space-y-4">
@@ -22,7 +25,7 @@ export function CategoriesForm({ block, onChange, categories }: Props) {
       </Field>
       <div>
         <p className="text-sm font-semibold text-zinc-800">
-          เลือกหมวดหมู่ ({block.categoryIds.length}/{MAX_HOME_CATEGORIES})
+          เลือกหมวดหมู่ ({categoryIds.length}/{MAX_HOME_CATEGORIES})
         </p>
         <p className="mb-2 text-xs text-zinc-500">
           ไม่ติ๊กเลย = แสดงทุกหมวดที่เปิดแสดง เรียงตามลำดับในหน้าหมวดหมู่ หมวดที่ซ่อนอยู่จะไม่ขึ้นในหน้าร้าน
@@ -41,7 +44,7 @@ export function CategoriesForm({ block, onChange, categories }: Props) {
                   <input
                     type="checkbox"
                     checked={checked}
-                    disabled={!checked && block.categoryIds.length >= MAX_HOME_CATEGORIES}
+                    disabled={!checked && categoryIds.length >= MAX_HOME_CATEGORIES}
                     onChange={() => toggle(c.id)}
                     className="h-5 w-5 shrink-0"
                   />

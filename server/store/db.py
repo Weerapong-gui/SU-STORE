@@ -381,9 +381,12 @@ def _apply_product_fields(connection: sqlite3.Connection, product_id: int, field
 
 
 def update_product(connection: sqlite3.Connection, product_id: int, payload: dict[str, Any]) -> dict[str, Any]:
-    get_product(connection, product_id, public=False)  # 404 if missing
+    stored = get_product(connection, product_id, public=False)  # 404 if missing
     fields = _product_fields(payload)
     ensure_exists(connection, fields.get("category_id"))
+    if fields.get("option_kind", stored["optionKind"]) != stored["optionKind"] and "variants" not in payload:
+        # Old size/colour rows would turn into design chips with empty codes.
+        raise StoreError(400, "เปลี่ยนแบบตัวเลือกต้องส่งรายการตัวเลือกมาด้วย")
     if "option_kind" in fields:
         _apply_product_fields(connection, product_id, {"option_kind": fields.pop("option_kind")})
     if "variants" in payload:

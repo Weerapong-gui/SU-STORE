@@ -27,7 +27,8 @@ DEFAULT_FONT = "sarabun"
 MAX_HOME_BLOCKS = 20
 MAX_HERO_SLIDES = 6
 MAX_FEATURED = 12
-MAX_CATEGORIES = 12
+# Must match MAX_HOME_CATEGORIES in src/components/admin/home/blocks.ts.
+MAX_HOME_CATEGORIES = 12
 
 # A hero slide with no image and no text renders the built-in bilingual store intro.
 DEFAULT_HOME: dict[str, Any] = {
@@ -140,8 +141,8 @@ def validate_home(payload: Any) -> dict[str, Any]:
             clean["productIds"] = list(dict.fromkeys(ids))
         elif kind == "categories":
             ids = block.get("categoryIds", [])
-            if not isinstance(ids, list) or len(ids) > MAX_CATEGORIES:
-                raise StoreError(400, f"{where}: เลือกหมวดหมู่ได้ไม่เกิน {MAX_CATEGORIES} หมวดหมู่")
+            if not isinstance(ids, list) or len(ids) > MAX_HOME_CATEGORIES:
+                raise StoreError(400, f"{where}: เลือกหมวดหมู่ได้ไม่เกิน {MAX_HOME_CATEGORIES} หมวดหมู่")
             if any(isinstance(i, bool) or not isinstance(i, int) for i in ids):
                 raise StoreError(400, f"{where}: รายการหมวดหมู่ไม่ถูกต้อง")
             clean["title"] = clean_text(block.get("title"), f"หัวข้อ ({where})", max_len=80)
