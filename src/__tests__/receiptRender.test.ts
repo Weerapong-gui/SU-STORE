@@ -18,6 +18,13 @@ describe("receipt SVG", () => {
     expect(doc.querySelectorAll('g[data-receipt-copy]')).toHaveLength(2);
     expect(doc.querySelector('[data-receipt-copy="right"]')?.getAttribute("transform")).toBe(`translate(${DEFAULT_LAYOUT.rightCopyOffset} 0)`);
   });
+  it("shows the page number only on multi-page receipts", () => {
+    const multi = renderReceiptSvg(template, DEFAULT_LAYOUT, SAMPLE_SNAPSHOT, {
+      copy: false, sample: false, page: { ...page(), pageNo: 2, pageCount: 3 }, dateText: "15/10/2569",
+    });
+    expect(multi).toContain(">2/3<");
+    expect(render()).not.toContain(">1/1<");
+  });
   it("marks copies only on reprints", () => {
     expect(render()).not.toContain("สำเนา");
     expect(render(true)).toContain("สำเนา / COPY");

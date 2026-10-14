@@ -1,3 +1,4 @@
+import { rowHeight, WRAP_LINE_HEIGHT } from "./paginate";
 import type { ReceiptField, ReceiptLayout, ReceiptPage, ReceiptSnapshot } from "@/types/store";
 
 type RenderOptions = { copy: boolean; sample: boolean; page: ReceiptPage; dateText: string };
@@ -27,13 +28,13 @@ function money(value: number): string {
 }
 
 function renderRows(page: ReceiptPage, layout: ReceiptLayout): string {
-  const { cols, size, rowSpacing, firstY } = layout.table;
+  const { cols, size, firstY } = layout.table;
   let y = firstY;
   return page.rows.map(({ line, nameLines }) => {
     const cell = (key: keyof typeof cols, value: string | number, rowY = y) => text(value, { ...cols[key], y: rowY, size });
-    const svg = cell("no", line.no) + nameLines.map((name, index) => cell("name", name, y + index * rowSpacing)).join("")
+    const svg = cell("no", line.no) + nameLines.map((name, index) => cell("name", name, y + index * size * WRAP_LINE_HEIGHT)).join("")
       + cell("qty", line.quantity) + cell("price", money(line.unitPrice)) + cell("amount", money(line.amount));
-    y += rowSpacing * nameLines.length;
+    y += rowHeight(layout.table, nameLines.length);
     return svg;
   }).join("");
 }
@@ -42,8 +43,9 @@ function renderCopy(layout: ReceiptLayout, snapshot: ReceiptSnapshot, opts: Rend
   const field = (key: keyof ReceiptLayout["fields"], value: string | number) => text(value, layout.fields[key]);
   let svg = field("date", opts.dateText) + field("receiptNo", snapshot.receiptNo)
     + field("customer", snapshot.customer.name) + field("studentId", snapshot.customer.studentCode)
-    + field("school", snapshot.customer.school) + field("pageNo", `${opts.page.pageNo}/${opts.page.pageCount}`)
-    + field("payeeName", snapshot.payeeName) + renderRows(opts.page, layout);
+    + field("school", snapshot.customer.school) + field("payeeName", snapshot.payeeName) + renderRows(opts.page, layout);
+  // A single-page receipt needs no "1/1" mark.
+  if (opts.page.pageCount > 1) svg += field("pageNo", `${opts.page.pageNo}/${opts.page.pageCount}`);
   if (opts.page.isLast) {
     svg += field("subtotal", money(snapshot.total)) + field("total", money(snapshot.total)) + field("words", `(${snapshot.totalText})`);
   }

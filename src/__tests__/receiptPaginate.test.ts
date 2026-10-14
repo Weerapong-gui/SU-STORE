@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import { DEFAULT_LAYOUT } from "@/lib/receipt/layout";
-import { paginate } from "@/lib/receipt/paginate";
+import { paginate, rowHeight, WRAP_LINE_HEIGHT } from "@/lib/receipt/paginate";
 
 const measure = (text: string, size: number) => text.length * size * 0.5;
 const lines = (count: number, name = "เสื้อ") => Array.from({ length: count }, (_, i) => ({ no: i + 1, name, quantity: 1, unitPrice: 10, amount: 10 }));
@@ -17,7 +17,7 @@ describe("receipt pagination", () => {
     expect(pages.length).toBeGreaterThan(1);
     pages.forEach((page, index) => {
       expect(page).toMatchObject({ pageNo: index + 1, pageCount: pages.length, isLast: index === pages.length - 1 });
-      expect(DEFAULT_LAYOUT.table.firstY + page.rows.reduce((sum, row) => sum + row.nameLines.length * DEFAULT_LAYOUT.table.rowSpacing, 0)).toBeLessThanOrEqual(DEFAULT_LAYOUT.table.bottomY);
+      expect(DEFAULT_LAYOUT.table.firstY + page.rows.reduce((sum, row) => sum + rowHeight(DEFAULT_LAYOUT.table, row.nameLines.length), 0)).toBeLessThanOrEqual(DEFAULT_LAYOUT.table.bottomY);
     });
     expect(pages.flatMap(page => page.rows.map(row => row.line.no))).toEqual(lines(30).map(line => line.no));
   });
@@ -27,6 +27,11 @@ describe("receipt pagination", () => {
     expect(row.nameLines.length).toBeGreaterThanOrEqual(2);
     expect(row.nameLines.join("")).toBe(name);
     row.nameLines.forEach(text => expect(measure(text, DEFAULT_LAYOUT.table.size)).toBeLessThanOrEqual(DEFAULT_LAYOUT.table.cols.name.width));
+  });
+  it("charges the full row height for the first line and 1.35x text size for each extra line", () => {
+    const { table } = DEFAULT_LAYOUT;
+    expect(rowHeight(table, 1)).toBe(table.rowSpacing);
+    expect(rowHeight(table, 3)).toBeCloseTo(table.rowSpacing + 2 * table.size * WRAP_LINE_HEIGHT);
   });
   it("falls back to characters when Segmenter is unavailable", () => {
     vi.stubGlobal("Intl", { ...Intl, Segmenter: undefined });

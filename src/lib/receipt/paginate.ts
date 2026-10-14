@@ -1,6 +1,13 @@
 import type { ReceiptLayout, ReceiptPage, ReceiptSnapshot } from "@/types/store";
 export type { ReceiptPage } from "@/types/store";
 
+// Extra wrapped lines sit tighter than a full row so long names do not waste page space.
+export const WRAP_LINE_HEIGHT = 1.35;
+
+export function rowHeight(table: ReceiptLayout["table"], nameLineCount: number): number {
+  return table.rowSpacing + table.size * WRAP_LINE_HEIGHT * (nameLineCount - 1);
+}
+
 type Measure = (text: string, size: number) => number;
 type SegmenterConstructor = new (locale: string, options: { granularity: "word" }) => {
   segment(text: string): Iterable<{ segment: string }>;
@@ -30,12 +37,12 @@ function wrapName(name: string, width: number, size: number, measure: Measure): 
 }
 
 export function paginate(lines: ReceiptSnapshot["lines"], layout: ReceiptLayout, measure: Measure): ReceiptPage[] {
-  const { firstY, bottomY, rowSpacing, size, cols } = layout.table;
+  const { firstY, bottomY, size, cols } = layout.table;
   const groups: ReceiptPage["rows"][] = [[]];
   let usedHeight = 0;
   for (const line of lines) {
     const nameLines = wrapName(line.name, cols.name.width, size, measure);
-    const height = rowSpacing * nameLines.length;
+    const height = rowHeight(layout.table, nameLines.length);
     // An oversized row stays intact on its own page; always advance instead of looping.
     if (groups[groups.length - 1].length && firstY + usedHeight + height > bottomY) {
       groups.push([]);
