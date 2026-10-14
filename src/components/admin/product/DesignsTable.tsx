@@ -3,45 +3,49 @@
 import { useRef, useState } from "react";
 import { adminFetch } from "@/lib/adminApi";
 import { Button, inputClass, useToast } from "@/components/admin/ui";
-import { cleanDesignCode, EMPTY_DESIGN_ROW, type DesignRow } from "./designRows";
+import { cleanDesignCode, newDesignRow, type DesignRow, type DesignRowsUpdate } from "./designRows";
 
 const DESKTOP_GRID = "md:grid-cols-[3.25rem_1fr_1fr_7rem_7rem_auto] md:items-center";
 const fieldLabel = "block text-xs font-semibold text-zinc-600 md:sr-only";
 const smallButton = "min-h-11 min-w-11 rounded-xl px-3 text-sm text-zinc-600 hover:bg-zinc-100 disabled:opacity-30";
 
 // Editable list of designs: stacked cards on phones, one table-like row per design from md up.
-export function DesignsTable({ rows, onChange }: { rows: DesignRow[]; onChange: (rows: DesignRow[]) => void }) {
+export function DesignsTable({ rows, onChange }: { rows: DesignRow[]; onChange: DesignRowsUpdate }) {
   const toast = useToast();
   const fileInput = useRef<HTMLInputElement>(null);
-  const uploadTarget = useRef(0);
-  const [uploadingIndex, setUploadingIndex] = useState<number | null>(null);
+  const uploadTarget = useRef("");
+  const [uploadingKey, setUploadingKey] = useState<string | null>(null);
 
-  const update = (index: number, patch: Partial<DesignRow>) => onChange(rows.map((r, i) => (i === index ? { ...r, ...patch } : r)));
-  const move = (index: number, by: -1 | 1) => {
-    const next = [...rows];
-    [next[index], next[index + by]] = [next[index + by], next[index]];
-    onChange(next);
-  };
+  const update = (key: string, patch: Partial<DesignRow>) => onChange((prev) => prev.map((r) => (r.key === key ? { ...r, ...patch } : r)));
+  const move = (key: string, by: -1 | 1) =>
+    onChange((prev) => {
+      const index = prev.findIndex((r) => r.key === key);
+      if (index < 0 || !prev[index + by]) return prev;
+      const next = [...prev];
+      [next[index], next[index + by]] = [next[index + by], next[index]];
+      return next;
+    });
+  const remove = (key: string) => onChange((prev) => prev.filter((r) => r.key !== key));
 
-  function pickImage(index: number) {
-    uploadTarget.current = index;
+  function pickImage(key: string) {
+    uploadTarget.current = key;
     fileInput.current?.click();
   }
 
   async function upload(file: File | undefined) {
-    const index = uploadTarget.current;
+    const key = uploadTarget.current;
     if (fileInput.current) fileInput.current.value = "";
     if (!file) return;
-    setUploadingIndex(index);
+    setUploadingKey(key);
     try {
       const form = new FormData();
       form.append("image", file);
       const { url } = await adminFetch<{ url: string }>("images", { method: "POST", body: form });
-      update(index, { image: url });
+      update(key, { image: url });
     } catch (e) {
       toast((e as Error).message, "error");
     } finally {
-      setUploadingIndex(null);
+      setUploadingKey(null);
     }
   }
 
@@ -60,25 +64,25 @@ export function DesignsTable({ rows, onChange }: { rows: DesignRow[]; onChange: 
         {rows.map((r, i) => {
           const mover = (cls: string) => (
             <div className={`flex ${cls}`}>
-              <button type="button" aria-label="เลื่อนขึ้น" disabled={i === 0} className={smallButton} onClick={() => move(i, -1)}>
+              <button type="button" aria-label="เลื่อนขึ้น" disabled={i === 0} className={smallButton} onClick={() => move(r.key, -1)}>
                 ↑
               </button>
-              <button type="button" aria-label="เลื่อนลง" disabled={i === rows.length - 1} className={smallButton} onClick={() => move(i, 1)}>
+              <button type="button" aria-label="เลื่อนลง" disabled={i === rows.length - 1} className={smallButton} onClick={() => move(r.key, 1)}>
                 ↓
               </button>
             </div>
           );
           return (
-            <div key={i} className={`grid gap-3 rounded-xl border border-zinc-200 p-3 md:rounded-none md:border-0 md:border-b md:border-zinc-100 md:px-0 ${DESKTOP_GRID}`}>
+            <div key={r.key} className={`grid gap-3 rounded-xl border border-zinc-200 p-3 md:rounded-none md:border-0 md:border-b md:border-zinc-100 md:px-0 ${DESKTOP_GRID}`}>
               <div className="flex items-center gap-3 md:contents">
                 <button
                   type="button"
                   aria-label={r.image ? `เปลี่ยนรูป ${r.designCode}` : "อัปโหลดรูป"}
-                  disabled={uploadingIndex === i}
-                  onClick={() => pickImage(i)}
+                  disabled={uploadingKey === r.key}
+                  onClick={() => pickImage(r.key)}
                   className="flex h-14 w-14 shrink-0 items-center justify-center overflow-hidden rounded-xl border border-dashed border-zinc-300 text-lg text-zinc-500 hover:border-zinc-500 md:h-11 md:w-11"
                 >
-                  {uploadingIndex === i ? (
+                  {uploadingKey === r.key ? (
                     <span className="text-xs">...</span>
                   ) : r.image ? (
                     // eslint-disable-next-line @next/next/no-img-element
@@ -95,11 +99,11 @@ export function DesignsTable({ rows, onChange }: { rows: DesignRow[]; onChange: 
               </div>
               <label className="block">
                 <span className={fieldLabel}>ชื่อลาย (ไทย) *</span>
-                <input className={inputClass} aria-label="ชื่อลาย (ไทย)" value={r.designName} onChange={(e) => update(i, { designName: e.target.value })} />
+                <input className={inputClass} aria-label="ชื่อลาย (ไทย)" value={r.designName} onChange={(e) => update(r.key, { designName: e.target.value })} />
               </label>
               <label className="block">
                 <span className={fieldLabel}>ชื่อลาย (อังกฤษ)</span>
-                <input className={inputClass} aria-label="ชื่อลาย (อังกฤษ)" value={r.designNameEn} onChange={(e) => update(i, { designNameEn: e.target.value })} />
+                <input className={inputClass} aria-label="ชื่อลาย (อังกฤษ)" value={r.designNameEn} onChange={(e) => update(r.key, { designNameEn: e.target.value })} />
               </label>
               <div className="grid grid-cols-2 gap-3 md:contents">
                 <label className="block">
@@ -108,7 +112,7 @@ export function DesignsTable({ rows, onChange }: { rows: DesignRow[]; onChange: 
                     className={`${inputClass} uppercase`}
                     aria-label="ตัวย่อ"
                     value={r.designCode}
-                    onChange={(e) => update(i, { designCode: cleanDesignCode(e.target.value) })}
+                    onChange={(e) => update(r.key, { designCode: cleanDesignCode(e.target.value) })}
                   />
                 </label>
                 <label className="block">
@@ -119,21 +123,21 @@ export function DesignsTable({ rows, onChange }: { rows: DesignRow[]; onChange: 
                     inputMode="numeric"
                     placeholder="ไม่จำกัด"
                     value={r.stock}
-                    onChange={(e) => update(i, { stock: e.target.value.trim() })}
+                    onChange={(e) => update(r.key, { stock: e.target.value.trim() })}
                   />
                 </label>
               </div>
               <div className="flex flex-wrap items-center justify-end gap-1">
                 {mover("hidden md:flex")}
                 {r.image && (
-                  <button type="button" className={`${smallButton} text-zinc-500`} onClick={() => update(i, { image: "" })}>
+                  <button type="button" className={`${smallButton} text-zinc-500`} onClick={() => update(r.key, { image: "" })}>
                     ลบรูป
                   </button>
                 )}
                 <button
                   type="button"
                   className={`${smallButton} text-red-600 hover:bg-red-50`}
-                  onClick={() => onChange(rows.filter((_, idx) => idx !== i))}
+                  onClick={() => remove(r.key)}
                 >
                   <span className="md:hidden">ลบลายนี้</span>
                   <span className="hidden md:inline">ลบ</span>
@@ -145,7 +149,7 @@ export function DesignsTable({ rows, onChange }: { rows: DesignRow[]; onChange: 
       </div>
 
       <div className="mt-3 flex flex-wrap items-center gap-3">
-        <Button variant="secondary" className="min-h-11" onClick={() => onChange([...rows, EMPTY_DESIGN_ROW])}>
+        <Button variant="secondary" className="min-h-11" onClick={() => onChange((prev) => [...prev, newDesignRow()])}>
           + เพิ่มลาย
         </Button>
         <span className="text-xs text-zinc-500">{rows.length} ลาย · ใช้ปุ่มลูกศรเพื่อเรียงลำดับที่ลูกค้าเห็น</span>

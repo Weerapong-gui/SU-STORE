@@ -4,7 +4,7 @@ import { useConfirm } from "@/components/admin/ConfirmDialog";
 import { Card, Field, inputClass } from "@/components/admin/ui";
 import type { StoreProduct } from "@/types/store";
 import { DesignsTable } from "./DesignsTable";
-import type { DesignRow } from "./designRows";
+import type { DesignRow, DesignRowsUpdate } from "./designRows";
 import { VariantsCard } from "./VariantsCard";
 import type { VariantRow } from "./variants";
 
@@ -24,7 +24,7 @@ type Props = {
   onRowsChange: (rows: VariantRow[]) => void;
   designRows: DesignRow[];
   designPrice: string;
-  onDesignRowsChange: (rows: DesignRow[]) => void;
+  onDesignRowsChange: DesignRowsUpdate;
   onDesignPriceChange: (price: string) => void;
   /** Changes whenever the product reloads, so the size/colour inputs remount from saved data. */
   resetKey: string;

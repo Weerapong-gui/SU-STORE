@@ -2,6 +2,7 @@ import { describe, it, expect } from "vitest";
 import { designPayload, designRowProblems, type DesignRow } from "@/components/admin/product/designRows";
 
 const row = (patch: Partial<DesignRow> = {}): DesignRow => ({
+  key: "k",
   designName: "ลายหนึ่ง",
   designNameEn: "",
   designCode: "SCI",

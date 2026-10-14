@@ -1,9 +1,20 @@
 import type { StoreProduct } from "@/types/store";
 
 // One editable row of the designs table. Stock stays a string while typing.
-export type DesignRow = { id?: number; designName: string; designNameEn: string; designCode: string; image: string; stock: string };
+// `key` is a client-only identity (never sent to the server) so async results find their row after reorders/deletes.
+export type DesignRow = { key: string; id?: number; designName: string; designNameEn: string; designCode: string; image: string; stock: string };
 
-export const EMPTY_DESIGN_ROW: DesignRow = { designName: "", designNameEn: "", designCode: "", image: "", stock: "" };
+export const newDesignRow = (): DesignRow => ({
+  key: crypto.randomUUID(),
+  designName: "",
+  designNameEn: "",
+  designCode: "",
+  image: "",
+  stock: "",
+});
+
+/** Functional row update, so late results apply to the rows as they are now. */
+export type DesignRowsUpdate = (update: (rows: DesignRow[]) => DesignRow[]) => void;
 
 // Mirrors the server's design-code rule (A-Z, 0-9 and "-"), applied while typing.
 export const cleanDesignCode = (text: string): string => text.toUpperCase().replace(/[^A-Z0-9-]/g, "");
@@ -12,6 +23,7 @@ export function designRowsFromProduct(p: StoreProduct): DesignRow[] {
   return p.variants
     .filter((v) => v.active)
     .map((v) => ({
+      key: crypto.randomUUID(),
       id: v.id,
       designName: v.designName,
       designNameEn: v.designNameEn,

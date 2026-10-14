@@ -9,7 +9,7 @@ import { Badge, Button, Card, Field, inputClass, PRODUCT_STATUS_LABEL, useToast 
 import type { ProductStatus, StoreCategory, StoreMeta, StoreProduct } from "@/types/store";
 import { ImagesCard } from "./ImagesCard";
 import { OptionsStep } from "./OptionsStep";
-import { EMPTY_DESIGN_ROW } from "./designRows";
+import { newDesignRow, type DesignRowsUpdate } from "./designRows";
 import { EMPTY_FORM, formFromProduct, formProblems, payloadFromForm, type Form } from "./productForm";
 
 const STATUS_HELP: Record<ProductStatus, string> = {
@@ -62,6 +62,12 @@ export function ProductEditor({ productId }: { productId?: number }) {
 
   const set = <K extends keyof Form>(key: K, value: Form[K]) => {
     setForm((f) => ({ ...f, [key]: value }));
+    setDirty(true);
+  };
+
+  // Functional so an upload finishing mid-edit applies to the current rows, not a stale render's.
+  const updateDesignRows: DesignRowsUpdate = (update) => {
+    setForm((f) => ({ ...f, designRows: update(f.designRows) }));
     setDirty(true);
   };
 
@@ -170,13 +176,13 @@ export function ProductEditor({ productId }: { productId?: number }) {
         optionKind={form.optionKind}
         onKindChange={(kind) => {
           set("optionKind", kind);
-          if (kind === "designs" && form.designRows.length === 0) set("designRows", [EMPTY_DESIGN_ROW]);
+          if (kind === "designs" && form.designRows.length === 0) set("designRows", [newDesignRow()]);
         }}
         rows={form.rows}
         onRowsChange={(rows) => set("rows", rows)}
         designRows={form.designRows}
         designPrice={form.designPrice}
-        onDesignRowsChange={(rows) => set("designRows", rows)}
+        onDesignRowsChange={updateDesignRows}
         onDesignPriceChange={(price) => set("designPrice", price)}
       />
 
