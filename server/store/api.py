@@ -225,6 +225,11 @@ def _route(handler: Any, method: str, path: str, query: dict[str, str]) -> None:
                     log_audit(conn, code, "v2_receipt_issued", f"{receipt['receiptNo']} by {_admin_user(handler)}")
             return send(HTTPStatus.CREATED if created else HTTPStatus.OK, receipt)
 
+    m = re.fullmatch(r"/v2/admin/receipts/(\d+)", path)
+    if method == "GET" and m:
+        with open_db() as conn:
+            return send(HTTPStatus.OK, receipts.get_receipt(conn, int(m.group(1))))
+
     m = re.fullmatch(r"/v2/admin/receipts/(\d+)/cancel", path)
     if method == "POST" and m:
         _require_superadmin(handler)

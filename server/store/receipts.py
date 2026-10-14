@@ -210,6 +210,13 @@ def cancel_receipt(conn: sqlite3.Connection, receipt_id: int, *, cancelled_by: s
     return _serialize(row)
 
 
+def get_receipt(conn: sqlite3.Connection, receipt_id: int) -> dict[str, Any]:
+    row = conn.execute(_RECEIPT_SELECT + " WHERE r.id = ?", (receipt_id,)).fetchone()
+    if row is None:
+        raise StoreError(404, "ไม่พบใบเสร็จ")
+    return _serialize(row)
+
+
 def list_order_receipts(conn: sqlite3.Connection, order_code: str) -> list[dict[str, Any]]:
     _order(conn, order_code)
     return [_serialize(row) for row in conn.execute(

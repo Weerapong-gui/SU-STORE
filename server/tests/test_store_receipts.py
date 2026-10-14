@@ -249,6 +249,16 @@ def test_receipt_http_flow(receipt_server):
 
 
 
+def test_get_receipt_by_id_http(receipt_server):
+    staff, code = _staff(receipt_server), _http_order(receipt_server)
+    issued = json.loads(_call(receipt_server, "POST", f"/v2/admin/orders/{code}/receipt", {"customer": CUSTOMER}, staff)[1])
+    status, body = _call(receipt_server, "GET", f"/v2/admin/receipts/{issued['id']}", headers=staff)
+    assert status == 200 and json.loads(body) == issued
+    status, body = _call(receipt_server, "GET", "/v2/admin/receipts/99999", headers=staff)
+    assert status == 404 and json.loads(body)["message"] == "ไม่พบใบเสร็จ"
+    assert _call(receipt_server, "GET", f"/v2/admin/receipts/{issued['id']}")[0] == 401
+
+
 def test_settings_put_requires_superadmin(receipt_server):
     staff = _staff(receipt_server)
     assert _call(receipt_server, "GET", "/v2/admin/receipt-settings")[0] == 401
