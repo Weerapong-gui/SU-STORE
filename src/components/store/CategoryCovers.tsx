@@ -8,14 +8,14 @@ import type { StoreCategory } from "@/types/store";
 import { CategoryImage } from "./CategoryTile";
 
 // The first cover is the big one; the rest are smaller, as in the approved design.
-export function CategoryCovers({ categories }: { categories: StoreCategory[] }) {
+export function CategoryCovers({ categories, title }: { categories: StoreCategory[]; title?: string }) {
   const t = useStoreText();
   const pick = useLocalized();
 
   if (categories.length === 0) return null;
   return (
     <section className="pt-8 md:pt-12">
-      <h2 className="mb-4 text-2xl font-bold tracking-tight text-ink md:mb-5 md:text-[32px]">{t.browseByCategory}</h2>
+      <h2 className="mb-4 text-2xl font-bold tracking-tight text-ink md:mb-5 md:text-[32px]">{title ?? t.browseByCategory}</h2>
       <div className="grid grid-cols-2 gap-3 md:grid-cols-3 md:gap-5">
         {categories.map((c, index) => {
           const name = pick(c.name, c.nameEn);
