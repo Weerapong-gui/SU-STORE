@@ -24,8 +24,9 @@ from fp28.database import log_audit, open_db
 from fp28.products import save_product_image_file
 from fp28.slips import delete_local_slip_file, resolve_stored_slip_path
 
-from . import categories, dashboard, db, home
+from . import categories, dashboard, db, home, receipt_routes
 from . import meta as store_meta
+from .route_helpers import admin_user, content_length, is_admin, is_superadmin, json_body
 
 _IMAGE_EXT = {"image/jpeg": ".jpg", "image/png": ".png", "image/webp": ".webp"}
 
@@ -40,36 +41,6 @@ def handle(handler: Any, method: str) -> None:
         handler.send_json(error.status, {"message": error.message})
     except json.JSONDecodeError:
         handler.send_json(HTTPStatus.BAD_REQUEST, {"message": "invalid json"})
-
-
-def _is_admin(handler: Any) -> bool:
-    if handler.has_global_authorization():
-        return True
-    return handler.has_claim_station_authorization()
-
-
-def _admin_user(handler: Any) -> str:
-    return handler.get_claim_station_user() or "token"
-
-
-MAX_JSON_BYTES = 512 * 1024
-
-
-def _content_length(handler: Any) -> int:
-    try:
-        return int(handler.headers.get("Content-Length", "0"))
-    except ValueError:
-        raise db.StoreError(HTTPStatus.BAD_REQUEST, "ข้อมูลไม่ถูกต้อง") from None
-
-
-def _json_body(handler: Any) -> dict[str, Any]:
-    # Refuse oversized bodies before _read_json pulls them into memory.
-    if _content_length(handler) > MAX_JSON_BYTES:
-        raise db.StoreError(HTTPStatus.BAD_REQUEST, "ข้อมูลใหญ่เกินไป")
-    payload = handler.read_json()
-    if not isinstance(payload, dict):
-        raise db.StoreError(HTTPStatus.BAD_REQUEST, "ข้อมูลไม่ถูกต้อง")
-    return payload
 
 
 def _route(handler: Any, method: str, path: str, query: dict[str, str]) -> None:
@@ -105,14 +76,14 @@ def _route(handler: Any, method: str, path: str, query: dict[str, str]) -> None:
             return send(HTTPStatus.OK, home.resolve_home(conn, home.get_home_admin(conn)["published"]))
 
     if method == "POST" and path == "/v2/orders":
-        payload = _json_body(handler)
+        payload = json_body(handler)
         with open_db() as conn:
             order = db.create_order(conn, payload)
             log_audit(conn, order["orderCode"], "v2_order_created", f"total={order['totalAmount']}")
         return send(HTTPStatus.CREATED, order)
 
     if method == "POST" and path == "/v2/orders/lookup":
-        payload = _json_body(handler)
+        payload = json_body(handler)
         with open_db() as conn:
             return send(HTTPStatus.OK, db.lookup_order(conn, payload.get("orderCode"), payload.get("phone")))
 
@@ -129,7 +100,7 @@ def _route(handler: Any, method: str, path: str, query: dict[str, str]) -> None:
         with open_db() as conn:
             row = db.get_order_row(conn, code)
             _require_order_access(handler, row, query)
-        if _content_length(handler) > config.MAX_SLIP_SIZE_BYTES + 64 * 1024:
+        if content_length(handler) > config.MAX_SLIP_SIZE_BYTES + 64 * 1024:
             raise db.StoreError(HTTPStatus.BAD_REQUEST, "ไฟล์สลิปต้องไม่เกิน 5MB")
         slip, error = handler.read_multipart_slip(code)
         if error:
@@ -144,7 +115,7 @@ def _route(handler: Any, method: str, path: str, query: dict[str, str]) -> None:
 
     # ── Admin ─────────────────────────────────────────────────────────────────
     if method == "POST" and path == "/v2/admin/login":
-        payload = _json_body(handler)
+        payload = json_body(handler)
         username, password = payload.get("username"), payload.get("password")
         if not (isinstance(username, str) and username and isinstance(password, str) and password):
             raise db.StoreError(HTTPStatus.BAD_REQUEST, "กรุณากรอกชื่อผู้ใช้และรหัสผ่าน")
@@ -159,11 +130,14 @@ def _route(handler: Any, method: str, path: str, query: dict[str, str]) -> None:
 
     if not path.startswith("/v2/admin/"):
         raise db.StoreError(HTTPStatus.NOT_FOUND, "not found")
-    if not _is_admin(handler):
+    if not is_admin(handler):
         raise db.StoreError(HTTPStatus.UNAUTHORIZED, "unauthorized")
 
     if method == "GET" and path == "/v2/admin/me":
-        return send(HTTPStatus.OK, {"username": _admin_user(handler)})
+        return send(HTTPStatus.OK, {"username": admin_user(handler), "isSuperadmin": is_superadmin(handler)})
+
+    if receipt_routes.route(handler, method, path):
+        return None
 
     if method == "GET" and path == "/v2/admin/dashboard":
         with open_db() as conn:
@@ -174,8 +148,8 @@ def _route(handler: Any, method: str, path: str, query: dict[str, str]) -> None:
             with open_db() as conn:
                 return send(HTTPStatus.OK, db.get_settings(conn))
         if method in ("PUT", "PATCH"):
-            payload = _json_body(handler)
-            user = _admin_user(handler)
+            payload = json_body(handler)
+            user = admin_user(handler)
             with open_db() as conn:
                 before = db.get_settings(conn)
                 settings = db.update_settings(conn, payload)
@@ -195,7 +169,7 @@ def _route(handler: Any, method: str, path: str, query: dict[str, str]) -> None:
             with open_db() as conn:
                 return send(HTTPStatus.OK, home.get_home_admin(conn))
         if method == "PUT":
-            payload = _json_body(handler)
+            payload = json_body(handler)
             with open_db() as conn:
                 return send(HTTPStatus.OK, home.save_home_draft(conn, payload))
 
@@ -206,7 +180,7 @@ def _route(handler: Any, method: str, path: str, query: dict[str, str]) -> None:
     if method == "POST" and path == "/v2/admin/home/publish":
         with open_db() as conn:
             state = home.publish_home(conn)
-            log_audit(conn, "-", "v2_home_published", f"by {_admin_user(handler)}")
+            log_audit(conn, "-", "v2_home_published", f"by {admin_user(handler)}")
         return send(HTTPStatus.OK, state)
 
     if method == "POST" and path == "/v2/admin/home/discard":
@@ -222,18 +196,18 @@ def _route(handler: Any, method: str, path: str, query: dict[str, str]) -> None:
             with open_db() as conn:
                 return send(HTTPStatus.OK, {"categories": categories.list_categories(conn, public=False)})
         if method == "POST":
-            payload = _json_body(handler)
+            payload = json_body(handler)
             with open_db() as conn:
                 category = categories.create_category(conn, payload)
-                log_audit(conn, "-", "v2_category_created", f"{category['slug']} by {_admin_user(handler)}")
+                log_audit(conn, "-", "v2_category_created", f"{category['slug']} by {admin_user(handler)}")
             return send(HTTPStatus.CREATED, category)
 
     if method == "PUT" and path == "/v2/admin/categories/order":
-        payload = _json_body(handler)
+        payload = json_body(handler)
         with open_db() as conn:
             ordered = categories.reorder_categories(conn, payload.get("ids"))
             slugs = ",".join(category["slug"] for category in ordered)
-            log_audit(conn, "-", "v2_category_reordered", f"{slugs} by {_admin_user(handler)}")
+            log_audit(conn, "-", "v2_category_reordered", f"{slugs} by {admin_user(handler)}")
         return send(HTTPStatus.OK, {"categories": ordered})
 
     m = re.fullmatch(r"/v2/admin/categories/(\d+)", path)
@@ -243,16 +217,16 @@ def _route(handler: Any, method: str, path: str, query: dict[str, str]) -> None:
             with open_db() as conn:
                 return send(HTTPStatus.OK, categories.get_category(conn, category_id, public=False))
         if method == "PUT":
-            payload = _json_body(handler)
+            payload = json_body(handler)
             with open_db() as conn:
                 category = categories.update_category(conn, category_id, payload)
-                log_audit(conn, "-", "v2_category_updated", f"{category['slug']} by {_admin_user(handler)}")
+                log_audit(conn, "-", "v2_category_updated", f"{category['slug']} by {admin_user(handler)}")
             return send(HTTPStatus.OK, category)
         if method == "DELETE":
             with open_db() as conn:
                 category = categories.get_category(conn, category_id, public=False)
                 result = categories.delete_category(conn, category_id)
-                log_audit(conn, "-", "v2_category_deleted", f"{category['slug']} by {_admin_user(handler)}")
+                log_audit(conn, "-", "v2_category_deleted", f"{category['slug']} by {admin_user(handler)}")
             return send(HTTPStatus.OK, result)
 
     if path == "/v2/admin/products":
@@ -260,7 +234,7 @@ def _route(handler: Any, method: str, path: str, query: dict[str, str]) -> None:
             with open_db() as conn:
                 return send(HTTPStatus.OK, {"products": db.list_products(conn, public=False)})
         if method == "POST":
-            payload = _json_body(handler)
+            payload = json_body(handler)
             with open_db() as conn:
                 return send(HTTPStatus.CREATED, db.create_product(conn, payload))
 
@@ -271,7 +245,7 @@ def _route(handler: Any, method: str, path: str, query: dict[str, str]) -> None:
             with open_db() as conn:
                 return send(HTTPStatus.OK, db.get_product(conn, product_id, public=False))
         if method in ("PUT", "PATCH"):
-            payload = _json_body(handler)
+            payload = json_body(handler)
             with open_db() as conn:
                 return send(HTTPStatus.OK, db.update_product(conn, product_id, payload))
         if method == "DELETE":
@@ -339,12 +313,12 @@ def _route(handler: Any, method: str, path: str, query: dict[str, str]) -> None:
             order["slipCheck"] = dict(ocr) if ocr else None
             return send(HTTPStatus.OK, order)
         if method == "PATCH":
-            payload = _json_body(handler)
+            payload = json_body(handler)
             with open_db() as conn:
                 order, changed_from = db.update_order(conn, code, payload)
                 if changed_from:
                     log_audit(conn, code, "v2_status_changed",
-                                   f"{changed_from} -> {order['status']} by {_admin_user(handler)}")
+                                   f"{changed_from} -> {order['status']} by {admin_user(handler)}")
             return send(HTTPStatus.OK, order)
 
     m = re.fullmatch(r"/v2/admin/orders/(SU\d{4}-\d{4,})/slip", path)

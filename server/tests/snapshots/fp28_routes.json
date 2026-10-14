@@ -4283,6 +4283,7 @@
   "store_order_items": [],
   "store_orders": [],
   "store_products": [],
+  "store_receipts": [],
   "store_settings": [],
   "store_variants": []
  }

@@ -73,8 +73,9 @@ Python HTTP server แบบ raw `http.server` (`ThreadingHTTPServer`) ไม่
 
 ### Receipt SVG
 
-- เทมเพลตใบเสร็จ serve ที่ `GET /admin/receipt-template` (ค่าคงที่ `RECEIPT_SVG`) ฟอนต์ไทย `SukhumvitSet.ttc` ที่ `/fonts/SukhumvitSet.ttc`
-- admin และ claim station เติมข้อมูลลง SVG ฝั่ง client แล้ว `window.print()`
+- **FP28:** เทมเพลต `receipt_template.svg` serve ที่ `GET /admin/receipt-template` (ค่าคงที่ `RECEIPT_SVG`) ฟอนต์ไทย `SukhumvitSet.ttc` ที่ `/fonts/SukhumvitSet.ttc` · admin และ claim station เติมข้อมูลลง SVG ฝั่ง client แล้ว `window.print()` (`admin.sumfu.xyz`) — ห้ามแก้เพื่องานร้านใหม่
+- **store v2:** ใช้ `receipt_template_v2.svg` (`GET /v2/admin/receipt-template`, `RECEIPT_SVG_V2`) ไม่มีชื่อผู้รับเงิน/ลายเซ็นใน SVG · เลขและ snapshot จัดการที่ `server/store/receipts.py` (routes ที่ `receipt_routes.py`) · render ฝั่ง Next.js (`src/lib/receipt/`) ไม่ใช่ใน template HTML
+- ถ้าแก้ตำแหน่ง/ฟิลด์ใน v2 ต้องดู `DEFAULT_LAYOUT` ที่ `receipts.py` ให้ตรงกับ `src/lib/receipt/layout.ts`
 
 ---
 

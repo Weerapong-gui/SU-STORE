@@ -52,6 +52,14 @@ SU STORE เป็นระบบสั่งซื้อเสื้อรั�
   - ข้อมูลที่ browser ใช้คนเดียว (ตะกร้า, ภาษา, token ออเดอร์) เก็บใน localStorage ไม่ใช่ cookie
 - FP28 เดิม: เหลือแค่หน้าค้นหาด้วยรหัสนักศึกษา `/check-order/fp28` (+ `/api/check-order`, feedback) flow สั่งซื้อ FP28 ใน Next.js ถูกลบแล้ว
 
+**ใบเสร็จร้านใหม่ (store v2):** ออกจากหน้า `/admin/orders/[code]` ได้เฉพาะออเดอร์ `paid`/`ready`/`completed` · logic อยู่ที่ `server/store/receipts.py` ไฟล์เดียว (ห้ามเขียนตารางออเดอร์) · routes อยู่ที่ `server/store/receipt_routes.py` (helper สิทธิ์/JSON ที่ใช้ร่วมกับ `api.py` อยู่ที่ `route_helpers.py`)
+- เลขใบเสร็จ `<prefix><seq:04d>` (default `SU-R2569-`) เป็น sequence เดียวทั้งร้าน เก็บใน `store_counters` แถว `receipt` ไม่รีเซ็ต ออกภายใต้ `BEGIN IMMEDIATE` ห้ามคำนวณเลขนอกฟังก์ชันนี้ ไม่งั้นเลขซ้ำ/ข้าม
+- ใบที่ใช้งานได้มีออเดอร์ละใบ พิมพ์ซ้ำใช้เลขเดิมและขึ้น "สำเนา" (POST ซ้ำตอบ 200 `created:false` และหน้าจอพิมพ์เป็นสำเนา ไม่ใช่ใบจริงซ้ำ) · ข้อมูลใน `store_receipts` เป็น snapshot ตอนออก (ชื่อ/รหัส/คณะที่ staff กรอกใน dialog ไม่เขียนกลับ `customer_json`) ส่วน layout ใช้ค่าปัจจุบันตอนพิมพ์
+- staff ทุกคนออก/พิมพ์ซ้ำได้ แต่ยกเลิก (ต้องมีเหตุผล) และแก้ตั้งค่า (`store_settings` key `receipt`: ชื่อผู้รับเงิน, ลายเซ็น, prefix, layout) ต้อง `is_superadmin` (token กลาง `ORDER_API_TOKEN` นับด้วย) · `/v2/admin/me` ส่ง `isSuperadmin`
+- routes: `/v2/admin/receipt-settings`, `/v2/admin/orders/<code>/receipt` (POST ออก) · `/v2/admin/orders/<code>/receipts` (GET รายการ), `/v2/admin/receipts/<id>` (+`/cancel`), `/v2/admin/receipt-template` (เสิร์ฟ `server/templates/receipt_template_v2.svg` ไม่มีชื่อผู้รับเงิน/ลายเซ็น เพราะ render ทีหลัง) · FP28 ยังใช้ `receipt_template.svg` เดิม ห้ามแก้
+- render ใช้ `renderReceiptSvg` ใน `src/lib/receipt/` ที่เดียว ทั้งตัวอย่างในหน้า `/admin/settings/receipt` (ลากวางตำแหน่ง) และหน้าพิมพ์ `/admin/receipts/[id]/print?copy=0|1`, `/admin/receipts/sample/print` (อยู่นอก `(panel)`) เพื่อให้ตัวอย่างตรงกับงานพิมพ์ · `DEFAULT_LAYOUT` มี 2 ที่ (`layout.ts` ↔ `receipts.py`) ต้องเหมือนกันเสมอ (image order-api ไม่มี `src/` จึงแยกสองชุด มี pytest `test_default_layout_matches_typescript_copy` กันหลุด) · ฟอนต์ `public/fonts/SukhumvitSet.ttc`
+- ออเดอร์ที่ใบเสร็จออกแล้วแต่สถานะถอยจาก paid จะขึ้นป้าย "ใบเสร็จค้าง" ในรายการออเดอร์ (`receipt_warning`)
+
 > **Hosting:** รันบนเซิร์ฟเวอร์ตัวเอง (Arch Linux) ผ่าน Docker + Cloudflare Tunnel  
 > โดเมน `sumfu.store` จดทะเบียนที่ Vercel แต่ DNS จัดการที่ Cloudflare (nameserver ชี้มา Cloudflare)
 
