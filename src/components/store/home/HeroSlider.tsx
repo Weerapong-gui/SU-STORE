@@ -118,7 +118,7 @@ export function HeroSlider({ slides, autoplay }: { slides: HeroSlide[]; autoplay
       </div>
 
       {count > 1 && (
-        <div className="absolute inset-x-0 bottom-2 flex justify-center">
+        <div className="pointer-events-none absolute inset-x-0 bottom-2 flex justify-center">
           {slides.map((slide, i) => (
             <button
               key={i}
@@ -126,8 +126,8 @@ export function HeroSlider({ slides, autoplay }: { slides: HeroSlide[]; autoplay
               onClick={() => go(i)}
               aria-label={t.slideLabel(i + 1)}
               aria-current={i === active}
-              // The visible dot is 8px; the button is the 44px tap target around it.
-              className="group flex h-11 items-center justify-center px-2"
+              // The visible dot is 8px; the button is the 44x44 tap target around it. The wrapper ignores pointer events so it can't swallow taps on a slide's CTA.
+              className="group pointer-events-auto flex h-11 min-w-11 items-center justify-center"
             >
               <span
                 className={cn(
