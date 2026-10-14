@@ -5,6 +5,7 @@ import { useEffect, useState } from "react";
 import { adminFetch, formatBaht, formatThaiDateTime } from "@/lib/adminApi";
 import { useConfirm } from "@/components/admin/ConfirmDialog";
 import { Badge, Button, Card, inputClass, ORDER_STATUS_LABEL, useToast } from "@/components/admin/ui";
+import { ReceiptPanel } from "@/components/admin/receipt/ReceiptPanel";
 import type { OrderStatus, StoreMeta, StoreOrder } from "@/types/store";
 
 // What staff normally do next from each status — shown as the big buttons.
@@ -184,6 +185,8 @@ export default function OrderDetailPage({ params }: { params: { code: string } }
               </details>
             )}
           </Card>
+
+          <ReceiptPanel order={order} />
 
           <Card title="หมายเหตุ (เห็นเฉพาะทีมงาน)">
             <textarea className={`${inputClass} min-h-24`} value={note} onChange={(e) => setNote(e.target.value)} />

@@ -1,0 +1,177 @@
+"use client";
+
+import { useCallback, useEffect, useState } from "react";
+import { adminFetch } from "@/lib/adminApi";
+import { formatReceiptDate } from "@/lib/receipt/render";
+import { Button, Card, inputClass, useToast } from "@/components/admin/ui";
+import type { OrderStatus, StoreOrder, StoreReceipt } from "@/types/store";
+import { IssueReceiptDialog, type ReceiptCustomer } from "./IssueReceiptDialog";
+
+// Statuses the order-api accepts for issuing (server/store receipts rule).
+const ISSUABLE_STATUSES: OrderStatus[] = ["paid", "ready", "completed"];
+const CONTROL = "min-h-11";
+
+type ReceiptsResponse = { receipts: StoreReceipt[]; warning: string | null };
+
+// Task 6 owns the print page; staff stay on the order page, so it opens in a new tab.
+export function openReceiptPrint(receiptId: number, opts: { copy: boolean }) {
+  window.open(`/admin/receipts/${receiptId}/print?copy=${opts.copy ? 1 : 0}`, "_blank", "noopener");
+}
+
+function customerFromOrder(order: StoreOrder): ReceiptCustomer {
+  return {
+    name: order.customer.name ?? "",
+    studentCode: order.customer.studentCode ?? "",
+    school: order.customer.school ?? "",
+  };
+}
+
+export function ReceiptPanel({ order }: { order: StoreOrder }) {
+  const toast = useToast();
+  const [receipts, setReceipts] = useState<StoreReceipt[]>([]);
+  const [warning, setWarning] = useState<string | null>(null);
+  const [isSuperadmin, setIsSuperadmin] = useState(false);
+  const [issuing, setIssuing] = useState(false);
+  const [cancelling, setCancelling] = useState(false);
+  const [busy, setBusy] = useState(false);
+
+  const load = useCallback(async () => {
+    try {
+      const data = await adminFetch<ReceiptsResponse>(`orders/${order.orderCode}/receipts`);
+      setReceipts(data.receipts);
+      setWarning(data.warning);
+    } catch (e) {
+      toast((e as Error).message, "error");
+    }
+  }, [order.orderCode, toast]);
+
+  useEffect(() => {
+    load();
+    adminFetch<{ isSuperadmin: boolean }>("me")
+      .then((me) => setIsSuperadmin(me.isSuperadmin))
+      .catch(() => setIsSuperadmin(false)); // hiding cancel is the safe default; the server still enforces it
+  }, [load]);
+
+  const active = receipts.find((r) => !r.cancelledAt) ?? null;
+  const history = receipts.filter((r) => r.cancelledAt);
+  const canIssue = !active && ISSUABLE_STATUSES.includes(order.status);
+
+  async function issue(customer: ReceiptCustomer) {
+    setBusy(true);
+    try {
+      const receipt = await adminFetch<StoreReceipt>(`orders/${order.orderCode}/receipt`, { method: "POST", json: { customer } });
+      setIssuing(false);
+      await load();
+      openReceiptPrint(receipt.id, { copy: false });
+    } catch (e) {
+      toast((e as Error).message, "error");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function cancel(receipt: StoreReceipt, reason: string) {
+    setBusy(true);
+    try {
+      await adminFetch(`receipts/${receipt.id}/cancel`, { method: "POST", json: { reason } });
+      setCancelling(false);
+      toast("ยกเลิกใบเสร็จแล้ว");
+      await load();
+    } catch (e) {
+      toast((e as Error).message, "error");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <Card title="ใบเสร็จ">
+      <div className="space-y-3">
+        {warning && (
+          <p role="alert" className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-800">
+            {warning}
+          </p>
+        )}
+        {active ? (
+          <div className="space-y-2">
+            <p className="font-mono text-base font-bold">{active.receiptNo}</p>
+            <p className="text-xs text-zinc-500">ออกเมื่อ {formatReceiptDate(active.issuedAt)} โดย {active.issuedBy}</p>
+            <Button variant="secondary" className={`${CONTROL} w-full`} onClick={() => openReceiptPrint(active.id, { copy: true })}>
+              พิมพ์ซ้ำ (สำเนา)
+            </Button>
+            {isSuperadmin && (
+              <Button variant="danger" className={`${CONTROL} w-full`} disabled={busy} onClick={() => setCancelling(true)}>
+                ยกเลิกใบเสร็จ
+              </Button>
+            )}
+          </div>
+        ) : (
+          <p className="text-sm text-zinc-500">ยังไม่มีใบเสร็จที่ใช้งานอยู่</p>
+        )}
+        {canIssue && (
+          <Button className={`${CONTROL} w-full`} disabled={busy} onClick={() => setIssuing(true)}>
+            ออกใบเสร็จ
+          </Button>
+        )}
+        {history.length > 0 && (
+          <div className="border-t border-zinc-100 pt-3">
+            <p className="mb-1 text-xs font-semibold text-zinc-500">ใบเสร็จที่ยกเลิกแล้ว</p>
+            <ul className="space-y-1.5 text-xs text-zinc-500">
+              {history.map((r) => (
+                <li key={r.id}>
+                  <span className="font-mono line-through">{r.receiptNo}</span> · ยกเลิก {formatReceiptDate(r.cancelledAt ?? "")} โดย{" "}
+                  {r.cancelledBy} · เหตุผล: {r.cancelReason}
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
+      </div>
+      {issuing && (
+        <IssueReceiptDialog initial={customerFromOrder(order)} busy={busy} onSubmit={issue} onClose={() => setIssuing(false)} />
+      )}
+      {cancelling && active && (
+        <CancelReceiptDialog receipt={active} busy={busy} onSubmit={(reason) => cancel(active, reason)} onClose={() => setCancelling(false)} />
+      )}
+    </Card>
+  );
+}
+
+// useConfirm has no input slot, so the required reason lives in a small dialog with the same look.
+function CancelReceiptDialog({ receipt, busy, onSubmit, onClose }: {
+  receipt: StoreReceipt;
+  busy: boolean;
+  onSubmit: (reason: string) => void;
+  onClose: () => void;
+}) {
+  const [reason, setReason] = useState("");
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => e.key === "Escape" && onClose();
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [onClose]);
+
+  return (
+    <div
+      className="backdrop-in fixed inset-0 z-[100] flex items-end justify-center bg-zinc-950/40 p-4 backdrop-blur-sm sm:items-center"
+      onMouseDown={(e) => e.target === e.currentTarget && onClose()}
+    >
+      <div role="alertdialog" aria-modal="true" aria-label="ยกเลิกใบเสร็จ" className="dialog-in w-full max-w-sm space-y-4 rounded-2xl bg-white p-6 shadow-2xl ring-1 ring-zinc-900/5">
+        <h2 className="text-base font-bold text-zinc-900">ยกเลิกใบเสร็จ {receipt.receiptNo}?</h2>
+        <p className="text-sm text-zinc-600">เลขใบเสร็จนี้จะไม่ถูกนำกลับมาใช้ และเปลี่ยนกลับไม่ได้</p>
+        <label className="block">
+          <span className="text-sm font-semibold text-zinc-800">เหตุผลที่ยกเลิก (จำเป็น)</span>
+          <textarea className={`${inputClass} mt-1.5 min-h-24`} value={reason} onChange={(e) => setReason(e.target.value)} />
+        </label>
+        <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+          <Button variant="secondary" className={CONTROL} onClick={onClose}>
+            ไม่ยกเลิก
+          </Button>
+          <Button variant="danger" className={CONTROL} disabled={busy || !reason.trim()} onClick={() => onSubmit(reason.trim())}>
+            ยกเลิกใบเสร็จ
+          </Button>
+        </div>
+      </div>
+    </div>
+  );
+}

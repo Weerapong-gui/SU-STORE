@@ -82,6 +82,7 @@ export type StoreOrder = {
   createdAt: string;
   updatedAt: string;
   accessToken?: string;
+  receiptWarning?: boolean; // list endpoint only
   slipCheck?: { status: string; amount: number | null; raw_reason: string | null; duplicate_of: string | null } | null;
 };
 

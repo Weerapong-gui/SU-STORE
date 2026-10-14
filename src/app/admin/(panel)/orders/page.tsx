@@ -120,6 +120,9 @@ export default function OrdersPage() {
                     <Link href={`/admin/orders/${o.orderCode}`} className="font-mono font-semibold text-zinc-900 hover:underline">
                       {o.orderCode}
                     </Link>
+                    {o.receiptWarning && (
+                      <span className="ml-2 rounded-full bg-red-100 px-2 py-0.5 text-xs font-semibold text-red-700">ใบเสร็จค้าง</span>
+                    )}
                   </td>
                   <td className="px-4 py-3">
                     <p>{o.customer.name}</p>
