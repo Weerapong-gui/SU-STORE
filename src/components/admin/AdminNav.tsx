@@ -6,6 +6,7 @@ import { usePathname, useRouter } from "next/navigation";
 const NAV_ITEMS = [
   { href: "/admin/dashboard", label: "ภาพรวม" },
   { href: "/admin/products", label: "สินค้า" },
+  { href: "/admin/categories", label: "หมวดหมู่" },
   { href: "/admin/orders", label: "ออเดอร์" },
   { href: "/admin/home", label: "ตกแต่งหน้าแรก" },
   { href: "/admin/settings", label: "ตั้งค่าร้าน" },
