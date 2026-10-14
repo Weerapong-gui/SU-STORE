@@ -1,8 +1,9 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { Button, Field, inputClass } from "@/components/admin/ui";
 import { SCHOOL_OPTIONS } from "@/lib/checkoutOptions";
+import { useModalFocus } from "./useModalFocus";
 import type { ReceiptSnapshot } from "@/types/store";
 
 export type ReceiptCustomer = ReceiptSnapshot["customer"];
@@ -25,11 +26,7 @@ export function IssueReceiptDialog({ initial, busy, onSubmit, onClose }: Props) 
   const [school, setSchool] = useState(initial.school);
   const [typingSchool, setTypingSchool] = useState(Boolean(initial.school) && !(SCHOOL_OPTIONS as readonly string[]).includes(initial.school));
 
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => e.key === "Escape" && onClose();
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [onClose]);
+  const { dialogRef, onBackdropMouseDown } = useModalFocus(busy, onClose);
 
   const incomplete = !studentCode.trim() || !school.trim();
   const selectValue = typingSchool ? OTHER_SCHOOL : school;
@@ -37,9 +34,9 @@ export function IssueReceiptDialog({ initial, busy, onSubmit, onClose }: Props) 
   return (
     <div
       className="backdrop-in fixed inset-0 z-[100] flex items-end justify-center bg-zinc-950/40 p-4 backdrop-blur-sm sm:items-center"
-      onMouseDown={(e) => e.target === e.currentTarget && onClose()}
+      onMouseDown={onBackdropMouseDown}
     >
-      <div role="dialog" aria-modal="true" aria-label="ออกใบเสร็จ" className="dialog-in w-full max-w-md space-y-4 rounded-2xl bg-white p-6 shadow-2xl ring-1 ring-zinc-900/5">
+      <div ref={dialogRef} role="dialog" aria-modal="true" aria-label="ออกใบเสร็จ" className="dialog-in w-full max-w-md space-y-4 rounded-2xl bg-white p-6 shadow-2xl ring-1 ring-zinc-900/5">
         <h2 className="text-base font-bold text-zinc-900">ออกใบเสร็จ</h2>
         <p className="text-sm text-zinc-500">ตรวจข้อมูลที่จะพิมพ์บนใบเสร็จ แก้ไขได้ (ไม่กระทบข้อมูลออเดอร์)</p>
         <Field label="ชื่อผู้ซื้อ">
@@ -85,7 +82,7 @@ export function IssueReceiptDialog({ initial, busy, onSubmit, onClose }: Props) 
           </p>
         )}
         <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
-          <Button variant="secondary" className={CONTROL} onClick={onClose}>
+          <Button variant="secondary" className={CONTROL} disabled={busy} onClick={onClose}>
             ยกเลิก
           </Button>
           <Button

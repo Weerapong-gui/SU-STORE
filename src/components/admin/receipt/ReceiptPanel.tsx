@@ -1,10 +1,11 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { adminFetch } from "@/lib/adminApi";
 import { formatReceiptDate } from "@/lib/receipt/render";
-import { Button, Card, inputClass, useToast } from "@/components/admin/ui";
+import { Button, Card, useToast } from "@/components/admin/ui";
 import type { OrderStatus, StoreOrder, StoreReceipt } from "@/types/store";
+import { CancelReceiptDialog } from "./CancelReceiptDialog";
 import { IssueReceiptDialog, type ReceiptCustomer } from "./IssueReceiptDialog";
 
 // Statuses the order-api accepts for issuing (server/store receipts rule).
@@ -14,8 +15,12 @@ const CONTROL = "min-h-11";
 type ReceiptsResponse = { receipts: StoreReceipt[]; warning: string | null };
 
 // Task 6 owns the print page; staff stay on the order page, so it opens in a new tab.
+function receiptPrintUrl(receiptId: number, opts: { copy: boolean }) {
+  return `/admin/receipts/${receiptId}/print?copy=${opts.copy ? 1 : 0}`;
+}
+
 export function openReceiptPrint(receiptId: number, opts: { copy: boolean }) {
-  window.open(`/admin/receipts/${receiptId}/print?copy=${opts.copy ? 1 : 0}`, "_blank", "noopener");
+  window.open(receiptPrintUrl(receiptId, opts), "_blank", "noopener");
 }
 
 function customerFromOrder(order: StoreOrder): ReceiptCustomer {
@@ -34,6 +39,7 @@ export function ReceiptPanel({ order }: { order: StoreOrder }) {
   const [issuing, setIssuing] = useState(false);
   const [cancelling, setCancelling] = useState(false);
   const [busy, setBusy] = useState(false);
+  const inFlight = useRef(false); // state lags a double click; the ref blocks the second request
 
   const load = useCallback(async () => {
     try {
@@ -57,20 +63,28 @@ export function ReceiptPanel({ order }: { order: StoreOrder }) {
   const canIssue = !active && ISSUABLE_STATUSES.includes(order.status);
 
   async function issue(customer: ReceiptCustomer) {
+    if (inFlight.current) return;
+    inFlight.current = true;
     setBusy(true);
+    // Opened inside the click so browsers don't treat it as a popup; pointed at the print page after the POST.
+    const tab = window.open("", "_blank");
     try {
       const receipt = await adminFetch<StoreReceipt>(`orders/${order.orderCode}/receipt`, { method: "POST", json: { customer } });
+      if (tab) tab.location.href = receiptPrintUrl(receipt.id, { copy: false });
       setIssuing(false);
-      await load();
-      openReceiptPrint(receipt.id, { copy: false });
+      void load();
     } catch (e) {
+      tab?.close();
       toast((e as Error).message, "error");
     } finally {
+      inFlight.current = false;
       setBusy(false);
     }
   }
 
   async function cancel(receipt: StoreReceipt, reason: string) {
+    if (inFlight.current) return;
+    inFlight.current = true;
     setBusy(true);
     try {
       await adminFetch(`receipts/${receipt.id}/cancel`, { method: "POST", json: { reason } });
@@ -80,6 +94,7 @@ export function ReceiptPanel({ order }: { order: StoreOrder }) {
     } catch (e) {
       toast((e as Error).message, "error");
     } finally {
+      inFlight.current = false;
       setBusy(false);
     }
   }
@@ -134,44 +149,5 @@ export function ReceiptPanel({ order }: { order: StoreOrder }) {
         <CancelReceiptDialog receipt={active} busy={busy} onSubmit={(reason) => cancel(active, reason)} onClose={() => setCancelling(false)} />
       )}
     </Card>
-  );
-}
-
-// useConfirm has no input slot, so the required reason lives in a small dialog with the same look.
-function CancelReceiptDialog({ receipt, busy, onSubmit, onClose }: {
-  receipt: StoreReceipt;
-  busy: boolean;
-  onSubmit: (reason: string) => void;
-  onClose: () => void;
-}) {
-  const [reason, setReason] = useState("");
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => e.key === "Escape" && onClose();
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [onClose]);
-
-  return (
-    <div
-      className="backdrop-in fixed inset-0 z-[100] flex items-end justify-center bg-zinc-950/40 p-4 backdrop-blur-sm sm:items-center"
-      onMouseDown={(e) => e.target === e.currentTarget && onClose()}
-    >
-      <div role="alertdialog" aria-modal="true" aria-label="ยกเลิกใบเสร็จ" className="dialog-in w-full max-w-sm space-y-4 rounded-2xl bg-white p-6 shadow-2xl ring-1 ring-zinc-900/5">
-        <h2 className="text-base font-bold text-zinc-900">ยกเลิกใบเสร็จ {receipt.receiptNo}?</h2>
-        <p className="text-sm text-zinc-600">เลขใบเสร็จนี้จะไม่ถูกนำกลับมาใช้ และเปลี่ยนกลับไม่ได้</p>
-        <label className="block">
-          <span className="text-sm font-semibold text-zinc-800">เหตุผลที่ยกเลิก (จำเป็น)</span>
-          <textarea className={`${inputClass} mt-1.5 min-h-24`} value={reason} onChange={(e) => setReason(e.target.value)} />
-        </label>
-        <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
-          <Button variant="secondary" className={CONTROL} onClick={onClose}>
-            ไม่ยกเลิก
-          </Button>
-          <Button variant="danger" className={CONTROL} disabled={busy || !reason.trim()} onClick={() => onSubmit(reason.trim())}>
-            ยกเลิกใบเสร็จ
-          </Button>
-        </div>
-      </div>
-    </div>
   );
 }
