@@ -10,6 +10,8 @@ jobs:
   frontend:
     name: Frontend lint & type-check
     runs-on: ubuntu-latest
+    env:
+      COOKIE_SECRET: ci-cookie-secret-minimum-32-chars
     steps:
       - uses: actions/checkout@v4
 
