@@ -65,7 +65,7 @@ export function CategoriesWorkspace({ selected }: { selected?: number | "new" })
             <h1 className="text-2xl font-bold">หมวดหมู่</h1>
             <p className="text-sm text-zinc-500">ลำดับในรายการนี้คือลำดับที่ลูกค้าเห็นในแถบหมวดบนหน้าร้าน</p>
           </div>
-          <Link href="/admin/categories/new" className="rounded-xl bg-zinc-900 px-4 py-2.5 text-sm font-semibold text-white hover:bg-zinc-700">
+          <Link href="/admin/categories/new" className="inline-flex min-h-11 items-center rounded-xl bg-zinc-900 px-4 text-sm font-semibold text-white hover:bg-zinc-700">
             ＋ เพิ่มหมวด
           </Link>
         </div>

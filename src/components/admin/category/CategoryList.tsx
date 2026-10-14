@@ -20,7 +20,7 @@ export function CategoryList({ categories, selectedId, onReorder }: {
   const dragFrom = useRef<number | null>(null);
 
   function drop(to: number) {
-    if (dragFrom.current !== null) onReorder(move(categories, dragFrom.current, to));
+    if (dragFrom.current !== null && dragFrom.current !== to) onReorder(move(categories, dragFrom.current, to));
     dragFrom.current = null;
   }
 
@@ -63,8 +63,8 @@ export function CategoryList({ categories, selectedId, onReorder }: {
             {c.visible ? "แสดง" : "ซ่อน"}
           </span>
           <div className="flex shrink-0">
-            <IconButton label="เลื่อนขึ้น" icon={ArrowUp} disabled={i === 0} onClick={() => onReorder(move(categories, i, i - 1))} />
-            <IconButton label="เลื่อนลง" icon={ArrowDown} disabled={i === categories.length - 1} onClick={() => onReorder(move(categories, i, i + 1))} />
+            <IconButton label="เลื่อนขึ้น" icon={ArrowUp} className="h-11 w-11" disabled={i === 0} onClick={() => onReorder(move(categories, i, i - 1))} />
+            <IconButton label="เลื่อนลง" icon={ArrowDown} className="h-11 w-11" disabled={i === categories.length - 1} onClick={() => onReorder(move(categories, i, i + 1))} />
           </div>
         </div>
       ))}

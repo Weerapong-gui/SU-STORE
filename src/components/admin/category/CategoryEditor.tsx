@@ -118,13 +118,13 @@ export function CategoryEditor({ category, onSaved, onDeleted }: {
       </div>
       <div className="mt-5 flex items-center justify-between gap-2 border-t border-zinc-100 pt-4">
         {category ? (
-          <Button variant="ghost" className="text-red-600 hover:bg-red-50" onClick={remove}>
+          <Button variant="ghost" className="min-h-11 text-red-600 hover:bg-red-50" onClick={remove}>
             ลบหมวด
           </Button>
         ) : (
           <span />
         )}
-        <Button disabled={saving} onClick={save}>
+        <Button className="min-h-11" disabled={saving} onClick={save}>
           {saving ? "กำลังบันทึก..." : "บันทึก"}
         </Button>
       </div>

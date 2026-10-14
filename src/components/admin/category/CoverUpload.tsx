@@ -39,11 +39,11 @@ export function CoverUpload({ value, onChange }: { value: string; onChange: (url
           </div>
         )}
         <div className="flex flex-wrap gap-2">
-          <Button variant="secondary" disabled={uploading} onClick={() => input.current?.click()}>
+          <Button variant="secondary" className="min-h-11" disabled={uploading} onClick={() => input.current?.click()}>
             {uploading ? "กำลังอัปโหลด..." : value ? "เปลี่ยนรูป" : "อัปโหลดรูป"}
           </Button>
           {value && (
-            <Button variant="ghost" onClick={() => onChange("")}>
+            <Button variant="ghost" className="min-h-11" onClick={() => onChange("")}>
               เอารูปออก
             </Button>
           )}

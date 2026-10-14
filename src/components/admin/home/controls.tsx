@@ -119,12 +119,14 @@ export function Segmented<T extends string>({ value, options, onChange }: {
   );
 }
 
-export function IconButton({ label, icon: Icon, onClick, disabled, danger }: {
+export function IconButton({ label, icon: Icon, onClick, disabled, danger, className = "p-2" }: {
   label: string;
   icon: LucideIcon;
   onClick: () => void;
   disabled?: boolean;
   danger?: boolean;
+  /** Replaces the default `p-2` sizing, e.g. `h-11 w-11` for touch targets. */
+  className?: string;
 }) {
   return (
     <button
@@ -137,7 +139,7 @@ export function IconButton({ label, icon: Icon, onClick, disabled, danger }: {
         e.stopPropagation();
         onClick();
       }}
-      className={`rounded-lg p-2 transition disabled:opacity-30 ${danger ? "text-red-600 hover:bg-red-50" : "text-zinc-600 hover:bg-zinc-100"}`}
+      className={`rounded-lg ${className} inline-flex items-center justify-center transition disabled:opacity-30 ${danger ? "text-red-600 hover:bg-red-50" : "text-zinc-600 hover:bg-zinc-100"}`}
     >
       <Icon className="h-4 w-4" />
     </button>
