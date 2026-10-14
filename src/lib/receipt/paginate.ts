@@ -8,6 +8,9 @@ export function rowHeight(table: ReceiptLayout["table"], nameLineCount: number):
   return table.rowSpacing + table.size * WRAP_LINE_HEIGHT * (nameLineCount - 1);
 }
 
+// Canvas measurement runs slightly narrower than the SVG's rendered text, so wrap a little early.
+const WRAP_SAFETY = 4;
+
 type Measure = (text: string, size: number) => number;
 type SegmenterConstructor = new (locale: string, options: { granularity: "word" }) => {
   segment(text: string): Iterable<{ segment: string }>;
@@ -19,17 +22,18 @@ function wrapName(name: string, width: number, size: number, measure: Measure): 
   const segments = Segmenter
     ? Array.from(new Segmenter("th", { granularity: "word" }).segment(name), part => part.segment)
     : Array.from(name);
+  const limit = width - WRAP_SAFETY;
   const wrapped: string[] = [];
   let current = "";
   const append = (part: string) => {
-    if (current && measure(current + part, size) > width) {
+    if (current && measure(current + part, size) > limit) {
       wrapped.push(current);
       current = "";
     }
     current += part;
   };
   for (const segment of segments) {
-    if (measure(segment, size) <= width) append(segment);
+    if (measure(segment, size) <= limit) append(segment);
     else for (const character of segment) append(character);
   }
   if (current || !wrapped.length) wrapped.push(current);

@@ -86,8 +86,10 @@ export function ReceiptPrintView({ receiptId, copy }: { receiptId: number | null
     if (!loaded || printed.current) return;
     printed.current = true;
     // The pages are in the DOM now, so this forces the template font to load before printing.
-    Promise.all([document.fonts.load(TEMPLATE_FONT_PROBE), waitForImage(loaded.signatureUrl)])
+    // A failed font load must not block printing; the print button stays as a fallback either way.
+    Promise.all([document.fonts.load(TEMPLATE_FONT_PROBE).catch(() => []), waitForImage(loaded.signatureUrl)])
       .then(() => document.fonts.ready)
+      .catch(() => undefined)
       .then(() => requestAnimationFrame(() => window.print()));
   }, [loaded]);
 
