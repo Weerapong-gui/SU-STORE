@@ -36,7 +36,7 @@ export function IssueReceiptDialog({ initial, busy, onSubmit, onClose }: Props) 
       className="backdrop-in fixed inset-0 z-[100] flex items-end justify-center bg-zinc-950/40 p-4 backdrop-blur-sm sm:items-center"
       onMouseDown={onBackdropMouseDown}
     >
-      <div ref={dialogRef} role="dialog" aria-modal="true" aria-label="ออกใบเสร็จ" className="dialog-in w-full max-w-md space-y-4 rounded-2xl bg-white p-6 shadow-2xl ring-1 ring-zinc-900/5">
+      <div ref={dialogRef} tabIndex={-1} role="dialog" aria-modal="true" aria-label="ออกใบเสร็จ" className="dialog-in outline-none w-full max-w-md space-y-4 rounded-2xl bg-white p-6 shadow-2xl ring-1 ring-zinc-900/5">
         <h2 className="text-base font-bold text-zinc-900">ออกใบเสร็จ</h2>
         <p className="text-sm text-zinc-500">ตรวจข้อมูลที่จะพิมพ์บนใบเสร็จ แก้ไขได้ (ไม่กระทบข้อมูลออเดอร์)</p>
         <Field label="ชื่อผู้ซื้อ">

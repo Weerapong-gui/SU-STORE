@@ -120,6 +120,18 @@ describe("ReceiptPanel", () => {
       expect(tab.location.href).toBe("/admin/receipts/7/print?copy=0");
     });
 
+    it("still issues and shows a print link when the pop-up is blocked", async () => {
+      vi.spyOn(window, "open").mockReturnValue(null);
+      await openDialogAndEditName();
+      receipts = [{ id: 7, receiptNo: "SU-R2569-0001", issuedAt: "2026-10-15T00:00:00Z", issuedBy: "a", cancelledAt: null }];
+      await act(async () => button("ออกใบเสร็จและพิมพ์")!.click());
+      expect(posts("/receipt")).toHaveLength(1);
+      const link = [...document.querySelectorAll("a")].find((a) => a.textContent === "เปิดหน้าพิมพ์ใบเสร็จ");
+      expect(link?.getAttribute("href")).toBe("/admin/receipts/7/print?copy=0");
+      expect(link?.getAttribute("target")).toBe("_blank");
+      expect(document.body.textContent).toContain("เบราว์เซอร์บล็อก");
+    });
+
     it("closes the pre-opened tab when the POST fails", async () => {
       await openDialogAndEditName();
       adminFetch.mockImplementation(async (path: string, init?: { method?: string }) => {

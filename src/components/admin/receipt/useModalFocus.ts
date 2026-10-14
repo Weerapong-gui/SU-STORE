@@ -11,6 +11,12 @@ export function useModalFocus(busy: boolean, onClose: () => void) {
   const busyRef = useRef(busy);
   busyRef.current = busy;
 
+  // Disabled buttons drop focus to body mid-request; pull it back so Tab stays trapped.
+  useEffect(() => {
+    const dialog = dialogRef.current;
+    if (busy && dialog && !dialog.contains(document.activeElement)) dialog.focus();
+  }, [busy]);
+
   useEffect(() => {
     const opener = document.activeElement as HTMLElement | null;
     const dialog = dialogRef.current;
@@ -22,6 +28,11 @@ export function useModalFocus(busy: boolean, onClose: () => void) {
         return;
       }
       if (e.key !== "Tab" || !dialog) return;
+      if (!dialog.contains(document.activeElement)) {
+        e.preventDefault();
+        dialog.focus();
+        return;
+      }
       const items = [...dialog.querySelectorAll<HTMLElement>(FOCUSABLE)];
       if (items.length === 0) return;
       const first = items[0];

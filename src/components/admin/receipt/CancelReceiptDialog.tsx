@@ -22,7 +22,7 @@ export function CancelReceiptDialog({ receipt, busy, onSubmit, onClose }: {
       className="backdrop-in fixed inset-0 z-[100] flex items-end justify-center bg-zinc-950/40 p-4 backdrop-blur-sm sm:items-center"
       onMouseDown={onBackdropMouseDown}
     >
-      <div ref={dialogRef} role="alertdialog" aria-modal="true" aria-label="ยกเลิกใบเสร็จ" className="dialog-in w-full max-w-sm space-y-4 rounded-2xl bg-white p-6 shadow-2xl ring-1 ring-zinc-900/5">
+      <div ref={dialogRef} tabIndex={-1} role="alertdialog" aria-modal="true" aria-label="ยกเลิกใบเสร็จ" className="dialog-in outline-none w-full max-w-sm space-y-4 rounded-2xl bg-white p-6 shadow-2xl ring-1 ring-zinc-900/5">
         <h2 className="text-base font-bold text-zinc-900">ยกเลิกใบเสร็จ {receipt.receiptNo}?</h2>
         <p className="text-sm text-zinc-600">เลขใบเสร็จนี้จะไม่ถูกนำกลับมาใช้ และเปลี่ยนกลับไม่ได้</p>
         <label className="block">

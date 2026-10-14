@@ -39,6 +39,9 @@ export function ReceiptPanel({ order }: { order: StoreOrder }) {
   const [issuing, setIssuing] = useState(false);
   const [cancelling, setCancelling] = useState(false);
   const [busy, setBusy] = useState(false);
+  const [blockedPrintUrl, setBlockedPrintUrl] = useState<string | null>(null);
+  const reprintRef = useRef<HTMLButtonElement>(null);
+  const focusReprintNext = useRef(false);
   const inFlight = useRef(false); // state lags a double click; the ref blocks the second request
 
   const load = useCallback(async () => {
@@ -62,6 +65,14 @@ export function ReceiptPanel({ order }: { order: StoreOrder }) {
   const history = receipts.filter((r) => r.cancelledAt);
   const canIssue = !active && ISSUABLE_STATUSES.includes(order.status);
 
+  // The opener button unmounts once a receipt exists, so hand focus to the reprint button.
+  useEffect(() => {
+    if (active && focusReprintNext.current) {
+      focusReprintNext.current = false;
+      reprintRef.current?.focus();
+    }
+  }, [active]);
+
   async function issue(customer: ReceiptCustomer) {
     if (inFlight.current) return;
     inFlight.current = true;
@@ -70,7 +81,14 @@ export function ReceiptPanel({ order }: { order: StoreOrder }) {
     const tab = window.open("", "_blank");
     try {
       const receipt = await adminFetch<StoreReceipt>(`orders/${order.orderCode}/receipt`, { method: "POST", json: { customer } });
-      if (tab) tab.location.href = receiptPrintUrl(receipt.id, { copy: false });
+      const printUrl = receiptPrintUrl(receipt.id, { copy: false });
+      if (tab) {
+        tab.location.href = printUrl;
+      } else {
+        setBlockedPrintUrl(printUrl);
+        toast("เบราว์เซอร์บล็อกการเปิดแท็บใหม่ กดปุ่ม \"เปิดหน้าพิมพ์ใบเสร็จ\" เพื่อพิมพ์", "error");
+      }
+      focusReprintNext.current = true;
       setIssuing(false);
       void load();
     } catch (e) {
@@ -111,7 +129,17 @@ export function ReceiptPanel({ order }: { order: StoreOrder }) {
           <div className="space-y-2">
             <p className="font-mono text-base font-bold">{active.receiptNo}</p>
             <p className="text-xs text-zinc-500">ออกเมื่อ {formatReceiptDate(active.issuedAt)} โดย {active.issuedBy}</p>
-            <Button variant="secondary" className={`${CONTROL} w-full`} onClick={() => openReceiptPrint(active.id, { copy: true })}>
+            {blockedPrintUrl && (
+              <a
+                href={blockedPrintUrl}
+                target="_blank"
+                rel="noopener"
+                className={`${CONTROL} inline-flex w-full items-center justify-center rounded-xl bg-zinc-900 px-4 text-sm font-semibold text-white hover:bg-zinc-700`}
+              >
+                เปิดหน้าพิมพ์ใบเสร็จ
+              </a>
+            )}
+            <Button ref={reprintRef} variant="secondary" className={`${CONTROL} w-full`} onClick={() => openReceiptPrint(active.id, { copy: true })}>
               พิมพ์ซ้ำ (สำเนา)
             </Button>
             {isSuperadmin && (
