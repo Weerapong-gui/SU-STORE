@@ -2,6 +2,7 @@
 
 import { useEffect } from "react";
 import { useRouter } from "next/navigation";
+import { localePath, stripLocale } from "@/lib/locale";
 
 type SiteStatus = {
   siteClosed?: boolean;
@@ -20,7 +21,8 @@ export function MaintenancePolling({ reason }: { reason?: string }) {
         if (!res.ok) return;
         const data = (await res.json()) as SiteStatus;
         if (!data.siteClosed && !data.scheduleClosed && !data.beRightBack) {
-          router.replace("/");
+          // This page sits outside LanguageProvider, so read the language from the URL.
+          router.replace(localePath(stripLocale(window.location.pathname).lang, "/"));
         }
       } catch {
         // ignore

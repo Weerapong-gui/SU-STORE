@@ -6,6 +6,7 @@ import { formatPrice } from "@/lib/formatPrice";
 import { useLocalized } from "@/lib/localized";
 import { useSaleDate, useStoreText } from "@/lib/storeI18n";
 import { cn } from "@/lib/utils";
+import { useLocalePath } from "@/lib/i18n";
 
 function CardBadge({ card }: { card: ProductCard }) {
   const t = useStoreText();
@@ -24,6 +25,7 @@ function CardBadge({ card }: { card: ProductCard }) {
 
 export function ProductCardGrid({ cards }: { cards: ProductCard[] }) {
   const t = useStoreText();
+  const localePath = useLocalePath();
   const pick = useLocalized();
 
   if (cards.length === 0) {
@@ -44,7 +46,7 @@ export function ProductCardGrid({ cards }: { cards: ProductCard[] }) {
         return (
           <Link
             key={card.key}
-            href={card.href}
+            href={localePath(card.href)}
             className={cn(
               "group block min-w-0 rounded-2xl text-ink focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-apple-blue/20",
               (card.soldOut || card.saleState === "ended") && "opacity-60"

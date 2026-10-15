@@ -1,6 +1,7 @@
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { LanguageProvider } from "@/lib/i18n";
 import { CategoryView } from "@/components/store/CategoryView";
 import type { StoreCategory, StoreProduct, StoreVariant } from "@/types/store";
 
@@ -76,5 +77,11 @@ describe("CategoryView", () => {
     act(() => button.click());
     expect(container.querySelector<HTMLInputElement>('input[type="search"]')!.value).toBe("");
     expect(container.querySelectorAll("a[href*='design=']")).toHaveLength(2);
+  });
+
+  it("links back to the products page in Thai under /th", () => {
+    act(() => root.render(<LanguageProvider lang="th"><CategoryView category={category} products={[product]} /></LanguageProvider>));
+    expect(container.querySelector('a[href="/th/products"]')).not.toBeNull();
+    expect(container.querySelector('a[href="/th/products/keychain?design=scs"]')).not.toBeNull();
   });
 });

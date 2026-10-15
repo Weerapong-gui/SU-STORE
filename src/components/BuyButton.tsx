@@ -1,5 +1,15 @@
+"use client";
+
 import Link from "next/link";
+import { useLocalePath } from "@/lib/i18n";
 import { cn } from "@/lib/utils";
+
+// Staff-entered button links may point outside the storefront routes.
+const NON_LOCALIZED_PATH = /^\/(?:api|images|product-images|admin)(?:[/?#]|$)/;
+
+function isStorefrontPath(href: string): boolean {
+  return href.startsWith("/") && !href.startsWith("//") && !NON_LOCALIZED_PATH.test(href);
+}
 
 type BuyButtonProps = {
   href: string;
@@ -14,6 +24,7 @@ export function BuyButton({
   variant = "primary",
   className
 }: BuyButtonProps) {
+  const localePath = useLocalePath();
   const buttonBaseClasses =
     "inline-flex min-h-11 items-center justify-center rounded-full px-6 py-2.5 text-sm font-semibold tracking-[0.01em] transition-all duration-200 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-apple-blue/20";
   const buttonVariantClasses = {
@@ -26,7 +37,7 @@ export function BuyButton({
   };
 
   return (
-    <Link href={href} className={cn(buttonBaseClasses, buttonVariantClasses[variant], className)}>
+    <Link href={isStorefrontPath(href) ? localePath(href) : href} className={cn(buttonBaseClasses, buttonVariantClasses[variant], className)}>
       {children}
     </Link>
   );

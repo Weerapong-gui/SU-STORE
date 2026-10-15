@@ -6,10 +6,12 @@ import { useStoreText } from "@/lib/storeI18n";
 import { cn } from "@/lib/utils";
 import type { StoreCategory } from "@/types/store";
 import { CategoryImage } from "./CategoryTile";
+import { useLocalePath } from "@/lib/i18n";
 
 // The first cover is the big one; the rest are smaller, as in the approved design.
 export function CategoryCovers({ categories, title }: { categories: StoreCategory[]; title?: string }) {
   const t = useStoreText();
+  const localePath = useLocalePath();
   const pick = useLocalized();
 
   if (categories.length === 0) return null;
@@ -24,7 +26,7 @@ export function CategoryCovers({ categories, title }: { categories: StoreCategor
           return (
             <Link
               key={c.id}
-              href={`/products/c/${c.slug}`}
+              href={localePath(`/products/c/${c.slug}`)}
               className={cn(
                 "flex min-h-11 flex-col overflow-hidden rounded-3xl bg-mist text-ink focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-apple-blue/20",
                 big && "col-span-2 md:col-span-2"

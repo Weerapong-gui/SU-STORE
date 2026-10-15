@@ -9,9 +9,11 @@ import type { StoreCategory, StoreProduct } from "@/types/store";
 import { Container } from "@/components/ui/Container";
 import { CategoryImage } from "./CategoryTile";
 import { ProductCardGrid } from "./ProductCardGrid";
+import { useLocalePath } from "@/lib/i18n";
 
 export function CategoryView({ category, products }: { category: StoreCategory; products: StoreProduct[] }) {
   const t = useStoreText();
+  const localePath = useLocalePath();
   const pick = useLocalized();
   const [query, setQuery] = useState("");
 
@@ -23,7 +25,7 @@ export function CategoryView({ category, products }: { category: StoreCategory; 
 
   return (
     <Container className="pb-16">
-      <Link href="/products" className="inline-flex min-h-11 min-w-11 items-center text-[15px] text-apple-blue">
+      <Link href={localePath("/products")} className="inline-flex min-h-11 min-w-11 items-center text-[15px] text-apple-blue">
         ‹ {t.backToShop}
       </Link>
       <section className="grid items-end gap-6 pb-2 pt-2 md:grid-cols-2 md:gap-10 md:pt-6">

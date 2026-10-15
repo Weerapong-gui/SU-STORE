@@ -13,6 +13,7 @@ import { useLocalized, variantDisplayLabel } from "@/lib/localized";
 import { useSaleDate, useStoreText } from "@/lib/storeI18n";
 import { cn } from "@/lib/utils";
 import type { StoreProduct, StoreVariant } from "@/types/store";
+import { useLocalePath } from "@/lib/i18n";
 
 const unique = (values: string[]) => Array.from(new Set(values.filter(Boolean)));
 
@@ -23,6 +24,7 @@ function firstDesign(designs: StoreVariant[], code: string | undefined): StoreVa
 
 export function ProductDetail({ product, initialDesign }: { product: StoreProduct; initialDesign?: string }) {
   const t = useStoreText();
+  const localePath = useLocalePath();
   const localized = useLocalized();
   const saleDate = useSaleDate();
   const router = useRouter();
@@ -57,7 +59,7 @@ export function ProductDetail({ product, initialDesign }: { product: StoreProduc
   function selectDesign(design: StoreVariant) {
     setDesignId(design.id);
     setNotice("");
-    router.replace(`/products/${product.slug}?design=${design.designCode.toLowerCase()}`, { scroll: false });
+    router.replace(localePath(`/products/${product.slug}?design=${design.designCode.toLowerCase()}`), { scroll: false });
   }
 
   function add(goToCheckout: boolean) {
@@ -75,7 +77,7 @@ export function ProductDetail({ product, initialDesign }: { product: StoreProduc
       image: variant.image || product.images[0] || "",
       quantity: Math.min(quantity, maxQty),
     });
-    if (goToCheckout) router.push("/checkout");
+    if (goToCheckout) router.push(localePath("/checkout"));
     else setNotice(t.added);
   }
 
