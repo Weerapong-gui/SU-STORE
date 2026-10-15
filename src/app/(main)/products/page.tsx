@@ -2,7 +2,7 @@ import { Container } from "@/components/ui/Container";
 import { CategoryCovers } from "@/components/store/CategoryCovers";
 import { CategoryStrip } from "@/components/store/CategoryStrip";
 import { ProductGrid } from "@/components/store/ProductGrid";
-import { SectionHeading, SectionSubtitle } from "@/components/store/SectionHeading";
+import { SectionHeading } from "@/components/store/SectionHeading";
 import { getStoreCategories, getStoreProducts } from "@/lib/storeApi";
 
 export const dynamic = "force-dynamic";
@@ -13,7 +13,6 @@ export default async function ProductsPage() {
     <>
       <Container className="pb-2 pt-9 md:pt-14">
         <SectionHeading textKey="shopTitle" className="text-[34px] font-bold leading-tight tracking-tight text-ink md:text-[56px]" />
-        <SectionSubtitle textKey="shopSubtitle" />
       </Container>
       <CategoryStrip categories={categories} />
       <Container className="pb-12 md:pb-16">
