@@ -3,9 +3,18 @@
 import { useRef, useState } from "react";
 import { useStoreText } from "@/lib/storeI18n";
 import { cn } from "@/lib/utils";
+import type { StoreProduct, StoreVariant } from "@/types/store";
 
 const arrowClass =
-  "absolute top-1/2 hidden h-9 w-9 -translate-y-1/2 items-center justify-center rounded-circle bg-white/90 text-xl leading-none text-ink shadow-md opacity-0 transition-opacity focus-visible:opacity-100 group-hover:opacity-100 disabled:invisible md:flex";
+  "absolute top-1/2 hidden h-9 w-9 -translate-y-1/2 items-center justify-center rounded-circle bg-white/90 text-xl leading-none text-ink shadow-md opacity-0 transition-opacity md:flex";
+// An arrow at the end stays focusable (aria-disabled, dimmed) instead of `disabled`: disabling the focused button would drop keyboard focus to <body>.
+const arrowStateClass = (atEnd: boolean) =>
+  atEnd ? "cursor-default group-hover:opacity-40 focus-visible:opacity-40" : "group-hover:opacity-100 focus-visible:opacity-100";
+
+// A design shows its own photos, or the product photos when it has none; size/colour products share the product photos.
+export function galleryImages(product: StoreProduct, variant: StoreVariant | undefined): string[] {
+  return product.optionKind === "designs" && variant?.images.length ? variant.images : product.images;
+}
 
 // `fallback` (a design code) fills the frame when there is no image; callers re-key it when the images change so the index resets.
 // Phones swipe the scroll-snap track; desktop gets hover arrows. The index follows scrollLeft so both stay in sync.
@@ -18,7 +27,7 @@ export function ProductGallery({ images, alt, fallback }: { images: string[]; al
 
   function scrollToImage(target: number) {
     const track = trackRef.current;
-    if (!track) return;
+    if (!track || target < 0 || target >= count) return;
     track.scrollTo({ left: target * track.clientWidth, behavior: "smooth" });
   }
 
@@ -57,18 +66,18 @@ export function ProductGallery({ images, alt, fallback }: { images: string[]; al
             <button
               type="button"
               aria-label={t.previousImage}
-              disabled={index === 0}
+              aria-disabled={index === 0}
               onClick={() => scrollToImage(index - 1)}
-              className={cn(arrowClass, "left-3")}
+              className={cn(arrowClass, arrowStateClass(index === 0), "left-3")}
             >
               ‹
             </button>
             <button
               type="button"
               aria-label={t.nextImage}
-              disabled={index === count - 1}
+              aria-disabled={index === count - 1}
               onClick={() => scrollToImage(index + 1)}
-              className={cn(arrowClass, "right-3")}
+              className={cn(arrowClass, arrowStateClass(index === count - 1), "right-3")}
             >
               ›
             </button>

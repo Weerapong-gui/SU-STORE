@@ -6,7 +6,7 @@ import { MAX_ITEM_QUANTITY, useCart } from "@/components/CartProvider";
 import { BuyBar } from "@/components/store/BuyBar";
 import { DesignPicker } from "@/components/store/DesignPicker";
 import { OptionButtons } from "@/components/store/OptionButtons";
-import { ProductGallery } from "@/components/store/ProductGallery";
+import { galleryImages, ProductGallery } from "@/components/store/ProductGallery";
 import { useStorePreview } from "@/components/store/StorePreview";
 import { formatPrice } from "@/lib/formatPrice";
 import { useLocalized, variantDisplayLabel } from "@/lib/localized";
@@ -55,8 +55,7 @@ export function ProductDetail({ product, initialDesign }: { product: StoreProduc
   const otherDesignName = designName === variant?.designNameEn ? variant.designName : variant?.designNameEn;
   const otherName = isDesigns && otherDesignName && otherDesignName !== designName ? otherDesignName : "";
   const price = variant?.price ?? product.minPrice;
-  // A design shows its own photos; size/colour products share the product photos.
-  const galleryImages = isDesigns && variant ? variant.images : product.images;
+  const images = galleryImages(product, variant);
 
   function selectDesign(design: StoreVariant) {
     setDesignId(design.id);
@@ -86,8 +85,8 @@ export function ProductDetail({ product, initialDesign }: { product: StoreProduc
   return (
     <div className="grid grid-cols-1 gap-10 md:grid-cols-2">
       <ProductGallery
-        key={galleryImages.join("|")}
-        images={galleryImages}
+        key={images.join("|")}
+        images={images}
         alt={designName || productName}
         fallback={variant?.designCode}
       />

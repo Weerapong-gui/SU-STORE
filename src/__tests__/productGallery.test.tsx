@@ -1,7 +1,8 @@
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { ProductGallery } from "@/components/store/ProductGallery";
+import { galleryImages, ProductGallery } from "@/components/store/ProductGallery";
+import type { StoreProduct, StoreVariant } from "@/types/store";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -78,6 +79,24 @@ describe("ProductGallery", () => {
     expect(scrollTo).toHaveBeenLastCalledWith({ left: FRAME_WIDTH, behavior: "smooth" });
   });
 
+  it("keeps keyboard focus inside the gallery at the last image", () => {
+    render(["a.png", "b.png", "c.png"]);
+    const { track, scrollTo } = mockTrack();
+    const next = container.querySelector<HTMLButtonElement>('button[aria-label="Next image"]')!;
+    act(() => next.focus());
+    for (const left of [FRAME_WIDTH, FRAME_WIDTH * 2]) {
+      act(() => next.click());
+      scrollTrackTo(track, left);
+    }
+    expect(currentDot()).toBe(2);
+    expect(container.contains(document.activeElement)).toBe(true);
+    expect(next.getAttribute("aria-disabled")).toBe("true");
+
+    scrollTo.mockClear();
+    act(() => next.click());
+    expect(scrollTo).not.toHaveBeenCalled();
+  });
+
   it("resets to the first image when images change", () => {
     render(["a.png", "b.png", "c.png"]);
     const { track } = mockTrack();
@@ -101,5 +120,23 @@ describe("ProductGallery", () => {
     expect(container.textContent).toContain("AGRO");
     expect(container.querySelector("img")).toBeNull();
     expect(dots()).toHaveLength(0);
+  });
+});
+
+describe("galleryImages", () => {
+  const design = (images: string[]) => ({ images }) as StoreVariant;
+  const product = (optionKind: StoreProduct["optionKind"]) => ({ optionKind, images: ["p1.png", "p2.png"] }) as StoreProduct;
+
+  it("shows the selected design's own images", () => {
+    expect(galleryImages(product("designs"), design(["d1.png", "d2.png"]))).toEqual(["d1.png", "d2.png"]);
+  });
+
+  it("falls back to the product images when the design has none", () => {
+    expect(galleryImages(product("designs"), design([]))).toEqual(["p1.png", "p2.png"]);
+    expect(galleryImages(product("designs"), undefined)).toEqual(["p1.png", "p2.png"]);
+  });
+
+  it("uses the product images for size/colour products", () => {
+    expect(galleryImages(product("options"), design(["v.png"]))).toEqual(["p1.png", "p2.png"]);
   });
 });
