@@ -1,8 +1,10 @@
 "use client";
 
-import { createContext, useContext, useEffect, useState, type ReactNode } from "react";
+import { createContext, useContext, type ReactNode } from "react";
 
-import type { Lang } from "@/lib/locale";
+import { writeLangCookie } from "@/lib/langCookie";
+import { localePath, switchLocalePath, type Lang } from "@/lib/locale";
+import { assignLocation } from "@/lib/navigate";
 
 export type { Lang } from "@/lib/locale";
 
@@ -105,25 +107,21 @@ type LanguageContextType = {
   t: Translations[Lang];
 };
 
+// The server decides the language from the URL; switching means loading the page again
+// under the other locale so server-rendered text, <html lang> and metadata all follow.
+function setLang(l: Lang) {
+  writeLangCookie(l);
+  const { pathname, search } = window.location;
+  assignLocation(switchLocalePath(pathname, search, l));
+}
+
 const LanguageContext = createContext<LanguageContextType>({
   lang: "en",
-  setLang: () => {},
+  setLang,
   t: translations.en,
 });
 
-export function LanguageProvider({ children }: { children: ReactNode }) {
-  const [lang, setLangState] = useState<Lang>("en");
-
-  useEffect(() => {
-    const stored = localStorage.getItem("su-store-lang") as Lang | null;
-    if (stored === "en" || stored === "th") setLangState(stored);
-  }, []);
-
-  function setLang(l: Lang) {
-    setLangState(l);
-    localStorage.setItem("su-store-lang", l);
-  }
-
+export function LanguageProvider({ lang, children }: { lang: Lang; children: ReactNode }) {
   return (
     <LanguageContext.Provider value={{ lang, setLang, t: translations[lang] }}>
       {children}
@@ -133,4 +131,9 @@ export function LanguageProvider({ children }: { children: ReactNode }) {
 
 export function useLang() {
   return useContext(LanguageContext);
+}
+
+export function useLocalePath(): (path: string) => string {
+  const { lang } = useLang();
+  return (path) => localePath(lang, path);
 }
