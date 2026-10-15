@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useStorePreview } from "@/components/store/StorePreview";
 import { useLang } from "@/lib/i18n";
+import { localePath } from "@/lib/locale";
 
 type SiteStatus = {
   siteClosed?: boolean;
@@ -34,7 +35,7 @@ const CLOSE_MIN = 23 * 60;           // 23:00
 
 export function ScheduleWarningBanner() {
   const router = useRouter();
-  const { t } = useLang();
+  const { t, lang } = useLang();
   const preview = useStorePreview();
   const [warning, setWarning] = useState(false);
   const [customMessage, setCustomMessage] = useState<string | null>(null);
@@ -54,8 +55,8 @@ export function ScheduleWarningBanner() {
         if (!closed && preview === "closedStore") router.refresh();
         return;
       }
-      if (data.siteClosed) { router.replace("/maintenance?reason=manual"); return; }
-      if (data.scheduleClosed) { router.replace("/maintenance?reason=schedule"); return; }
+      if (data.siteClosed) { router.replace(localePath(lang, "/maintenance?reason=manual")); return; }
+      if (data.scheduleClosed) { router.replace(localePath(lang, "/maintenance?reason=schedule")); return; }
 
       // API says warning (either schedule time or test warning)
       const apiWarning = data.scheduleWarning === true;
@@ -73,7 +74,7 @@ export function ScheduleWarningBanner() {
     } catch {
       // ignore network errors
     }
-  }, [router, preview]);
+  }, [router, preview, lang]);
 
   // Poll every 10s so test-warning appears quickly
   useEffect(() => {
@@ -100,14 +101,14 @@ export function ScheduleWarningBanner() {
     const tick = setInterval(() => {
       setSecondsLeft((prev) => {
         if (prev <= 1) {
-          router.replace("/maintenance?reason=schedule");
+          router.replace(localePath(lang, "/maintenance?reason=schedule"));
           return 0;
         }
         return prev - 1;
       });
     }, 1000);
     return () => clearInterval(tick);
-  }, [warning, router]);
+  }, [warning, router, lang]);
 
   if (!warning) return null;
 

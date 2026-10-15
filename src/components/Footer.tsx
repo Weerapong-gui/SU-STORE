@@ -3,6 +3,7 @@
 import { Container } from "@/components/ui/Container";
 import { Instagram, Facebook } from "lucide-react";
 import { useLang } from "@/lib/i18n";
+import { LanguagePicker } from "@/components/LanguagePicker";
 
 export function Footer() {
   const currentYear = new Date().getFullYear();
@@ -60,6 +61,7 @@ export function Footer() {
           <p>
             © {currentYear} SU STORE. All rights reserved.
           </p>
+          <LanguagePicker />
         </div>
       </Container>
     </footer>

@@ -176,6 +176,7 @@ def ensure_store_db(connection: sqlite3.Connection) -> None:
             ("design_name_en", "TEXT NOT NULL DEFAULT ''"),
             ("design_code", "TEXT NOT NULL DEFAULT ''"),
             ("image", "TEXT NOT NULL DEFAULT ''"),
+            ("extra_images_json", "TEXT NOT NULL DEFAULT '[]'"),
         )),
         ("store_order_items", (
             ("product_name_en", "TEXT"),
@@ -258,6 +259,7 @@ def _serialize_variant(row: sqlite3.Row) -> dict[str, Any]:
         "designName": row["design_name"],
         "designNameEn": row["design_name_en"],
         "image": row["image"],
+        "images": [image for image in [row["image"], *json.loads(row["extra_images_json"])] if image],
         "price": row["price"],
         "stock": row["stock"],
         "sku": row["sku"],
@@ -454,7 +456,6 @@ def replace_variants(connection: sqlite3.Connection, product_id: int, variants: 
             design_rows[index] if design_rows is not None
             else dict.fromkeys(("design_code", "design_name", "design_name_en", "image"), "")
         )
-        design_values = tuple(design[key] for key in ("design_code", "design_name", "design_name_en", "image"))
         size = "" if design_rows is not None else clean_text(raw.get("size"), "ไซซ์", max_len=40)
         color = "" if design_rows is not None else clean_text(raw.get("color"), "สี/แบบ", max_len=40)
         price = as_int(raw.get("price"), f"ราคา ({variant_label(size, color)})")
@@ -466,18 +467,30 @@ def replace_variants(connection: sqlite3.Connection, product_id: int, variants: 
                 raise StoreError(400, f"ตัวเลือก {variant_label(size, color)} ซ้ำกัน")
             seen_labels.add((size, color))
         variant_id = raw.get("id")
+        previous = existing.get(variant_id)
+        extra_images = design.get(
+            "extra_images_json",
+            previous["extra_images_json"] if design_rows is not None and previous is not None else "[]",
+        )
+        if design_rows is not None and not design["image"]:
+            # Image-only payload cleared the main image: promote the first kept extra so image == images[0].
+            extras = json.loads(extra_images)
+            if extras:
+                design = {**design, "image": extras[0]}
+                extra_images = json.dumps(extras[1:], ensure_ascii=False)
+        design_values = (*(design[key] for key in ("design_code", "design_name", "design_name_en", "image")), extra_images)
         if variant_id is not None:
             if variant_id not in existing:
                 raise StoreError(400, f"ไม่พบตัวเลือก id {variant_id} ในสินค้านี้")
             connection.execute(
-                "UPDATE store_variants SET size=?, color=?, price=?, stock=?, sku=?, active=?, sort_order=?, design_code=?, design_name=?, design_name_en=?, image=? WHERE id=?",
+                "UPDATE store_variants SET size=?, color=?, price=?, stock=?, sku=?, active=?, sort_order=?, design_code=?, design_name=?, design_name_en=?, image=?, extra_images_json=? WHERE id=?",
                 (size, color, price, stock, sku, active, index, *design_values, variant_id),
             )
             kept_ids.add(variant_id)
         else:
             connection.execute(
-                "INSERT INTO store_variants (product_id, size, color, price, stock, sku, active, sort_order, design_code, design_name, design_name_en, image) "
-                "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                "INSERT INTO store_variants (product_id, size, color, price, stock, sku, active, sort_order, design_code, design_name, design_name_en, image, extra_images_json) "
+                "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
                 (product_id, size, color, price, stock, sku, active, index, *design_values),
             )
     for variant_id in set(existing) - kept_ids:

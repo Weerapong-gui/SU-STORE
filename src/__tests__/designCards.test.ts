@@ -4,7 +4,8 @@ import type { StoreProduct, StoreVariant } from "@/types/store";
 
 const variant = (id: number, code: string, overrides: Partial<StoreVariant> = {}): StoreVariant => ({
   id, size: "", color: "", label: code, price: 99, stock: 3, sku: "", active: true, soldOut: false,
-  designCode: code, designName: "วิทยาศาสตร์เครื่องสำอาง", designNameEn: "Cosmetic Science", image: "", ...overrides,
+  designCode: code, designName: "วิทยาศาสตร์เครื่องสำอาง", designNameEn: "Cosmetic Science", image: "",
+  images: overrides.image ? [overrides.image] : [], ...overrides,
 });
 const product: StoreProduct = {
   id: 1, slug: "keychain", name: "พวงกุญแจ", nameEn: "Keychain", categoryId: 2, optionKind: "designs",

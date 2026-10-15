@@ -5,6 +5,7 @@ import { useSearchParams, useRouter } from "next/navigation";
 import { Container } from "@/components/ui/Container";
 import { Search, Package, CheckCircle2, Clock, XCircle, Truck, AlertCircle, Ticket } from "lucide-react";
 import { useLang } from "@/lib/i18n";
+import { localePath } from "@/lib/locale";
 import QRCode from "qrcode";
 import { FeedbackModal } from "@/components/FeedbackModal";
 
@@ -210,7 +211,7 @@ const FINAL_STATUSES: OrderStatus[] = ["received", "cancelled", "rejected", "ref
 function CheckOrderContent() {
   const searchParams = useSearchParams();
   const router = useRouter();
-  const { t } = useLang();
+  const { t, lang } = useLang();
 
   const initInput = searchParams.get("studentCode") ?? searchParams.get("code") ?? "";
   const [input, setInput] = useState(initInput);
@@ -234,7 +235,7 @@ function CheckOrderContent() {
     const useCode = isOrderCode(q);
     const param = useCode ? `code=${encodeURIComponent(q)}` : `studentCode=${encodeURIComponent(q)}`;
     lastParamRef.current = param;
-    router.replace(`/check-order/fp28?${param}`, { scroll: false });
+    router.replace(localePath(lang, `/check-order/fp28?${param}`), { scroll: false });
 
     try {
       const res = await fetch(`/api/check-order?${param}`, { cache: "no-store" });
@@ -248,7 +249,7 @@ function CheckOrderContent() {
     } finally {
       setLoading(false);
     }
-  }, [router, t.checkOrder.errorGeneric]);
+  }, [router, lang, t.checkOrder.errorGeneric]);
 
   useEffect(() => {
     const sc = searchParams.get("studentCode");

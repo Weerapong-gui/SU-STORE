@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { BankAccountCopyField } from "@/components/BankAccountCopyField";
-import { useLang } from "@/lib/i18n";
+import { useLang, useLocalePath } from "@/lib/i18n";
 import { orderItemText } from "@/lib/localized";
 import { formatPrice } from "@/lib/formatPrice";
 import { getOrderToken, orderPageHref, saveOrderToken } from "@/lib/orderTokens";
@@ -17,6 +17,7 @@ const MAX_SLIP_BYTES = 5 * 1024 * 1024;
 
 export function OrderView({ code }: { code: string }) {
   const t = useStoreText();
+  const localePath = useLocalePath();
   const { lang } = useLang();
   const searchParams = useSearchParams();
   const [token, setToken] = useState<string | null>(null);
@@ -98,7 +99,7 @@ export function OrderView({ code }: { code: string }) {
   async function copyLink() {
     if (!token) return;
     try {
-      await navigator.clipboard.writeText(new URL(orderPageHref(code, token), window.location.origin).toString());
+      await navigator.clipboard.writeText(new URL(localePath(orderPageHref(code, token)), window.location.origin).toString());
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
     } catch {
@@ -113,7 +114,7 @@ export function OrderView({ code }: { code: string }) {
       <div className="rounded-3xl bg-mist px-6 py-16 text-center">
         <p className="text-lg font-semibold text-ink">{t.orderNotFound}</p>
         <p className="mx-auto mt-2 max-w-md text-sm text-ink-soft">{t.orderNotFoundHint}</p>
-        <Link href={`/check-order?code=${code}`} className="mt-5 inline-flex min-h-11 items-center font-semibold text-apple-blue hover:underline">
+        <Link href={localePath(`/check-order?code=${code}`)} className="mt-5 inline-flex min-h-11 items-center font-semibold text-apple-blue hover:underline">
           {t.trackTitle} →
         </Link>
       </div>

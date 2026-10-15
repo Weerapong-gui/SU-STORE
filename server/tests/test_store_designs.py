@@ -1,4 +1,6 @@
 """Design catalog validation and preservation of ordered options."""
+import sqlite3
+
 import pytest
 from store import db
 
@@ -151,3 +153,100 @@ def test_invalid_design_fields(field, value):
 def test_invalid_product_fields(payload):
     with pytest.raises(db.StoreError):
         db.create_product(_conn(), {"name": "เสื้อ", **payload})
+
+
+IMAGE_A = "/product-images/a.png"
+IMAGE_B = "/product-images/b.png"
+IMAGE_C = "/product-images/c.png"
+
+
+def _image_product(conn: sqlite3.Connection, **fields: object) -> dict:
+    return db.create_product(conn, {
+        "name": "พวงกุญแจ", "optionKind": "designs", "status": "active",
+        "variants": [{"designCode": "AGRO", "designName": "เกษตร", "price": 49, **fields}],
+    })
+
+
+def test_design_images_round_trip() -> None:
+    conn = _conn()
+    product = _image_product(conn, images=[IMAGE_A, IMAGE_B, IMAGE_C])
+    for public in (True, False):
+        variant = db.get_product(conn, product["id"], public=public)["variants"][0]
+        assert variant["image"] == IMAGE_A
+        assert variant["images"] == [IMAGE_A, IMAGE_B, IMAGE_C]
+
+
+@pytest.mark.parametrize("image,expected", [(IMAGE_A, [IMAGE_A]), ("", [])])
+def test_variant_images_from_legacy_row(image: str, expected: list[str]) -> None:
+    product = _image_product(_conn(), image=image)
+    assert product["variants"][0]["images"] == expected
+
+
+def test_image_only_payload_keeps_extra_images() -> None:
+    conn = _conn()
+    product = _image_product(conn, images=[IMAGE_A, IMAGE_B])
+    variant = {key: value for key, value in product["variants"][0].items() if key != "images"}
+    updated = db.update_product(conn, product["id"], {"variants": [{**variant, "image": IMAGE_C}]})
+    assert updated["variants"][0]["images"] == [IMAGE_C, IMAGE_B]
+
+
+def test_image_only_payload_with_empty_image_promotes_first_extra() -> None:
+    conn = _conn()
+    product = _image_product(conn, images=[IMAGE_A, IMAGE_B, IMAGE_C])
+    variant = {key: value for key, value in product["variants"][0].items() if key != "images"}
+    updated = db.update_product(conn, product["id"], {"variants": [{**variant, "image": ""}]})
+    assert updated["variants"][0]["image"] == IMAGE_B
+    assert updated["variants"][0]["images"] == [IMAGE_B, IMAGE_C]
+
+
+def test_too_many_design_images_rejected() -> None:
+    conn = _conn()
+    product = _image_product(conn, image=IMAGE_A)
+    with pytest.raises(db.StoreError, match="รูปลายใส่ได้ไม่เกิน 8 รูป") as error:
+        db.update_product(conn, product["id"], {"variants": [
+            {**product["variants"][0], "images": [IMAGE_A] * 9},
+        ]})
+    assert error.value.status == 400
+    assert db.get_product(conn, product["id"], public=False) == product
+
+
+def test_bad_design_image_url_rejected() -> None:
+    with pytest.raises(db.StoreError, match=r"รูปลาย \(1\)ต้องเป็นรูปที่อัปโหลดผ่านหลังร้าน") as error:
+        _image_product(_conn(), images=["https://evil.example/x.png"])
+    assert error.value.status == 400
+
+
+@pytest.mark.parametrize("old_schema", [False, True])
+def test_migration_adds_extra_images_column(old_schema: bool) -> None:
+    conn = _conn()
+    if old_schema:
+        conn.execute("ALTER TABLE store_variants DROP COLUMN extra_images_json")
+    db.ensure_store_db(conn)
+    columns = {row[1]: row for row in conn.execute("PRAGMA table_info(store_variants)")}
+    assert "extra_images_json" in columns
+    assert columns["extra_images_json"][3:5] == (1, "'[]'")
+
+
+@pytest.mark.parametrize("images", [[], [IMAGE_A] * 8])
+def test_design_images_replace_entire_gallery(images: list[str]) -> None:
+    conn = _conn()
+    product = _image_product(conn, images=[IMAGE_A, IMAGE_B])
+    updated = db.update_product(conn, product["id"], {"variants": [
+        {**product["variants"][0], "images": images},
+    ]})
+    assert updated["variants"][0]["images"] == images
+    assert updated["variants"][0]["image"] == (images[0] if images else "")
+
+
+@pytest.mark.parametrize("images", [None, "bad", {}])
+def test_design_images_must_be_list(images: object) -> None:
+    with pytest.raises(db.StoreError) as error:
+        _image_product(_conn(), images=images)
+    assert error.value.status == 400
+
+
+def test_options_have_empty_images() -> None:
+    conn = _conn()
+    product = _product(conn)
+    assert product["variants"][0]["images"] == []
+    assert conn.execute("SELECT extra_images_json FROM store_variants").fetchone()[0] == "[]"

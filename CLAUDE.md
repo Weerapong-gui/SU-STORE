@@ -32,7 +32,7 @@ SU STORE เป็นระบบสั่งซื้อเสื้อรั�
   - หมวดที่ซ่อน = ไม่โผล่ใน category strip, หน้าปก และบล็อกหน้าแรก และหน้าของหมวดคืน 404 แต่สินค้าในหมวดยังอยู่ใน "ทั้งหมด" และสั่งได้ตามปกติ (หยุดขายสินค้าใช้ status ของสินค้า)
   - routes: public `/v2/categories`, `/v2/categories/<slug>` · admin `/v2/admin/categories*`, `/v2/admin/categories/order` · อัปโหลดรูปทั่วไป `/v2/admin/images`
 - สินค้าหลายลาย: สินค้ามี `nameEn`, `categoryId`, `optionKind` (`options` = ไซซ์/สี, `designs` = หลายลาย) โหมดหลายลายตั้งใน ProductEditor
-  - variant แบบลายมี `designCode`, `designName`, `designNameEn`, `image` · โค้ด A-Z 0-9 `-` ตัวใหญ่ ยาวไม่เกิน 12 · label แสดงเป็น "CODE · ชื่อ" (`server/store/designs.py`)
+  - variant แบบลายมี `designCode`, `designName`, `designNameEn`, `images` (สูงสุด 8 รูป รูปแรกเก็บใน `image` ที่เหลือใน `extra_images_json` · ปุ่มเลือกลาย/ตะกร้า/ออเดอร์ใช้รูปแรก · ลายไม่มีรูปจะแสดงรูปสินค้า) · โค้ด A-Z 0-9 `-` ตัวใหญ่ ยาวไม่เกิน 12 · label แสดงเป็น "CODE · ชื่อ" (`server/store/designs.py`)
   - ทุกลายในสินค้าเดียวกันราคาเดียว
 - ชื่อ 2 ภาษา: ภาษาไทยจำเป็น อังกฤษไม่บังคับ ถ้าภาษาที่เลือกว่างจะใช้อีกภาษา · `store_order_items` เก็บ snapshot `product_name_en` / `variant_label_en` (nullable ออเดอร์เก่าเป็น NULL แสดงภาษาไทย)
 - `middleware.ts` บังคับ login สำหรับ `/admin/*` และไม่ให้หน้า "ปิดร้าน" บังหน้า admin
@@ -44,12 +44,13 @@ SU STORE เป็นระบบสั่งซื้อเสื้อรั�
 - token ของออเดอร์เก็บใน localStorage (`src/lib/orderTokens.ts`) และอยู่ในลิงก์ `?t=` · ลูกค้าค้นออเดอร์ด้วยเลขออเดอร์ + เบอร์โทรที่ `/check-order`
 - หน้า `/products` มี category strip + หน้าปกหมวด · หน้าหมวดคือ `/products/c/[category]` มีช่องค้นหา sticky (ชื่อ, ชื่ออังกฤษ, โค้ดลาย) · `/products/[slug]?design=<code>` เลือกลายตั้งต้น
 - แถบซื้อ sticky บนมือถือ (`BuyBar`) มีทุกหน้าสินค้า รวมเสื้อ · ผลตรวจมือถือ `docs/superpowers/specs/2026-10-14-mobile-audit.md`
-- ข้อความ 2 ภาษา (EN/TH) ของร้านใหม่อยู่ที่ `src/lib/storeI18n.ts` ใช้ตัวสลับภาษาเดิม `useLang()`
-- **Cookie มี 3 ตัว เป็น cookie ที่จำเป็นทั้งหมด จึงไม่ต้องมี cookie banner (PDPA)** ถ้าจะเพิ่ม cookie ติดตามหรือโฆษณา ต้องมี banner ขอความยินยอมก่อน
+- ข้อความ 2 ภาษา (EN/TH) ของร้านใหม่อยู่ที่ `src/lib/storeI18n.ts` ใช้ `useLang()` · ภาษามาจาก URL (`/` = EN, `/th/` = TH ดู `src/lib/locale.ts` + middleware) ลิงก์ภายในหน้าร้านใช้ `useLocalePath()` · ตัวเลือกภาษาอยู่ที่ footer (`LanguagePicker`)
+- **Cookie มี 4 ตัว เป็น cookie ที่จำเป็นทั้งหมด จึงไม่ต้องมี cookie banner (PDPA)** ถ้าจะเพิ่ม cookie ติดตามหรือโฆษณา ต้องมี banner ขอความยินยอมก่อน
   - `su-admin-auth`: session หลังร้าน อายุ 12 ชม.
   - `bypass_gate`: ให้ทีมเข้าเว็บได้ตอนปิดร้าน อายุ 7 วัน
   - `su_vid`: id สุ่ม ไม่ระบุตัวตน อายุ 30 วัน (`src/lib/visitorId.ts`) ใช้นับคนออนไลน์อย่างเดียว ถ้าไม่มี cookie จะถอยไปนับตาม IP (`server/fp28/visitors.py`)
-  - ข้อมูลที่ browser ใช้คนเดียว (ตะกร้า, ภาษา, token ออเดอร์) เก็บใน localStorage ไม่ใช่ cookie
+  - `su_lang`: ภาษาที่ลูกค้าเลือกเอง (`en`/`th`) อายุ 1 ปี เป็น cookie จำค่าที่เลือก ไม่ติดตามตัวตน
+  - ข้อมูลที่ browser ใช้คนเดียว (ตะกร้า, token ออเดอร์) เก็บใน localStorage ไม่ใช่ cookie
 - FP28 เดิม: เหลือแค่หน้าค้นหาด้วยรหัสนักศึกษา `/check-order/fp28` (+ `/api/check-order`, feedback) flow สั่งซื้อ FP28 ใน Next.js ถูกลบแล้ว
 
 **ใบเสร็จร้านใหม่ (store v2):** ออกจากหน้า `/admin/orders/[code]` ได้เฉพาะออเดอร์ `paid`/`ready`/`completed` · logic อยู่ที่ `server/store/receipts.py` ไฟล์เดียว (ห้ามเขียนตารางออเดอร์) · routes อยู่ที่ `server/store/receipt_routes.py` (helper สิทธิ์/JSON ที่ใช้ร่วมกับ `api.py` อยู่ที่ `route_helpers.py`)

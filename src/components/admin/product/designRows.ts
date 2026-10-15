@@ -2,14 +2,17 @@ import type { StoreProduct } from "@/types/store";
 
 // One editable row of the designs table. Stock stays a string while typing.
 // `key` is a client-only identity (never sent to the server) so async results find their row after reorders/deletes.
-export type DesignRow = { key: string; id?: number; designName: string; designNameEn: string; designCode: string; image: string; stock: string };
+export type DesignRow = { key: string; id?: number; designName: string; designNameEn: string; designCode: string; images: string[]; stock: string };
+
+// Mirrors MAX_DESIGN_IMAGES in server/store/designs.py.
+export const MAX_DESIGN_IMAGES = 8;
 
 export const newDesignRow = (): DesignRow => ({
   key: crypto.randomUUID(),
   designName: "",
   designNameEn: "",
   designCode: "",
-  image: "",
+  images: [],
   stock: "",
 });
 
@@ -18,6 +21,17 @@ export type DesignRowsUpdate = (update: (rows: DesignRow[]) => DesignRow[]) => v
 
 // Mirrors the server's design-code rule (A-Z, 0-9 and "-"), applied while typing.
 export const cleanDesignCode = (text: string): string => text.toUpperCase().replace(/[^A-Z0-9-]/g, "");
+
+/** Moves one image to another position; the first image is the design's main image. */
+export function moveImage(images: string[], from: number, to: number): string[] {
+  if (from === to || from < 0 || from >= images.length || to < 0 || to >= images.length) return images;
+  const next = [...images];
+  const [moved] = next.splice(from, 1);
+  next.splice(to, 0, moved);
+  return next;
+}
+
+export const removeImage = (images: string[], index: number): string[] => images.filter((_, i) => i !== index);
 
 export function designRowsFromProduct(p: StoreProduct): DesignRow[] {
   return p.variants
@@ -28,7 +42,7 @@ export function designRowsFromProduct(p: StoreProduct): DesignRow[] {
       designName: v.designName,
       designNameEn: v.designNameEn,
       designCode: v.designCode,
-      image: v.image,
+      images: v.images,
       stock: v.stock === null ? "" : String(v.stock),
     }));
 }
@@ -63,7 +77,7 @@ export function designPayload(rows: DesignRow[], price: string) {
     designCode: r.designCode.trim().toUpperCase(),
     designName: r.designName.trim(),
     designNameEn: r.designNameEn.trim(),
-    image: r.image,
+    images: r.images,
     price: Number(price),
     stock: r.stock === "" ? null : Number(r.stock),
     active: true,

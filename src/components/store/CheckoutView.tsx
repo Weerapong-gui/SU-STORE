@@ -6,7 +6,7 @@ import { useEffect, useMemo, useState } from "react";
 import { MAX_CART_LINES, MAX_ITEM_QUANTITY, useCart } from "@/components/CartProvider";
 import { SCHOOL_OPTIONS } from "@/lib/checkoutOptions";
 import { formatPrice } from "@/lib/formatPrice";
-import { useLang } from "@/lib/i18n";
+import { useLang, useLocalePath } from "@/lib/i18n";
 import { localized, variantDisplayLabel } from "@/lib/localized";
 import { orderPageHref, saveOrderToken } from "@/lib/orderTokens";
 import { BUYER_FIELD_LABEL_EN, useStoreText } from "@/lib/storeI18n";
@@ -20,6 +20,7 @@ const inputClass =
 
 export function CheckoutView() {
   const t = useStoreText();
+  const localePath = useLocalePath();
   const { lang } = useLang();
   const router = useRouter();
   const { items, hydrated, checkoutId, setQuantity, removeItem, clearCart } = useCart();
@@ -117,7 +118,7 @@ export function CheckoutView() {
       }
       saveOrderToken(data.orderCode, data.accessToken);
       clearCart();
-      router.push(orderPageHref(data.orderCode, data.accessToken));
+      router.push(localePath(orderPageHref(data.orderCode, data.accessToken)));
     } catch {
       setError(t.errorGeneric);
     } finally {
@@ -131,7 +132,7 @@ export function CheckoutView() {
     return (
       <div className="rounded-3xl bg-mist px-6 py-16 text-center">
         <p className="text-lg font-semibold text-ink">{t.cartEmpty}</p>
-        <Link href="/products" className="mt-4 inline-block font-semibold text-apple-blue hover:underline">
+        <Link href={localePath("/products")} className="mt-4 inline-block font-semibold text-apple-blue hover:underline">
           {t.continueShopping} →
         </Link>
       </div>
@@ -154,7 +155,7 @@ export function CheckoutView() {
                   )}
                 </div>
                 <div className="min-w-0">
-                  <Link href={`/products/${item.productSlug}`} className="inline-flex min-h-11 items-center break-words font-semibold text-ink hover:underline">
+                  <Link href={localePath(`/products/${item.productSlug}`)} className="inline-flex min-h-11 items-center break-words font-semibold text-ink hover:underline">
                     {name}
                   </Link>
                   {variantLabel && <p className="break-words text-sm text-ink-soft">{variantLabel}</p>}
@@ -248,7 +249,7 @@ export function CheckoutView() {
         >
           {submitting ? t.placing : t.placeOrder}
         </button>
-        <Link href="/products" className="flex min-h-11 items-center justify-center text-sm font-semibold text-apple-blue hover:underline">
+        <Link href={localePath("/products")} className="flex min-h-11 items-center justify-center text-sm font-semibold text-apple-blue hover:underline">
           {t.continueShopping}
         </Link>
       </aside>

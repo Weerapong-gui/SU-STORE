@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { ADMIN_COOKIE } from "@/lib/adminAuth";
 import { clientIp } from "@/lib/clientIp";
 import { ORDER_API_BASE } from "@/lib/orderApi";
+import { decideLocale, LANG_COOKIE, LANG_HEADER, type Lang, type LocaleDecision, PATH_HEADER, stripLocale } from "@/lib/locale";
 import { consume, type RateLimitStore } from "@/lib/rateLimitCore";
 import { adminCookie, isStaffSession, PREVIEW_ORDER_BLOCKED_MESSAGE, STORE_PREVIEW_HEADER, storeGate } from "@/lib/storePreview";
 import { setVisitorCookie, siteStatusQuery, visitorId } from "@/lib/visitorId";
@@ -19,22 +20,59 @@ const BYPASS_TOKEN = process.env.BYPASS_TOKEN ?? "";
 const ALWAYS_OPEN = process.env.ALWAYS_OPEN === "1";
 const STAGING_HOST = process.env.STAGING_HOST ?? "";
 
+// First path segments that are never storefront pages: Next internals, API, static files.
+const NON_PAGE_SEGMENTS = ["_next", "api", "images", "fonts"];
+// Also kept out of the language step: /admin has its own login gate above, and uploaded
+// images are shared. Checked against the path with /th stripped, so /th/admin/* and
+// /th/api/* are never rewritten past the admin gate or the order rate limiter.
+const UNLOCALIZED_SEGMENTS = [...NON_PAGE_SEGMENTS, "admin", "product-images"];
+
+function isUnder(pathname: string, segments: string[]): boolean {
+  const first = pathname.split("/")[1] ?? "";
+  return segments.includes(first) || first.startsWith("favicon");
+}
+
 function isPageRequest(request: NextRequest): boolean {
   const { pathname } = request.nextUrl;
-  if (
-    pathname.startsWith("/_next/") ||
-    pathname.startsWith("/api/") ||
-    pathname.startsWith("/images/") ||
-    pathname.startsWith("/fonts/") ||
-    pathname.startsWith("/favicon")
-  ) {
-    return false;
-  }
+  if (isUnder(pathname, NON_PAGE_SEGMENTS)) return false;
   // Skip static file extensions
   if (/\.(ico|png|jpg|jpeg|svg|webp|gif|woff2?|ttf|otf|css|js|map)$/.test(pathname)) {
     return false;
   }
   return true;
+}
+
+// Files such as robots.txt or sitemap.xml exist once, not per language.
+function isLocalizedPage(pathname: string): boolean {
+  const { path } = stripLocale(pathname);
+  if (isUnder(path, UNLOCALIZED_SEGMENTS)) return false;
+  return !(path.split("/").pop() ?? "").includes(".");
+}
+
+// Temporary: the target depends on the visitor, so browsers must not remember it.
+const TEMPORARY_REDIRECT = 307;
+
+type PageLocale = { lang: Lang; path: string };
+
+// The redirect depends on this visitor's cookie and device, so shared caches must not keep it.
+function localeRedirect(request: NextRequest, to: string): NextResponse {
+  const res = NextResponse.redirect(new URL(to + request.nextUrl.search, request.url), TEMPORARY_REDIRECT);
+  res.headers.set("Cache-Control", "private, no-store");
+  res.headers.set("Vary", "Cookie, Accept-Language");
+  return res;
+}
+
+// Only navigations follow the visitor's language: a 307 would replay a form POST
+// under another URL, so other methods are served in the URL's own language.
+function resolveLocale(request: NextRequest): LocaleDecision {
+  const { pathname } = request.nextUrl;
+  if (request.method !== "GET" && request.method !== "HEAD") return { kind: "serve", ...stripLocale(pathname) };
+  return decideLocale({
+    pathname,
+    cookie: request.cookies.get(LANG_COOKIE)?.value,
+    acceptLanguage: request.headers.get("accept-language"),
+    userAgent: request.headers.get("user-agent")
+  });
 }
 
 function isAlwaysOpen(request: NextRequest): boolean {
@@ -70,8 +108,14 @@ export async function middleware(request: NextRequest) {
     return NextResponse.next();
   }
 
-  // ── Always-open deployments (store.sumfu.xyz / Docker) ─────────────────────
-  if (isAlwaysOpen(request)) return NextResponse.next();
+  // ── Language: redirect to the visitor's language, or serve /th/* from the shared pages ──
+  const isPage = isPageRequest(request);
+  let locale: PageLocale | null = null;
+  if (isPage && isLocalizedPage(pathname)) {
+    const decision = resolveLocale(request);
+    if (decision.kind === "redirect") return localeRedirect(request, decision.to);
+    locale = { lang: decision.lang, path: decision.path };
+  }
 
   // ── Bypass token ────────────────────────────────────────────────────────────
   if (BYPASS_TOKEN && request.method === "GET") {
@@ -85,43 +129,64 @@ export async function middleware(request: NextRequest) {
     }
   }
 
+  // ── Always-open deployments (store.sumfu.xyz / Docker) ─────────────────────
+  if (isAlwaysOpen(request)) return locale ? pageResponse(request, false, locale) : NextResponse.next();
+
   // ── Page navigations: visitor cookie + site-closed check ─────────────────────
-  if (request.method === "GET" && isPageRequest(request)) {
+  if (request.method === "GET" && isPage) {
+    const pageLocale = locale ?? { lang: "en", path: pathname };
     const existingId = visitorId(request);
     const id = existingId ?? crypto.randomUUID();
-    const response = hasBypass ? pageResponse(request, false) : await gatedPageResponse(request, id);
+    const response = hasBypass ? pageResponse(request, false, pageLocale) : await gatedPageResponse(request, id, pageLocale);
     return existingId ? response : setVisitorCookie(response, id);
   }
 
-  return NextResponse.next();
+  // Other page requests (HEAD, form posts) still reach a layout, so they get trusted headers too.
+  return locale ? pageResponse(request, false, locale) : NextResponse.next();
 }
 
 // Page navigations: rewrite to /maintenance while the store is closed, except for
 // signed-in staff, who get a read-only preview.
-async function gatedPageResponse(request: NextRequest, visitorIdValue: string): Promise<NextResponse> {
-  const reason = await siteClosedReason(request, visitorIdValue);
+async function gatedPageResponse(request: NextRequest, visitorIdValue: string, locale: PageLocale): Promise<NextResponse> {
+  const reason = await siteClosedReason(request, visitorIdValue, locale.path);
   const gate = storeGate({
     closed: reason !== "",
     staff: reason !== "" && (await isStaffSession(request)),
-    pathname: request.nextUrl.pathname
+    pathname: locale.path
   });
   if (gate === "closed") {
-    return NextResponse.rewrite(new URL(`/maintenance?reason=${reason}`, request.url));
+    // Keep the language headers so the closed page speaks the language of the URL.
+    return NextResponse.rewrite(new URL(`/maintenance?reason=${reason}`, request.url), {
+      request: { headers: pageHeaders(request, false, locale) }
+    });
   }
-  return pageResponse(request, gate === "preview");
+  return pageResponse(request, gate === "preview", locale);
 }
 
-// The layout trusts the preview flag, so never pass through a client-sent copy.
-function pageResponse(request: NextRequest, preview: boolean): NextResponse {
+// Layouts trust these headers, so never pass through client-sent copies.
+function pageHeaders(request: NextRequest, preview: boolean, locale: PageLocale): Headers {
   const headers = new Headers(request.headers);
   headers.delete(STORE_PREVIEW_HEADER);
   if (preview) headers.set(STORE_PREVIEW_HEADER, "1");
+  // set() replaces any client-sent value.
+  headers.set(LANG_HEADER, locale.lang);
+  headers.set(PATH_HEADER, locale.path);
+  return headers;
+}
+
+// Thai URLs render the same pages as English ones; only the headers differ.
+function pageResponse(request: NextRequest, preview: boolean, locale: PageLocale): NextResponse {
+  const headers = pageHeaders(request, preview, locale);
+  if (locale.lang === "th") {
+    return NextResponse.rewrite(new URL(locale.path + request.nextUrl.search, request.url), { request: { headers } });
+  }
   return NextResponse.next({ request: { headers } });
 }
 
 // Why the store is closed ("" = open), cached for SITE_STATUS_TTL.
-async function siteClosedReason(request: NextRequest, visitorIdValue?: string): Promise<string> {
-  if (request.nextUrl.pathname === "/maintenance" || !ORDER_API_BASE) return "";
+// `pathname` is the page path with any /th prefix removed.
+async function siteClosedReason(request: NextRequest, visitorIdValue?: string, pathname = request.nextUrl.pathname): Promise<string> {
+  if (pathname === "/maintenance" || !ORDER_API_BASE) return "";
 
   const now = Date.now();
   if (now - siteClosedCache.ts > SITE_STATUS_TTL) {

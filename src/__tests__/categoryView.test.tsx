@@ -1,6 +1,7 @@
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { LanguageProvider } from "@/lib/i18n";
 import { CategoryView } from "@/components/store/CategoryView";
 import type { StoreCategory, StoreProduct, StoreVariant } from "@/types/store";
 
@@ -16,7 +17,7 @@ const category: StoreCategory = {
 };
 const variant = (id: number, code: string, en: string): StoreVariant => ({
   id, size: "", color: "", label: code, price: 79, stock: 3, sku: "", active: true, soldOut: false,
-  designCode: code, designName: en, designNameEn: en, image: "",
+  designCode: code, designName: en, designNameEn: en, image: "", images: [],
 });
 const product: StoreProduct = {
   id: 1, slug: "keychain", name: "พวงกุญแจ", nameEn: "Keychain", categoryId: 1, optionKind: "designs",
@@ -76,5 +77,37 @@ describe("CategoryView", () => {
     act(() => button.click());
     expect(container.querySelector<HTMLInputElement>('input[type="search"]')!.value).toBe("");
     expect(container.querySelectorAll("a[href*='design=']")).toHaveLength(2);
+  });
+
+  it("links back to the products page in Thai under /th", () => {
+    act(() => root.render(<LanguageProvider lang="th"><CategoryView category={category} products={[product]} /></LanguageProvider>));
+    expect(container.querySelector('a[href="/th/products"]')).not.toBeNull();
+    expect(container.querySelector('a[href="/th/products/keychain?design=scs"]')).not.toBeNull();
+  });
+
+  it("renders the cover hero with shade", () => {
+    act(() => root.render(<CategoryView category={{ ...category, coverImage: "/product-images/c.png" }} products={[product]} />));
+    expect(container.querySelector('section img[src="/product-images/c.png"]')).not.toBeNull();
+    expect(container.querySelector(".category-hero-shade")).not.toBeNull();
+    expect(container.querySelector("section h1")?.textContent).toBe("Keychain");
+    expect(container.querySelector("section")?.textContent).toContain("2 designs in total");
+  });
+
+  it("clamps long hero text so it fits the fixed-height cover", () => {
+    act(() => root.render(<CategoryView category={{ ...category, coverImage: "/product-images/c.png", tagline: "a\nb\nc", taglineEn: "a\nb\nc" }} products={[product]} />));
+    expect(container.querySelector("section h1")?.classList.contains("line-clamp-2")).toBe(true);
+    expect(container.querySelector("section h1 + p")?.classList.contains("line-clamp-2")).toBe(true);
+    expect(container.querySelector("section h1")?.parentElement?.className).toContain("max-w-");
+  });
+
+  it("keeps the plain header without a cover", () => {
+    render([product]);
+    expect(container.querySelector("section img")).toBeNull();
+    expect(container.querySelector(".category-hero-shade")).toBeNull();
+    const back = container.querySelector('a[href="/products"]');
+    expect(back?.textContent).toContain("‹");
+    expect(back?.textContent).toContain("Shop");
+    expect(back?.classList.contains("hidden")).toBe(true);
+    expect(back?.classList.contains("md:inline-flex")).toBe(true);
   });
 });

@@ -1,6 +1,9 @@
 """Design row validation and catalog labels; independent of database wiring."""
+import json
+
 from .common import StoreError, as_int, clean_image_url, clean_text
 
+MAX_DESIGN_IMAGES = 8
 MAX_CODE_LENGTH = 12
 MAX_NAME_LENGTH = 80
 CODE_CHARACTERS = frozenset("ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789-")
@@ -19,12 +22,23 @@ def design_label(code: str, name: str) -> str:
 
 
 def clean_design(raw: dict, index: int) -> dict[str, str]:
-    return {
+    design = {
         "design_code": normalize_code(raw.get("designCode", "")),
         "design_name": clean_text(raw.get("designName"), f"ชื่อลาย ({index + 1})", required=True, max_len=MAX_NAME_LENGTH),
         "design_name_en": clean_text(raw.get("designNameEn"), "ชื่อลายภาษาอังกฤษ", max_len=MAX_NAME_LENGTH),
-        "image": clean_image_url(raw.get("image"), "รูปลาย"),
+        "image": clean_image_url(None if "images" in raw else raw.get("image"), f"รูปลาย ({index + 1})"),
     }
+    # Omission preserves the existing gallery for older admin clients.
+    if "images" in raw:
+        images = raw["images"]
+        if not isinstance(images, list):
+            raise StoreError(400, "รูปลายต้องเป็นรายการ URL")
+        if len(images) > MAX_DESIGN_IMAGES:
+            raise StoreError(400, f"รูปลายใส่ได้ไม่เกิน {MAX_DESIGN_IMAGES} รูป")
+        images = [url for url in (clean_image_url(value, f"รูปลาย ({index + 1})") for value in images) if url]
+        design["image"] = images[0] if images else ""
+        design["extra_images_json"] = json.dumps(images[1:], ensure_ascii=False)
+    return design
 
 
 def clean_designs(variants: list) -> list[dict[str, str]]:

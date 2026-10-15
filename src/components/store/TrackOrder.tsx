@@ -6,12 +6,14 @@ import { useState } from "react";
 import { orderPageHref, saveOrderToken } from "@/lib/orderTokens";
 import { useStoreText } from "@/lib/storeI18n";
 import type { StoreOrder } from "@/types/store";
+import { useLocalePath } from "@/lib/i18n";
 
 const inputClass =
   "w-full rounded-2xl border border-zinc-300 bg-white px-4 py-3 text-base outline-none transition focus:border-apple-blue focus:ring-4 focus:ring-apple-blue/10";
 
 export function TrackOrder() {
   const t = useStoreText();
+  const localePath = useLocalePath();
   const router = useRouter();
   const searchParams = useSearchParams();
   const [orderCode, setOrderCode] = useState(searchParams.get("code") ?? "");
@@ -35,7 +37,7 @@ export function TrackOrder() {
         return;
       }
       saveOrderToken(data.orderCode, data.accessToken);
-      router.push(orderPageHref(data.orderCode, data.accessToken));
+      router.push(localePath(orderPageHref(data.orderCode, data.accessToken)));
     } catch {
       setError(t.errorGeneric);
     } finally {
@@ -73,7 +75,7 @@ export function TrackOrder() {
       </form>
       <p className="mt-10 border-t border-zinc-200 pt-6 text-sm text-ink-soft">
         {t.fp28Link}{" "}
-        <Link href="/check-order/fp28" className="inline-flex min-h-11 items-center font-semibold text-apple-blue hover:underline">
+        <Link href={localePath("/check-order/fp28")} className="inline-flex min-h-11 items-center font-semibold text-apple-blue hover:underline">
           {t.fp28Cta} →
         </Link>
       </p>
