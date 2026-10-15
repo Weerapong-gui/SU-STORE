@@ -100,5 +100,7 @@ describe("CategoryView", () => {
     const back = container.querySelector('a[href="/products"]');
     expect(back?.textContent).toContain("‹");
     expect(back?.textContent).toContain("Shop");
+    expect(back?.classList.contains("hidden")).toBe(true);
+    expect(back?.classList.contains("md:inline-flex")).toBe(true);
   });
 });

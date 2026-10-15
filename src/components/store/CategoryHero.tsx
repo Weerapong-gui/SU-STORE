@@ -19,7 +19,8 @@ export function CategoryHero({ category, designCount }: { category: StoreCategor
   if (!category.coverImage) {
     return (
       <Container>
-        <Link href={localePath("/products")} className="inline-flex min-h-11 min-w-11 items-center text-[15px] text-apple-blue">
+        {/* Mobile gets the back link from the navbar on category pages, so it only shows here from md up. */}
+        <Link href={localePath("/products")} className="hidden min-h-11 min-w-11 items-center text-[15px] text-apple-blue md:inline-flex">
           {backLink}
         </Link>
         <section className="pb-2 pt-2 md:pt-6">
