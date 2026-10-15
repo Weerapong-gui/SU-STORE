@@ -8,7 +8,7 @@ import { Menu, ShoppingBag, X } from "lucide-react";
 import { useCart } from "@/components/CartProvider";
 import { Container } from "@/components/ui/Container";
 import { cn } from "@/lib/utils";
-import { useLang, useLocalePath } from "@/lib/i18n";
+import { useLocalePath } from "@/lib/i18n";
 import { stripLocale } from "@/lib/locale";
 
 const navigationLinks = [
@@ -24,7 +24,6 @@ export function Navbar() {
   // Link hrefs and the active-link check compare language-neutral paths.
   const pathname = stripLocale(usePathname()).path;
   const [isMenuOpen, setIsMenuOpen] = useState(false);
-  const { lang, setLang } = useLang();
 
   useEffect(() => {
     setIsMenuOpen(false);
@@ -81,22 +80,10 @@ export function Navbar() {
               ) : null}
             </Link>
           ))}
-          <button
-            onClick={() => setLang(lang === "en" ? "th" : "en")}
-            className="rounded-full border border-zinc-300 px-3 py-1 text-xs font-semibold text-zinc-600 transition hover:border-zinc-400 hover:text-zinc-900"
-          >
-            {lang === "en" ? "EN" : "TH"}
-          </button>
         </nav>
 
-        {/* Mobile: lang toggle + cart icon + hamburger */}
+        {/* Mobile: cart icon + hamburger */}
         <div className="flex items-center gap-2 md:hidden">
-          <button
-            onClick={() => setLang(lang === "en" ? "th" : "en")}
-            className="min-h-11 min-w-11 rounded-full border border-zinc-300 px-3 text-xs font-semibold text-zinc-600 transition hover:border-zinc-400 hover:text-zinc-900"
-          >
-            {lang === "en" ? "EN" : "TH"}
-          </button>
           <Link
             href={localePath("/checkout")}
             className="relative flex h-11 w-11 items-center justify-center rounded-circle text-zinc-600 transition hover:bg-zinc-100 hover:text-zinc-900"
