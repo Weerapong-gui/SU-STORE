@@ -32,8 +32,7 @@ function isUnder(pathname: string, segments: string[]): boolean {
   return segments.includes(first) || first.startsWith("favicon");
 }
 
-function isPageRequest(request: NextRequest): boolean {
-  const { pathname } = request.nextUrl;
+function isPageRequest(pathname: string): boolean {
   if (isUnder(pathname, NON_PAGE_SEGMENTS)) return false;
   // Skip static file extensions
   if (/\.(ico|png|jpg|jpeg|svg|webp|gif|woff2?|ttf|otf|css|js|map)$/.test(pathname)) {
@@ -64,8 +63,7 @@ function localeRedirect(request: NextRequest, to: string): NextResponse {
 
 // Only navigations follow the visitor's language: a 307 would replay a form POST
 // under another URL, so other methods are served in the URL's own language.
-function resolveLocale(request: NextRequest): LocaleDecision {
-  const { pathname } = request.nextUrl;
+function resolveLocale(request: NextRequest, pathname: string): LocaleDecision {
   if (request.method !== "GET" && request.method !== "HEAD") return { kind: "serve", ...stripLocale(pathname) };
   return decideLocale({
     pathname,
@@ -80,8 +78,19 @@ function isAlwaysOpen(request: NextRequest): boolean {
   return ALWAYS_OPEN || (STAGING_HOST !== "" && host.startsWith(STAGING_HOST));
 }
 
+// Next decodes the path before matching routes, so every check here must see the decoded
+// path too: otherwise /%61dmin or /api/store/%6Frders reach those routes past the checks.
+function routePath(request: NextRequest): string | null {
+  try {
+    return decodeURIComponent(request.nextUrl.pathname);
+  } catch {
+    return null; // malformed percent-encoding; Next could not route it either
+  }
+}
+
 export async function middleware(request: NextRequest) {
-  const { pathname } = request.nextUrl;
+  const pathname = routePath(request);
+  if (pathname === null) return new NextResponse(null, { status: 400 });
 
   // ── Admin pages: require a staff session, never show the store-closed page ──
   if (pathname === "/admin" || pathname.startsWith("/admin/")) {
@@ -96,7 +105,7 @@ export async function middleware(request: NextRequest) {
   // ── Rate-limit order creation and order lookup ──────────────────────────────
   if (request.method === "POST" && (pathname === "/api/store/orders" || pathname === "/api/store/orders/lookup")) {
     // Staff previewing the closed store must not create real orders.
-    if (pathname === "/api/store/orders" && adminCookie(request) && !hasBypass && !isAlwaysOpen(request) && (await siteClosedReason(request))) {
+    if (pathname === "/api/store/orders" && adminCookie(request) && !hasBypass && !isAlwaysOpen(request) && (await siteClosedReason(request, undefined, pathname))) {
       return NextResponse.json({ success: false, message: PREVIEW_ORDER_BLOCKED_MESSAGE }, { status: 403 });
     }
     if (consume(orderRateLimits, clientIp(request), MAX_ORDER_REQUESTS) === "limited") {
@@ -109,10 +118,10 @@ export async function middleware(request: NextRequest) {
   }
 
   // ── Language: redirect to the visitor's language, or serve /th/* from the shared pages ──
-  const isPage = isPageRequest(request);
+  const isPage = isPageRequest(pathname);
   let locale: PageLocale | null = null;
   if (isPage && isLocalizedPage(pathname)) {
-    const decision = resolveLocale(request);
+    const decision = resolveLocale(request, pathname);
     if (decision.kind === "redirect") return localeRedirect(request, decision.to);
     locale = { lang: decision.lang, path: decision.path };
   }
@@ -184,8 +193,8 @@ function pageResponse(request: NextRequest, preview: boolean, locale: PageLocale
 }
 
 // Why the store is closed ("" = open), cached for SITE_STATUS_TTL.
-// `pathname` is the page path with any /th prefix removed.
-async function siteClosedReason(request: NextRequest, visitorIdValue?: string, pathname = request.nextUrl.pathname): Promise<string> {
+// `pathname` is the decoded request path (for pages, with any /th prefix removed).
+async function siteClosedReason(request: NextRequest, visitorIdValue: string | undefined, pathname: string): Promise<string> {
   if (pathname === "/maintenance" || !ORDER_API_BASE) return "";
 
   const now = Date.now();

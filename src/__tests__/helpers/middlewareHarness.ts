@@ -18,14 +18,21 @@ function fakeOrderApi(siteClosed: boolean) {
   });
 }
 
-/** Runs a fresh copy of the middleware; `cookie` is a raw Cookie header value. */
-export async function runMiddleware(siteClosed: boolean, path: string, { cookie, method = "GET", headers = {} }: RunOptions = {}) {
+/** Loads a fresh copy of the middleware; reuse the returned runner to keep module state (rate limits) across calls. */
+export async function loadMiddleware(siteClosed: boolean) {
   vi.resetModules();
   vi.stubEnv("ORDER_API_BASE_URL", API);
   vi.stubGlobal("fetch", fakeOrderApi(siteClosed));
   const { middleware } = await import("@/middleware");
-  const all = { ...headers, cookie: cookie ? `${cookie}; su_vid=v` : "su_vid=v" };
-  return middleware(new NextRequest(`https://sumfu.store${path}`, { method, headers: all }));
+  return (path: string, { cookie, method = "GET", headers = {} }: RunOptions = {}) => {
+    const all = { ...headers, cookie: cookie ? `${cookie}; su_vid=v` : "su_vid=v" };
+    return middleware(new NextRequest(`https://sumfu.store${path}`, { method, headers: all }));
+  };
+}
+
+/** Runs a fresh copy of the middleware; `cookie` is a raw Cookie header value. */
+export async function runMiddleware(siteClosed: boolean, path: string, options: RunOptions = {}) {
+  return (await loadMiddleware(siteClosed))(path, options);
 }
 
 export function resetMiddlewareHarness(): void {
