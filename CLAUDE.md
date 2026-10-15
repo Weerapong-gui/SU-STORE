@@ -32,7 +32,7 @@ SU STORE เป็นระบบสั่งซื้อเสื้อรั�
   - หมวดที่ซ่อน = ไม่โผล่ใน category strip, หน้าปก และบล็อกหน้าแรก และหน้าของหมวดคืน 404 แต่สินค้าในหมวดยังอยู่ใน "ทั้งหมด" และสั่งได้ตามปกติ (หยุดขายสินค้าใช้ status ของสินค้า)
   - routes: public `/v2/categories`, `/v2/categories/<slug>` · admin `/v2/admin/categories*`, `/v2/admin/categories/order` · อัปโหลดรูปทั่วไป `/v2/admin/images`
 - สินค้าหลายลาย: สินค้ามี `nameEn`, `categoryId`, `optionKind` (`options` = ไซซ์/สี, `designs` = หลายลาย) โหมดหลายลายตั้งใน ProductEditor
-  - variant แบบลายมี `designCode`, `designName`, `designNameEn`, `image` · โค้ด A-Z 0-9 `-` ตัวใหญ่ ยาวไม่เกิน 12 · label แสดงเป็น "CODE · ชื่อ" (`server/store/designs.py`)
+  - variant แบบลายมี `designCode`, `designName`, `designNameEn`, `images` (สูงสุด 8 รูป รูปแรกเก็บใน `image` ที่เหลือใน `extra_images_json` · ปุ่มเลือกลาย/ตะกร้า/ออเดอร์ใช้รูปแรก · ลายไม่มีรูปจะแสดงรูปสินค้า) · โค้ด A-Z 0-9 `-` ตัวใหญ่ ยาวไม่เกิน 12 · label แสดงเป็น "CODE · ชื่อ" (`server/store/designs.py`)
   - ทุกลายในสินค้าเดียวกันราคาเดียว
 - ชื่อ 2 ภาษา: ภาษาไทยจำเป็น อังกฤษไม่บังคับ ถ้าภาษาที่เลือกว่างจะใช้อีกภาษา · `store_order_items` เก็บ snapshot `product_name_en` / `variant_label_en` (nullable ออเดอร์เก่าเป็น NULL แสดงภาษาไทย)
 - `middleware.ts` บังคับ login สำหรับ `/admin/*` และไม่ให้หน้า "ปิดร้าน" บังหน้า admin
