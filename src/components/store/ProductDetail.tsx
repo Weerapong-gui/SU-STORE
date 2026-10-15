@@ -55,6 +55,8 @@ export function ProductDetail({ product, initialDesign }: { product: StoreProduc
   const otherDesignName = designName === variant?.designNameEn ? variant.designName : variant?.designNameEn;
   const otherName = isDesigns && otherDesignName && otherDesignName !== designName ? otherDesignName : "";
   const price = variant?.price ?? product.minPrice;
+  // A design shows its own photos; size/colour products share the product photos.
+  const galleryImages = isDesigns && variant ? variant.images : product.images;
 
   function selectDesign(design: StoreVariant) {
     setDesignId(design.id);
@@ -84,8 +86,8 @@ export function ProductDetail({ product, initialDesign }: { product: StoreProduc
   return (
     <div className="grid grid-cols-1 gap-10 md:grid-cols-2">
       <ProductGallery
-        key={variant?.image}
-        images={variant?.image ? [variant.image] : product.images}
+        key={galleryImages.join("|")}
+        images={galleryImages}
         alt={designName || productName}
         fallback={variant?.designCode}
       />
