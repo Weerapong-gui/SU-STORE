@@ -42,7 +42,7 @@ export function CategoryHero({ category, designCount }: { category: StoreCategor
           {backLink}
         </Link>
         <div className="max-w-[28rem] md:max-w-xl">
-          <h1 className="line-clamp-2 text-[34px] font-bold leading-none tracking-tight drop-shadow md:text-[56px]">{name}</h1>
+          <h1 className="line-clamp-2 text-[34px] font-bold leading-tight tracking-tight drop-shadow md:text-[56px]">{name}</h1>
           <p className="mt-2 line-clamp-2 whitespace-pre-line text-[15px] leading-snug text-white/85 md:text-[17px]">
             {tagline || t.designTotal(designCount)}
           </p>
