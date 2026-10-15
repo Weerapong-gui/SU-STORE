@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { ADMIN_COOKIE } from "@/lib/adminAuth";
 import { clientIp } from "@/lib/clientIp";
 import { ORDER_API_BASE } from "@/lib/orderApi";
-import { decideLocale, LANG_COOKIE, LANG_HEADER, type Lang, PATH_HEADER } from "@/lib/locale";
+import { decideLocale, LANG_COOKIE, LANG_HEADER, type Lang, type LocaleDecision, PATH_HEADER, stripLocale } from "@/lib/locale";
 import { consume, type RateLimitStore } from "@/lib/rateLimitCore";
 import { adminCookie, isStaffSession, PREVIEW_ORDER_BLOCKED_MESSAGE, STORE_PREVIEW_HEADER, storeGate } from "@/lib/storePreview";
 import { setVisitorCookie, siteStatusQuery, visitorId } from "@/lib/visitorId";
@@ -57,6 +57,19 @@ function localeRedirect(request: NextRequest, to: string): NextResponse {
   return res;
 }
 
+// Only navigations follow the visitor's language: a 307 would replay a form POST
+// under another URL, so other methods are served in the URL's own language.
+function resolveLocale(request: NextRequest): LocaleDecision {
+  const { pathname } = request.nextUrl;
+  if (request.method !== "GET" && request.method !== "HEAD") return { kind: "serve", ...stripLocale(pathname) };
+  return decideLocale({
+    pathname,
+    cookie: request.cookies.get(LANG_COOKIE)?.value,
+    acceptLanguage: request.headers.get("accept-language"),
+    userAgent: request.headers.get("user-agent")
+  });
+}
+
 function isAlwaysOpen(request: NextRequest): boolean {
   const host = request.headers.get("host") ?? "";
   return ALWAYS_OPEN || (STAGING_HOST !== "" && host.startsWith(STAGING_HOST));
@@ -91,15 +104,10 @@ export async function middleware(request: NextRequest) {
   }
 
   // ── Language: redirect to the visitor's language, or serve /th/* from the shared pages ──
-  const isPageGet = request.method === "GET" && isPageRequest(request);
+  const isPage = isPageRequest(request);
   let locale: PageLocale | null = null;
-  if (isPageGet && isLocalizedPage(pathname)) {
-    const decision = decideLocale({
-      pathname,
-      cookie: request.cookies.get(LANG_COOKIE)?.value,
-      acceptLanguage: request.headers.get("accept-language"),
-      userAgent: request.headers.get("user-agent")
-    });
+  if (isPage && isLocalizedPage(pathname)) {
+    const decision = resolveLocale(request);
     if (decision.kind === "redirect") return localeRedirect(request, decision.to);
     locale = { lang: decision.lang, path: decision.path };
   }
@@ -120,7 +128,7 @@ export async function middleware(request: NextRequest) {
   if (isAlwaysOpen(request)) return locale ? pageResponse(request, false, locale) : NextResponse.next();
 
   // ── Page navigations: visitor cookie + site-closed check ─────────────────────
-  if (isPageGet) {
+  if (request.method === "GET" && isPage) {
     const pageLocale = locale ?? { lang: "en", path: pathname };
     const existingId = visitorId(request);
     const id = existingId ?? crypto.randomUUID();
@@ -128,7 +136,8 @@ export async function middleware(request: NextRequest) {
     return existingId ? response : setVisitorCookie(response, id);
   }
 
-  return NextResponse.next();
+  // Other page requests (HEAD, form posts) still reach a layout, so they get trusted headers too.
+  return locale ? pageResponse(request, false, locale) : NextResponse.next();
 }
 
 // Page navigations: rewrite to /maintenance while the store is closed, except for

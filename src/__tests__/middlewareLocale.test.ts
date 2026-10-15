@@ -1,42 +1,14 @@
-import { NextRequest } from "next/server";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { ADMIN_COOKIE } from "@/lib/adminAuth";
 import { LANG_HEADER, PATH_HEADER } from "@/lib/locale";
+import { forwarded, resetMiddlewareHarness, rewrittenTo, runMiddleware as run } from "./helpers/middlewareHarness";
 
-const API = "http://order-api:10000";
-
-// Fakes the order-api: the store is open or closed, and only "Claim good" is a staff session.
-function fakeOrderApi(siteClosed: boolean) {
-  return vi.fn(async (url: string, init?: RequestInit) => {
-    if (url.startsWith(`${API}/site-status`)) return Response.json({ siteClosed });
-    if (url === `${API}/v2/admin/me`) {
-      const auth = (init?.headers as Record<string, string>).Authorization;
-      return new Response("{}", { status: auth === "Claim good" ? 200 : 401 });
-    }
-    throw new Error(`unexpected fetch ${url}`);
-  });
-}
-
-async function run(siteClosed: boolean, path: string, { cookie, method = "GET", headers = {} }: { cookie?: string; method?: string; headers?: Record<string, string> } = {}) {
-  vi.resetModules();
-  vi.stubEnv("ORDER_API_BASE_URL", API);
-  vi.stubGlobal("fetch", fakeOrderApi(siteClosed));
-  const { middleware } = await import("@/middleware");
-  const all = { ...headers, cookie: cookie ? `${cookie}; su_vid=v` : "su_vid=v" };
-  return middleware(new NextRequest(`https://sumfu.store${path}`, { method, headers: all }));
-}
-
-const rewrittenTo = (res: Response) => res.headers.get("x-middleware-rewrite") ?? "";
-const forwarded = (res: Response, name: string) => res.headers.get(`x-middleware-request-${name}`);
 const locationOf = (res: Response) => new URL(res.headers.get("location") ?? "");
 const thaiPhone = { "accept-language": "th-TH", "user-agent": "Mozilla/5.0 (iPhone) Safari" };
 const englishMac = { "accept-language": "en-US", "user-agent": "Mozilla/5.0 (Macintosh) Safari" };
 
 describe("middleware locale routing", () => {
-  afterEach(() => {
-    vi.unstubAllEnvs();
-    vi.unstubAllGlobals();
-  });
+  afterEach(resetMiddlewareHarness);
 
   it("serves Thai paths from the shared pages", async () => {
     const res = await run(false, "/th/products/x", { headers: englishMac, cookie: "su_lang=th" });
@@ -91,6 +63,18 @@ describe("middleware locale routing", () => {
   it("leaves admin and api routes alone", async () => {
     expect((await run(false, "/admin/login", { headers: thaiPhone })).status).not.toBe(307);
     expect((await run(false, "/api/store/products", { headers: thaiPhone })).status).not.toBe(307);
+  });
+
+  it("serves Thai paths to HEAD requests", async () => {
+    const res = await run(false, "/th/products/x", { method: "HEAD", headers: thaiPhone });
+    expect(new URL(rewrittenTo(res)).pathname).toBe("/products/x");
+    expect(forwarded(res, LANG_HEADER)).toBe("th");
+  });
+
+  it("drops client-sent language headers on non-GET page requests", async () => {
+    const res = await run(false, "/products/x", { method: "POST", headers: { ...englishMac, [LANG_HEADER]: "th", [PATH_HEADER]: "/evil" } });
+    expect(forwarded(res, LANG_HEADER)).toBe("en");
+    expect(forwarded(res, PATH_HEADER)).toBe("/products/x");
   });
 
   it("leaves product images and files alone", async () => {

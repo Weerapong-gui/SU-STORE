@@ -1,39 +1,16 @@
-import { NextRequest } from "next/server";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it } from "vitest";
 import { ADMIN_COOKIE } from "@/lib/adminAuth";
 import { STORE_PREVIEW_HEADER } from "@/lib/storePreview";
+import { forwarded, resetMiddlewareHarness, rewrittenTo, runMiddleware, type RunOptions } from "./helpers/middlewareHarness";
 
-const API = "http://order-api:10000";
+// Here `cookie` is the staff session value, not a raw Cookie header.
+const run = (siteClosed: boolean, path: string, { cookie, ...rest }: RunOptions = {}) =>
+  runMiddleware(siteClosed, path, { ...rest, cookie: cookie ? `${ADMIN_COOKIE}=${cookie}` : undefined });
 
-// Fakes the order-api: the store is closed, and only "Claim good" is a staff session.
-function fakeOrderApi(siteClosed: boolean) {
-  return vi.fn(async (url: string, init?: RequestInit) => {
-    if (url.startsWith(`${API}/site-status`)) return Response.json({ siteClosed });
-    if (url === `${API}/v2/admin/me`) {
-      const auth = (init?.headers as Record<string, string>).Authorization;
-      return new Response("{}", { status: auth === "Claim good" ? 200 : 401 });
-    }
-    throw new Error(`unexpected fetch ${url}`);
-  });
-}
-
-async function run(siteClosed: boolean, path: string, { cookie, method = "GET", headers = {} }: { cookie?: string; method?: string; headers?: Record<string, string> } = {}) {
-  vi.resetModules();
-  vi.stubEnv("ORDER_API_BASE_URL", API);
-  vi.stubGlobal("fetch", fakeOrderApi(siteClosed));
-  const { middleware } = await import("@/middleware");
-  const all = { ...headers, ...(cookie ? { cookie: `${ADMIN_COOKIE}=${cookie}; su_vid=v` } : { cookie: "su_vid=v" }) };
-  return middleware(new NextRequest(`https://sumfu.store${path}`, { method, headers: all }));
-}
-
-const rewrittenTo = (res: Response) => res.headers.get("x-middleware-rewrite") ?? "";
-const forwardedPreview = (res: Response) => res.headers.get(`x-middleware-request-${STORE_PREVIEW_HEADER}`);
+const forwardedPreview = (res: Response) => forwarded(res, STORE_PREVIEW_HEADER);
 
 describe("middleware store preview", () => {
-  afterEach(() => {
-    vi.unstubAllEnvs();
-    vi.unstubAllGlobals();
-  });
+  afterEach(resetMiddlewareHarness);
 
   it("shows customers the closed page", async () => {
     expect(rewrittenTo(await run(true, "/"))).toContain("/maintenance?reason=manual");
