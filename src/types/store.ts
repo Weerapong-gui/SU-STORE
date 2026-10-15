@@ -18,6 +18,8 @@ export type StoreVariant = {
   designName: string;
   designNameEn: string;
   image: string;
+  /** Every image of the design, main image first (empty when there is none). */
+  images: string[];
   id: number;
   size: string;
   color: string;

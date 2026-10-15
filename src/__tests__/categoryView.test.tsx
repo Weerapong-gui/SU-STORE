@@ -17,7 +17,7 @@ const category: StoreCategory = {
 };
 const variant = (id: number, code: string, en: string): StoreVariant => ({
   id, size: "", color: "", label: code, price: 79, stock: 3, sku: "", active: true, soldOut: false,
-  designCode: code, designName: en, designNameEn: en, image: "",
+  designCode: code, designName: en, designNameEn: en, image: "", images: [],
 });
 const product: StoreProduct = {
   id: 1, slug: "keychain", name: "พวงกุญแจ", nameEn: "Keychain", categoryId: 1, optionKind: "designs",

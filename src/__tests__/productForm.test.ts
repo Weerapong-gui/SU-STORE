@@ -9,7 +9,7 @@ const designForm: Form = {
   categoryId: 3,
   optionKind: "designs",
   designPrice: "79",
-  designRows: [{ key: "a", id: 7, designName: "ลาย", designNameEn: "", designCode: "sci", image: "/x.png", stock: "" }],
+  designRows: [{ key: "a", id: 7, designName: "ลาย", designNameEn: "", designCode: "sci", images: ["/x.png"], stock: "" }],
 };
 
 describe("payloadFromForm", () => {
@@ -17,7 +17,7 @@ describe("payloadFromForm", () => {
     const p = payloadFromForm(designForm, false);
     expect(p).toMatchObject({ nameEn: "Keychain", categoryId: 3, optionKind: "designs" });
     expect(p.variants).toEqual([
-      { id: 7, designCode: "SCI", designName: "ลาย", designNameEn: "", image: "/x.png", price: 79, stock: null, active: true },
+      { id: 7, designCode: "SCI", designName: "ลาย", designNameEn: "", images: ["/x.png"], price: 79, stock: null, active: true },
     ]);
   });
 
@@ -32,7 +32,7 @@ describe("formFromProduct", () => {
   it("loads a designs product into design rows and the shared price", () => {
     const variant = {
       id: 9, active: true, price: 79, stock: 4, size: "", color: "",
-      designCode: "SCI", designName: "ลาย", designNameEn: "Sci", image: "/x.png",
+      designCode: "SCI", designName: "ลาย", designNameEn: "Sci", image: "/x.png", images: ["/x.png"],
     } as StoreVariant;
     const f = formFromProduct({ ...({} as StoreProduct), name: "ก", nameEn: "A", categoryId: 3, optionKind: "designs", slug: "k", description: "", buyerFields: [], status: "draft", saleStartsAt: null, saleEndsAt: null, variants: [variant] });
     expect(f.optionKind).toBe("designs");

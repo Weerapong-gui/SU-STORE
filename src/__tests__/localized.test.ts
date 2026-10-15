@@ -28,7 +28,7 @@ describe("order and cart display text", () => {
       .toEqual({ name: "Shirt", label: "A01 · Flower" });
     expect(orderItemText({ ...item, variantLabel: "-" }, "th").label).toBe("");
   });
-  const base = { id: 1, size: "", color: "", label: "-", price: 1, stock: null, sku: "", active: true, soldOut: false, image: "" };
+  const base = { id: 1, size: "", color: "", label: "-", price: 1, stock: null, sku: "", active: true, soldOut: false, image: "", images: [] };
   it("labels design variants as code and localized name, options variants by label", () => {
     const design = { ...base, designCode: "A01", designName: "ดอกไม้", designNameEn: "Flower" };
     expect(variantDisplayLabel(design, "en")).toBe("A01 · Flower");

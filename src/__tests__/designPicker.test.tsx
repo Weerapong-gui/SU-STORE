@@ -12,7 +12,7 @@ vi.mock("@/components/CartProvider", () => ({ MAX_ITEM_QUANTITY: 10, useCart: ()
 
 const variant = (id: number, code: string, name: string, soldOut = false): StoreVariant => ({
   id, size: "", color: "", label: code, price: 79, stock: soldOut ? 0 : 3, sku: "", active: true, soldOut,
-  designCode: code, designName: name, designNameEn: name, image: "",
+  designCode: code, designName: name, designNameEn: name, image: "", images: [],
 });
 const product: StoreProduct = {
   id: 1, slug: "keychain", name: "พวงกุญแจ", nameEn: "Keychain", categoryId: 1, optionKind: "designs",
