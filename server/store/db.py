@@ -472,6 +472,12 @@ def replace_variants(connection: sqlite3.Connection, product_id: int, variants: 
             "extra_images_json",
             previous["extra_images_json"] if design_rows is not None and previous is not None else "[]",
         )
+        if design_rows is not None and not design["image"]:
+            # Image-only payload cleared the main image: promote the first kept extra so image == images[0].
+            extras = json.loads(extra_images)
+            if extras:
+                design = {**design, "image": extras[0]}
+                extra_images = json.dumps(extras[1:], ensure_ascii=False)
         design_values = (*(design[key] for key in ("design_code", "design_name", "design_name_en", "image")), extra_images)
         if variant_id is not None:
             if variant_id not in existing:

@@ -190,6 +190,15 @@ def test_image_only_payload_keeps_extra_images() -> None:
     assert updated["variants"][0]["images"] == [IMAGE_C, IMAGE_B]
 
 
+def test_image_only_payload_with_empty_image_promotes_first_extra() -> None:
+    conn = _conn()
+    product = _image_product(conn, images=[IMAGE_A, IMAGE_B, IMAGE_C])
+    variant = {key: value for key, value in product["variants"][0].items() if key != "images"}
+    updated = db.update_product(conn, product["id"], {"variants": [{**variant, "image": ""}]})
+    assert updated["variants"][0]["image"] == IMAGE_B
+    assert updated["variants"][0]["images"] == [IMAGE_B, IMAGE_C]
+
+
 def test_too_many_design_images_rejected() -> None:
     conn = _conn()
     product = _image_product(conn, image=IMAGE_A)

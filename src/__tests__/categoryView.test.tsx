@@ -93,6 +93,13 @@ describe("CategoryView", () => {
     expect(container.querySelector("section")?.textContent).toContain("2 designs in total");
   });
 
+  it("clamps long hero text so it fits the fixed-height cover", () => {
+    act(() => root.render(<CategoryView category={{ ...category, coverImage: "/product-images/c.png", tagline: "a\nb\nc", taglineEn: "a\nb\nc" }} products={[product]} />));
+    expect(container.querySelector("section h1")?.classList.contains("line-clamp-2")).toBe(true);
+    expect(container.querySelector("section h1 + p")?.classList.contains("line-clamp-2")).toBe(true);
+    expect(container.querySelector("section h1")?.parentElement?.className).toContain("max-w-");
+  });
+
   it("keeps the plain header without a cover", () => {
     render([product]);
     expect(container.querySelector("section img")).toBeNull();

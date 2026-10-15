@@ -34,8 +34,8 @@ def clean_design(raw: dict, index: int) -> dict[str, str]:
         if not isinstance(images, list):
             raise StoreError(400, "รูปลายต้องเป็นรายการ URL")
         if len(images) > MAX_DESIGN_IMAGES:
-            raise StoreError(400, "รูปลายใส่ได้ไม่เกิน 8 รูป")
-        images = [clean_image_url(value, f"รูปลาย ({index + 1})") for value in images]
+            raise StoreError(400, f"รูปลายใส่ได้ไม่เกิน {MAX_DESIGN_IMAGES} รูป")
+        images = [url for url in (clean_image_url(value, f"รูปลาย ({index + 1})") for value in images) if url]
         design["image"] = images[0] if images else ""
         design["extra_images_json"] = json.dumps(images[1:], ensure_ascii=False)
     return design
