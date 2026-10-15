@@ -77,6 +77,20 @@ describe("middleware locale routing", () => {
     expect(forwarded(res, PATH_HEADER)).toBe("/products/x");
   });
 
+  it("never serves the admin panel through a Thai path", async () => {
+    const res = await run(false, "/th/admin/dashboard", { headers: thaiPhone });
+    expect(rewrittenTo(res)).not.toContain("/admin");
+    expect(res.headers.get("location")).toBeNull();
+  });
+
+  it("never routes Thai paths to the API", async () => {
+    const order = await run(false, "/th/api/store/orders", { method: "POST", headers: thaiPhone });
+    expect(rewrittenTo(order)).not.toContain("/api/");
+    const products = await run(false, "/th/api/store/products", { headers: thaiPhone });
+    expect(rewrittenTo(products)).not.toContain("/api/");
+    expect(products.headers.get("location")).toBeNull();
+  });
+
   it("leaves product images and files alone", async () => {
     expect((await run(false, "/product-images/abc", { headers: thaiPhone })).status).not.toBe(307);
     expect((await run(false, "/robots.txt", { headers: thaiPhone })).status).not.toBe(307);

@@ -20,17 +20,21 @@ const BYPASS_TOKEN = process.env.BYPASS_TOKEN ?? "";
 const ALWAYS_OPEN = process.env.ALWAYS_OPEN === "1";
 const STAGING_HOST = process.env.STAGING_HOST ?? "";
 
+// First path segments that are never storefront pages: Next internals, API, static files.
+const NON_PAGE_SEGMENTS = ["_next", "api", "images", "fonts"];
+// Also kept out of the language step: /admin has its own login gate above, and uploaded
+// images are shared. Checked against the path with /th stripped, so /th/admin/* and
+// /th/api/* are never rewritten past the admin gate or the order rate limiter.
+const UNLOCALIZED_SEGMENTS = [...NON_PAGE_SEGMENTS, "admin", "product-images"];
+
+function isUnder(pathname: string, segments: string[]): boolean {
+  const first = pathname.split("/")[1] ?? "";
+  return segments.includes(first) || first.startsWith("favicon");
+}
+
 function isPageRequest(request: NextRequest): boolean {
   const { pathname } = request.nextUrl;
-  if (
-    pathname.startsWith("/_next/") ||
-    pathname.startsWith("/api/") ||
-    pathname.startsWith("/images/") ||
-    pathname.startsWith("/fonts/") ||
-    pathname.startsWith("/favicon")
-  ) {
-    return false;
-  }
+  if (isUnder(pathname, NON_PAGE_SEGMENTS)) return false;
   // Skip static file extensions
   if (/\.(ico|png|jpg|jpeg|svg|webp|gif|woff2?|ttf|otf|css|js|map)$/.test(pathname)) {
     return false;
@@ -38,10 +42,11 @@ function isPageRequest(request: NextRequest): boolean {
   return true;
 }
 
-// Uploaded images and files such as robots.txt or sitemap.xml exist once, not per language.
+// Files such as robots.txt or sitemap.xml exist once, not per language.
 function isLocalizedPage(pathname: string): boolean {
-  if (pathname.startsWith("/product-images/")) return false;
-  return !(pathname.split("/").pop() ?? "").includes(".");
+  const { path } = stripLocale(pathname);
+  if (isUnder(path, UNLOCALIZED_SEGMENTS)) return false;
+  return !(path.split("/").pop() ?? "").includes(".");
 }
 
 // Temporary: the target depends on the visitor, so browsers must not remember it.
