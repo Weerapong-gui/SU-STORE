@@ -11,7 +11,9 @@ export const SITE_URL = "https://sumfu.store";
 
 const THAI_PREFIX = "/th";
 // Crawlers and link previewers must see the URL's own language, never a redirect.
-const BOT_PATTERN = /bot|crawl|spider|slurp|facebookexternalhit|line\/|whatsapp|telegram|discord|preview/i;
+// No "line/": the LINE in-app browser UA has it and carries real customers (LINE's
+// preview crawler is already caught by facebookexternalhit).
+const BOT_PATTERN = /bot|crawl|spider|slurp|facebookexternalhit|whatsapp|telegram|discord|preview/i;
 
 export type LocaleDecision =
   | { kind: "redirect"; to: string }
@@ -67,9 +69,9 @@ export function decideLocale(input: {
   userAgent: string | null;
 }): LocaleDecision {
   const { lang: urlLang, path } = stripLocale(input.pathname);
-  const wanted = isBot(input.userAgent)
-    ? null
-    : parseLang(input.cookie) ?? preferredLang(input.acceptLanguage);
+  // A saved choice always wins; only the Accept-Language guess is skipped for bots.
+  const wanted =
+    parseLang(input.cookie) ?? (isBot(input.userAgent) ? null : preferredLang(input.acceptLanguage));
   if (wanted && wanted !== urlLang) return { kind: "redirect", to: localePath(wanted, path) };
   return { kind: "serve", lang: urlLang, path };
 }

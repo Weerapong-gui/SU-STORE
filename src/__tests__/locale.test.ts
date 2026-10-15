@@ -40,10 +40,13 @@ describe("preferredLang / isBot", () => {
     expect(preferredLang(null)).toBeNull();
   });
   it("spots crawlers and link previewers", () => {
-    for (const ua of ["Mozilla/5.0 (compatible; Googlebot/2.1)", "facebookexternalhit/1.1", "Line/13.0", "Twitterbot/1.0", "bingbot/2.0"]) {
+    for (const ua of ["Mozilla/5.0 (compatible; Googlebot/2.1)", "facebookexternalhit/1.1", "Twitterbot/1.0", "bingbot/2.0"]) {
       expect(isBot(ua)).toBe(true);
     }
     expect(isBot("Mozilla/5.0 (iPhone; CPU iPhone OS 17_0) Safari/604.1")).toBe(false);
+  });
+  it("does not treat the LINE in-app browser as a bot", () => {
+    expect(isBot("Mozilla/5.0 (iPhone; CPU iPhone OS 17_0) AppleWebKit/605.1.15 Mobile/15E148 Safari Line/13.20.0")).toBe(false);
   });
 });
 
@@ -67,6 +70,10 @@ describe("decideLocale", () => {
   it("never redirects bots or requests without a language", () => {
     expect(decide("/th/x", undefined, "en", "Googlebot/2.1")).toEqual({ kind: "serve", lang: "th", path: "/x" });
     expect(decide("/x", undefined, null)).toEqual({ kind: "serve", lang: "en", path: "/x" });
+  });
+  it("lets a saved language win even for bot-looking user agents", () => {
+    expect(decide("/x", "th", "en", "Googlebot/2.1")).toEqual({ kind: "redirect", to: "/th/x" });
+    expect(decide("/x", undefined, "th", "Googlebot/2.1")).toEqual({ kind: "serve", lang: "en", path: "/x" });
   });
   it("ignores an unknown cookie value", () => {
     expect(decide("/x", "xx", "th")).toEqual({ kind: "redirect", to: "/th/x" });

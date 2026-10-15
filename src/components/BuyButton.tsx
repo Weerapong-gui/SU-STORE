@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useLocalePath } from "@/lib/i18n";
+import { stripLocale } from "@/lib/locale";
 import { cn } from "@/lib/utils";
 
 // Staff-entered button links may point outside the storefront routes.
@@ -9,6 +10,12 @@ const NON_LOCALIZED_PATH = /^\/(?:api|images|product-images|admin)(?:[/?#]|$)/;
 
 function isStorefrontPath(href: string): boolean {
   return href.startsWith("/") && !href.startsWith("//") && !NON_LOCALIZED_PATH.test(href);
+}
+
+// Staff may paste a link that already carries /th, so drop it before localizing.
+function localizeHref(href: string, localePath: (path: string) => string): string {
+  const { path } = stripLocale(href);
+  return isStorefrontPath(path) ? localePath(path) : href;
 }
 
 type BuyButtonProps = {
@@ -37,7 +44,7 @@ export function BuyButton({
   };
 
   return (
-    <Link href={isStorefrontPath(href) ? localePath(href) : href} className={cn(buttonBaseClasses, buttonVariantClasses[variant], className)}>
+    <Link href={localizeHref(href, localePath)} className={cn(buttonBaseClasses, buttonVariantClasses[variant], className)}>
       {children}
     </Link>
   );
