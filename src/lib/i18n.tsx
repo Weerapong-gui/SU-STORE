@@ -2,7 +2,9 @@
 
 import { createContext, useContext, useEffect, useState, type ReactNode } from "react";
 
-export type Lang = "en" | "th";
+import type { Lang } from "@/lib/locale";
+
+export type { Lang } from "@/lib/locale";
 
 export const translations = {
   en: {
