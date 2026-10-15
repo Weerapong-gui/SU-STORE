@@ -84,4 +84,21 @@ describe("CategoryView", () => {
     expect(container.querySelector('a[href="/th/products"]')).not.toBeNull();
     expect(container.querySelector('a[href="/th/products/keychain?design=scs"]')).not.toBeNull();
   });
+
+  it("renders the cover hero with shade", () => {
+    act(() => root.render(<CategoryView category={{ ...category, coverImage: "/product-images/c.png" }} products={[product]} />));
+    expect(container.querySelector('section img[src="/product-images/c.png"]')).not.toBeNull();
+    expect(container.querySelector(".category-hero-shade")).not.toBeNull();
+    expect(container.querySelector("section h1")?.textContent).toBe("Keychain");
+    expect(container.querySelector("section")?.textContent).toContain("2 designs in total");
+  });
+
+  it("keeps the plain header without a cover", () => {
+    render([product]);
+    expect(container.querySelector("section img")).toBeNull();
+    expect(container.querySelector(".category-hero-shade")).toBeNull();
+    const back = container.querySelector('a[href="/products"]');
+    expect(back?.textContent).toContain("‹");
+    expect(back?.textContent).toContain("Shop");
+  });
 });

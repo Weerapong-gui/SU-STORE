@@ -10,6 +10,8 @@ import { Container } from "@/components/ui/Container";
 import { cn } from "@/lib/utils";
 import { useLocalePath } from "@/lib/i18n";
 import { stripLocale } from "@/lib/locale";
+import { useStoreText } from "@/lib/storeI18n";
+import { isCategoryPath } from "@/lib/storePaths";
 
 const navigationLinks = [
   { href: "/", label: "Home" },
@@ -23,7 +25,10 @@ export function Navbar() {
   const localePath = useLocalePath();
   // Link hrefs and the active-link check compare language-neutral paths.
   const pathname = stripLocale(usePathname()).path;
+  const t = useStoreText();
   const [isMenuOpen, setIsMenuOpen] = useState(false);
+  // On mobile the category hero leaves the back link out (it would sit on the cover photo), so it takes the logo spot here.
+  const showBackLink = isCategoryPath(pathname);
 
   useEffect(() => {
     setIsMenuOpen(false);
@@ -43,9 +48,20 @@ export function Navbar() {
   return (
     <header className="sticky top-0 z-50 border-b border-black/[0.06] bg-[rgba(255,255,255,0.88)] backdrop-blur-xl backdrop-saturate-150">
       <Container className="flex h-16 items-center justify-between">
+        {showBackLink ? (
+          <Link
+            href={localePath("/products")}
+            className="inline-flex min-h-11 min-w-11 items-center text-[15px] font-medium text-apple-blue md:hidden"
+          >
+            ‹ {t.backToShop}
+          </Link>
+        ) : null}
         <Link
           href={localePath("/")}
-          className="inline-flex min-h-11 min-w-11 items-center transition hover:opacity-80"
+          className={cn(
+            "min-h-11 min-w-11 items-center transition hover:opacity-80",
+            showBackLink ? "hidden md:inline-flex" : "inline-flex"
+          )}
           aria-label="SU STORE"
         >
           <Image

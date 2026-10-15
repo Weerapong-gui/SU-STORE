@@ -71,3 +71,8 @@ body {
 @media (prefers-reduced-motion: reduce) {
   .hero-in, .backdrop-in, .dialog-in { animation: none; }
 }
+
+/* Category cover hero: dark on the left so the white title reads on any photo, clear on the right to show it. */
+.category-hero-shade {
+  background: linear-gradient(to right, rgba(0, 0, 0, 0.65), rgba(0, 0, 0, 0.35) 45%, rgba(0, 0, 0, 0.05) 80%);
+}
