@@ -4,7 +4,7 @@ import { Suspense } from "react";
 import { Container } from "@/components/ui/Container";
 import { OrderView } from "@/components/store/OrderView";
 
-export const metadata: Metadata = { title: "Order · SU STORE", robots: { index: false } };
+export const metadata: Metadata = { title: "Order SU STORE", robots: { index: false } };
 
 export default function OrderPage({ params }: { params: { code: string } }) {
   const code = params.code.toUpperCase();

@@ -15,7 +15,7 @@ export async function generateMetadata({ params, searchParams }: PageProps): Pro
   const product = await getStoreProduct(params.slug);
   if (!product) return { title: "SU STORE" };
   const design = product.variants.find((v) => v.designCode.toLowerCase() === designParam(searchParams.design)?.toLowerCase());
-  return { title: `${design?.designName || product.name} · SU STORE` };
+  return { title: `${design?.designName || product.name} SU STORE` };
 }
 
 export default async function ProductPage({ params, searchParams }: PageProps) {

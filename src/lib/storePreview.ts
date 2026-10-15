@@ -7,7 +7,7 @@ import { ORDER_API_BASE } from "@/lib/orderApi";
 // (after stripping any client-sent copy) and the (main) layout reads it.
 export const STORE_PREVIEW_HEADER = "x-su-store-preview";
 
-export const PREVIEW_ORDER_BLOCKED_MESSAGE = "ร้านปิดอยู่ · โหมดดูตัวอย่างสั่งซื้อไม่ได้";
+export const PREVIEW_ORDER_BLOCKED_MESSAGE = "ร้านปิดอยู่ โหมดดูตัวอย่างสั่งซื้อไม่ได้";
 
 // Pages that would let staff place a real order; they keep the closed page in preview.
 const ORDER_PATHS = ["/checkout"];

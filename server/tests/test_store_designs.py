@@ -3,6 +3,7 @@ import sqlite3
 
 import pytest
 from store import db
+from store.designs import design_label
 
 from .test_store_v2 import CUSTOMER, _conn, _product
 
@@ -21,13 +22,13 @@ def test_design_product_round_trip():
     assert product["optionKind"] == "designs"
     assert product["categoryId"] is None
     assert [v["designCode"] for v in product["variants"]] == ["SCS", "AI"]
-    assert product["variants"][0]["label"] == "SCS · วิทยาศาสตร์เครื่องสำอาง"
+    assert product["variants"][0]["label"] == "SCS วิทยาศาสตร์เครื่องสำอาง"
     assert product["variants"][0]["designNameEn"] == "Cosmetic Science"
     assert product["variants"][0]["image"] == "/product-images/scs.png"
     assert all(v["size"] == v["color"] == "" for v in product["variants"])
     updated = db.update_product(conn, product["id"], {"nameEn": "New Shirt", "variants": [{**product["variants"][0], "designName": "ลายใหม่"}]})
     assert updated["nameEn"] == "New Shirt"
-    assert updated["variants"][0]["label"] == "SCS · ลายใหม่"
+    assert updated["variants"][0]["label"] == "SCS ลายใหม่"
 
 
 def test_duplicate_design_code_rejected_case_insensitive():
@@ -113,9 +114,9 @@ def test_order_snapshots_both_languages() -> None:
     })
     item = order["items"][0]
     assert item["productNameEn"] == "Keychain"
-    assert item["variantLabelEn"] == "SCS · Cosmetic Science"
+    assert item["variantLabelEn"] == "SCS Cosmetic Science"
     assert item["productName"] == "พวงกุญแจ"
-    assert item["variantLabel"] == "SCS · วิทยาศาสตร์เครื่องสำอาง"
+    assert item["variantLabel"] == "SCS วิทยาศาสตร์เครื่องสำอาง"
     assert order["items"][1]["variantLabelEn"] is None
     db.update_product(conn, product["id"], {
         "name": "ชื่อใหม่", "nameEn": "New Keychain",
@@ -250,3 +251,7 @@ def test_options_have_empty_images() -> None:
     product = _product(conn)
     assert product["variants"][0]["images"] == []
     assert conn.execute("SELECT extra_images_json FROM store_variants").fetchone()[0] == "[]"
+
+
+def test_design_label_uses_space_separator():
+    assert design_label("SCI", "School of Science") == "SCI School of Science"

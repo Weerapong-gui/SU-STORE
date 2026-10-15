@@ -78,7 +78,7 @@ def test_snapshot_frozen():
     db.update_product(conn, product_id, {"name": "Changed"})
     receipts.save_receipt_settings(conn, {"payeeName": "New Payee"})
     assert receipts.list_order_receipts(conn, code)[0]["snapshot"] == snapshot
-    assert snapshot["lines"] == [{"no": 1, "name": "SU Tote Bag · Black", "quantity": 1,
+    assert snapshot["lines"] == [{"no": 1, "name": "SU Tote Bag Black", "quantity": 1,
                                   "unitPrice": 150, "amount": 150}]
     assert snapshot["total"] == 150
     assert datetime.fromisoformat(snapshot["issuedAt"]).utcoffset() == timedelta(0)

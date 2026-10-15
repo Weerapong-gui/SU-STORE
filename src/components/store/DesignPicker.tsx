@@ -18,7 +18,7 @@ export function DesignPicker({ designs, selectedId, onSelect }: {
     <fieldset className="min-w-0">
       <legend className="text-[15px] font-semibold text-ink">
         {t.design}
-        {selected && <span className="font-normal text-ink-soft"> · {selected.designCode}</span>}
+        {selected && <span className="font-normal text-ink-soft"> {selected.designCode}</span>}
       </legend>
       <div role="radiogroup" aria-label={t.chooseDesign} className="-mx-6 mt-2.5 flex gap-2.5 overflow-x-auto px-6 pb-2 pt-1 md:mx-0 md:grid md:grid-cols-7 md:overflow-visible md:px-0">
         {designs.map((design) => {

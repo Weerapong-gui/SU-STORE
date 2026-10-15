@@ -19,7 +19,7 @@ export function Footer() {
         <div className="border-b border-white/10 pb-8">
           <p className="text-xs font-semibold tracking-[0.12em] text-zinc-500">SU STORE</p>
           <p className="mt-2 text-sm text-zinc-400">
-            Mae Fah Luang University Student Union · องค์การนักศึกษา มหาวิทยาลัยแม่ฟ้าหลวง
+            Mae Fah Luang University Student Union องค์การนักศึกษา มหาวิทยาลัยแม่ฟ้าหลวง
           </p>
           <div className="mt-4">
             <p className="text-xs font-semibold tracking-[0.1em] text-zinc-500">CONTACT US</p>

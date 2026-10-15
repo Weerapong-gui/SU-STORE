@@ -88,7 +88,7 @@ export const SAMPLE_SNAPSHOT: ReceiptSnapshot = {
   customer: { name: "สมใจ ใจดี", studentCode: "6930000000", school: "สำนักวิชาศิลปศาสตร์" },
   lines: [
     { no: 1, name: "เสื้อรับน้อง ไซซ์ M", quantity: 1, unitPrice: 399, amount: 399 },
-    { no: 2, name: "A01 · เสื้อที่ระลึกลายมหาวิทยาลัยแม่ฟ้าหลวงสำหรับนักศึกษาใหม่ พร้อมภาพดอกไม้และภูเขาแห่งความทรงจำ รุ่นพิเศษประจำปีการศึกษา 2569", quantity: 2, unitPrice: 250, amount: 500 },
+    { no: 2, name: "A01 เสื้อที่ระลึกลายมหาวิทยาลัยแม่ฟ้าหลวงสำหรับนักศึกษาใหม่ พร้อมภาพดอกไม้และภูเขาแห่งความทรงจำ รุ่นพิเศษประจำปีการศึกษา 2569", quantity: 2, unitPrice: 250, amount: 500 },
     { no: 3, name: "กระเป๋าผ้า", quantity: 1, unitPrice: 150, amount: 150 },
   ],
   total: 1049,

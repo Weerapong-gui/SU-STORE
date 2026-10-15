@@ -6,7 +6,7 @@ import { requestLang } from "@/lib/requestLocale";
 export const metadata: Metadata = {
   metadataBase: new URL(SITE_URL),
   title: "SU STORE",
-  description: "SU STORE · Official store of the Mae Fah Luang University Student Union.",
+  description: "SU STORE Official store of the Mae Fah Luang University Student Union.",
   icons: {
     icon: [
       { url: "/images/LOGO-01.png", media: "(prefers-color-scheme: light)" },

@@ -210,7 +210,7 @@ export function OrderView({ code }: { code: string }) {
               <li key={i.variantId} className="flex justify-between gap-4 py-3 text-sm">
                 <span>
                   <span className="font-semibold text-ink">{name}</span>
-                  {label && <span className="text-ink-soft"> · {label}</span>}
+                  {label && <span className="text-ink-soft"> {label}</span>}
                   <span className="text-ink-soft"> × {i.quantity}</span>
                 </span>
                 <span className="font-semibold text-ink">{formatPrice(i.lineTotal)}</span>

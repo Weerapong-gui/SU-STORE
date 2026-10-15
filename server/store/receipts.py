@@ -161,7 +161,7 @@ def _snapshot(conn: sqlite3.Connection, order: sqlite3.Row, number: str, issued_
     )}
     rows = conn.execute("SELECT * FROM store_order_items WHERE order_id = ? ORDER BY id", (order["id"],)).fetchall()
     lines = [{
-        "no": index, "name": row["product_name"] + (" · " + row["variant_label"] if row["variant_label"] != "-" else ""),
+        "no": index, "name": row["product_name"] + (" " + row["variant_label"] if row["variant_label"] != "-" else ""),
         "quantity": row["quantity"], "unitPrice": row["unit_price"], "amount": row["quantity"] * row["unit_price"],
     } for index, row in enumerate(rows, 1)]
     settings = get_receipt_settings(conn)

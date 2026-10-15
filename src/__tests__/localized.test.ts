@@ -21,18 +21,24 @@ describe("order and cart display text", () => {
     variantLabel: "A01 · ลายดอกไม้", variantLabelEn: null, unitPrice: 100, quantity: 1, lineTotal: 100,
   };
   it("shows the Thai name under en when the order has no English fields", () => {
-    expect(orderItemText(item, "en")).toEqual({ name: "เสื้อ", label: "A01 · ลายดอกไม้" });
+    expect(orderItemText(item, "en")).toEqual({ name: "เสื้อ", label: "A01 ลายดอกไม้" });
   });
   it("uses English text when present and hides a '-' label", () => {
     expect(orderItemText({ ...item, productNameEn: "Shirt", variantLabelEn: "A01 · Flower" }, "en"))
-      .toEqual({ name: "Shirt", label: "A01 · Flower" });
+      .toEqual({ name: "Shirt", label: "A01 Flower" });
     expect(orderItemText({ ...item, variantLabel: "-" }, "th").label).toBe("");
+  });
+  it("normalizes stored design labels without changing the snapshot", () => {
+    const stored = { ...item, variantLabel: "SCI · School of Science" };
+    expect(orderItemText(stored, "en").label).toBe("SCI School of Science");
+    expect(stored.variantLabel).toBe("SCI · School of Science");
   });
   const base = { id: 1, size: "", color: "", label: "-", price: 1, stock: null, sku: "", active: true, soldOut: false, image: "", images: [] };
   it("labels design variants as code and localized name, options variants by label", () => {
     const design = { ...base, designCode: "A01", designName: "ดอกไม้", designNameEn: "Flower" };
-    expect(variantDisplayLabel(design, "en")).toBe("A01 · Flower");
-    expect(variantDisplayLabel(design, "th")).toBe("A01 · ดอกไม้");
+    expect(variantDisplayLabel({ ...design, designCode: "SCI", designNameEn: "School of Science" }, "en")).toBe("SCI School of Science");
+    expect(variantDisplayLabel(design, "en")).toBe("A01 Flower");
+    expect(variantDisplayLabel(design, "th")).toBe("A01 ดอกไม้");
     expect(variantDisplayLabel({ ...base, designCode: "", designName: "", designNameEn: "", label: "M" }, "en")).toBe("M");
     expect(variantDisplayLabel({ ...base, designCode: "", designName: "", designNameEn: "" }, "en")).toBe("");
   });

@@ -18,7 +18,7 @@ def normalize_code(code: str) -> str:
 
 
 def design_label(code: str, name: str) -> str:
-    return f"{code} · {name}"
+    return f"{code} {name}"
 
 
 def clean_design(raw: dict, index: int) -> dict[str, str]:
